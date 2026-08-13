@@ -1,0 +1,13 @@
+{
+  "name": "b3-write-human",
+  "version": "1.0.0",
+  "description": "Chặn văn AI ngay lúc sinh: cấm từ vựng business, ép nhịp câu lệch, có mục riêng cho tiếng Việt, gate self-audit trước khi xuất. Bổ trợ cho humanizer.",
+  "author": {
+    "name": "ducban",
+    "url": "https://github.com/ducban"
+  },
+  "homepage": "https://github.com/ducban/b3-skills",
+  "repository": "https://github.com/ducban/b3-skills",
+  "license": "MIT",
+  "keywords": ["writing", "prose", "anti-ai-slop", "vietnamese", "humanizer"]
+}

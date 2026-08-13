@@ -1,0 +1,18 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "b3-skills",
+  "description": "Skills Ban tự viết, dùng chung cho Claude Code và các agent đọc .agents/skills.",
+  "owner": {
+    "name": "ducban",
+    "url": "https://github.com/ducban"
+  },
+  "plugins": [
+    {
+      "name": "b3-write-human",
+      "description": "Chặn văn AI ngay lúc sinh: cấm từ vựng business, ép nhịp câu lệch, có mục riêng cho tiếng Việt, gate self-audit trước khi xuất.",
+      "source": "./plugins/b3-write-human",
+      "category": "productivity",
+      "tags": ["writing", "prose", "anti-ai-slop", "vietnamese", "humanizer"]
+    }
+  ]
+}
