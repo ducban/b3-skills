@@ -9,7 +9,7 @@ description: |
   behind a self-audit. Complements `humanizer`, which cleans text that
   already exists; this one governs text as it is being written.
 metadata:
-  version: "1.0.0"
+  version: "1.1.0"
   companion: humanizer
 ---
 
@@ -60,6 +60,8 @@ The banned list above is English. Vietnamese has its own tells, mostly translati
 - Cấu trúc bị động dịch từ tiếng Anh: "được thực hiện bởi", "được xem như là". Viết thẳng chủ ngữ.
 - Nhồi Hán Việt khi có từ thuần Việt: "tiến hành kiểm tra" là "kiểm tra"; "thực hiện việc gửi" là "gửi".
 - Ba vế đối xứng ("nhanh chóng, chính xác, hiệu quả") là dấu hiệu máy viết y như rule of three tiếng Anh.
+
+**Tài liệu dài bằng tiếng Việt: đọc `tai-lieu-tieng-viet.md` cạnh tệp này trước khi viết.** Bốn gạch đầu dòng trên đủ cho tin nhắn và đoạn ngắn. Từ khoảng một trang trở lên (báo cáo, trang wiki, bài nghiên cứu, brief, tài liệu, thư dài) thì cần bộ đầy đủ: luật viết thẳng bằng tiếng Việt chứ không dịch, 19 luật kiểm bằng mắt (dấu thanh, số kiểu Việt, thuật ngữ chú tiếng Anh một lần, nhịp câu, danh sách từ cấm, không bịa số), bảng tiêu đề mục Anh sang Việt, một đoạn mẫu, và vòng tự đọc lại tám câu. Chuẩn đó rút từ bài báo hội thảo AI4Econ&Biz 2026 của Ban, bản văn tiếng Việt đã qua bảy vòng sửa và một vòng phản biện.
 
 ## Hard limits
 
