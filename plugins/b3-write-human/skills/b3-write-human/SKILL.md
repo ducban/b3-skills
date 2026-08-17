@@ -25,7 +25,7 @@ A generation-time rule set. You load this before you write, not after.
 | A draft already exists and needs cleaning | `humanizer` |
 | Long or high-stakes piece | this skill to draft, then `humanizer` to audit |
 
-`humanizer` carries the full 33-pattern catalog, the false-positive list, and voice calibration. Don't restate it here. When a judgment call goes beyond the rules below, read `~/.claude/skills/humanizer/SKILL.md` instead of guessing.
+`humanizer` carries the full 33-pattern catalog, the false-positive list, and voice calibration. Don't restate it here. When a judgment call goes beyond the rules below, read the `humanizer` skill instead of guessing (`~/.claude/skills/humanizer/SKILL.md` on the host, `/app/skills/humanizer/SKILL.md` inside a NanoClaw agent container).
 
 ## Banned vocabulary
 
