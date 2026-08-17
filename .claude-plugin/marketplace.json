@@ -13,6 +13,13 @@
       "source": "./plugins/b3-write-human",
       "category": "productivity",
       "tags": ["writing", "prose", "anti-ai-slop", "vietnamese", "humanizer"]
+    },
+    {
+      "name": "b3-figure-drawing",
+      "description": "Bảy khuôn vẽ hình cho tài liệu: so sánh, quy trình, dãy số, kiến trúc nhiều tầng, đồ thị hai biến, chênh lệch lời khai với số kiểm chứng, mốc thời gian. SVG thang xám, trục thật, tự đổi theo nền sáng tối.",
+      "source": "./plugins/b3-figure-drawing",
+      "category": "productivity",
+      "tags": ["figures", "diagram", "chart", "svg", "greyscale", "vietnamese"]
     }
   ]
 }
