@@ -36,10 +36,16 @@ kiểu Anh. Nếu đã lỡ có bản Anh, viết lại từ ý, đừng dịch 
 
 **Thuật ngữ**
 
-4. Thuật ngữ chuyên môn xuất hiện lần đầu: tiếng Việt trước, tiếng Anh trong
-   ngoặc ngay sau, ví dụ "ranh giới suy luận (inference boundary)". Từ lần hai
-   dùng tiếng Việt trơn. Tiêu đề mục cũng theo cách này khi tài liệu mang tính
-   học thuật.
+4. Thuật ngữ chuyên môn đã dịch sang tiếng Việt thì chú tiếng Anh trong ngoặc
+   ngay sau, ví dụ "ranh giới suy luận (inference boundary)". Chú ở ba chỗ:
+   lần đầu thuật ngữ xuất hiện trong bài, lần đầu nó xuất hiện trong **mỗi mục
+   lớn** (mỗi tiêu đề `##`), và **mọi tiêu đề** có chứa nó. Trong cùng một mục,
+   từ lần hai dùng tiếng Việt trơn.
+   Lý do: người đọc hay lướt tiêu đề rồi nhảy thẳng vào một mục. Chú một lần ở
+   đầu bài thì tới Phần 4 họ gặp "việc nền" mà không biết đó là background
+   jobs; Ban vấp đúng chỗ này ngày 18/09/2026.
+   Tiêu đề chung của khuôn (Tóm tắt, Bước tiếp theo, các dòng trong bảng tiêu
+   đề chuẩn bên dưới) không phải thuật ngữ, không chú.
 5. Tên riêng giữ nguyên bản: tên công ty, sản phẩm, framework, người, mô hình.
 6. Từ đã quen dùng nguyên bản trong nghề (sprint, backlog, deadline, token, API)
    giữ nguyên, không dịch cứng. Ngược lại, chỗ tiếng Việt đã có từ tự nhiên thì
@@ -69,7 +75,9 @@ kiểu Anh. Nếu đã lỡ có bản Anh, viết lại từ ý, đừng dịch 
     dùng khi cố ý nhấn.
 14. Tiêu đề mục là cụm danh từ tiếng Việt, không viết hoa từng chữ, không dấu
     hai chấm cuối, không emoji. Đánh số khi tài liệu có tham chiếu chéo
-    ("xem mục 6.3").
+    ("xem mục 6.3"). Tiêu đề có thuật ngữ đã dịch thì kèm tiếng Anh trong
+    ngoặc theo luật 4: "Phần 4 — Việc nền (background jobs) và cách ly
+    (sandboxing)".
 15. Bảng chỉ dùng cho dữ liệu so sánh được theo cột. Có tiêu đề bảng ở trên,
     có nguồn ở dưới nếu số liệu lấy từ ngoài. Hình có chú thích đánh số.
 16. In đậm dè sẻn: tên khái niệm khi định nghĩa, tiêu đề đoạn dạng "**Đối chiếu
@@ -106,7 +114,7 @@ bài tiếng Việt.
 ## Đoạn mẫu
 
 Đoạn dưới lấy từ tóm tắt bài báo. Đọc để bắt nhịp: câu dài mang lập luận, câu
-ngắn chốt, số kiểu Việt, thuật ngữ chú tiếng Anh một lần, không tính từ.
+ngắn chốt, số kiểu Việt, thuật ngữ chú tiếng Anh ở lần đầu, không tính từ.
 
 > Nghiên cứu này tách "chi phí" trong phép cân nhắc đó thành hai loại phát sinh
 > ở hai thời điểm khác nhau. Chi phí trải nghiệm (UX cost) là cái giá của việc
@@ -132,7 +140,9 @@ Cùng ý đó viết theo lối máy, để nhận diện chứ không để b�
 1. Có chữ nào thiếu dấu, số nào viết kiểu Anh (`0.5`, `1,000`) không?
 2. Có gạch ngang dài nào đang nối vế trong câu không?
 3. Có tiêu đề hay cụm tiếng Anh nào lẫn trong thân bài tiếng Việt mà không phải
-   tên riêng hay thuật ngữ đã chú không?
+   tên riêng hay thuật ngữ đã chú không? Ngược lại, có thuật ngữ đã dịch nào
+   nằm trong tiêu đề, hoặc xuất hiện lần đầu trong một mục, mà thiếu tiếng Anh
+   trong ngoặc không?
 4. Có câu nào bị động mà chủ thể quan trọng không?
 5. Có từ nào trong danh sách cấm ở luật 10 không?
 6. Có đoạn nào ba câu dài đều nhau, hay có nhịp ba không?
