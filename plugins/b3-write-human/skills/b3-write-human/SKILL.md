@@ -61,8 +61,13 @@ The banned list above is English. Vietnamese has its own tells, mostly translati
 - Nhồi Hán Việt khi có từ thuần Việt: "tiến hành kiểm tra" là "kiểm tra"; "thực hiện việc gửi" là "gửi".
 - Ba vế đối xứng ("nhanh chóng, chính xác, hiệu quả") là dấu hiệu máy viết y như rule of three tiếng Anh.
 - Thuật ngữ nghề đã dịch sang tiếng Việt thì kèm tiếng Anh trong ngoặc ngay sau: "việc nền (background jobs)". Tài liệu dài chú lại ở mỗi mục và trong mọi tiêu đề chứa nó (luật 4 của `tai-lieu-tieng-viet.md`).
+- Gạch đầu dòng dịch từ đầu đề tiếng Anh: "Trường hợp Marvel Rivals", "Metaverse tự ghi là thiếu cơ chế AI NPC đã kiểm chứng". Một ý nêu sự việc thì viết thành câu có chủ ngữ và động từ: "Tiền lệ xấu đã xảy ra với Marvel Rivals". Đọc to từng dòng và hỏi người Việt có nói câu đó không.
+- Viết "trường hợp", không viết "ca": "trường hợp Marvel Rivals", không "ca Marvel Rivals".
+- Chữ ghi thừa vào chính sản phẩm: "(nháp 22/10)" trong tiêu đề, câu chú thích tả lại bố cục người đọc đang nhìn ("bốn khung trên là..."). Trạng thái và ngày đã nằm ở metadata với lịch sử; xoá câu đó mà không mất tin gì thì đừng viết.
 
-**Tài liệu dài bằng tiếng Việt: đọc `tai-lieu-tieng-viet.md` cạnh tệp này trước khi viết.** Năm gạch đầu dòng trên đủ cho tin nhắn và đoạn ngắn. Từ khoảng một trang trở lên (báo cáo, trang wiki, bài nghiên cứu, brief, tài liệu, thư dài) thì cần bộ đầy đủ: luật viết thẳng bằng tiếng Việt chứ không dịch, 19 luật kiểm bằng mắt (dấu thanh, số kiểu Việt, thuật ngữ chú tiếng Anh ở lần đầu mỗi mục và trong tiêu đề, nhịp câu, danh sách từ cấm, không bịa số), bảng tiêu đề mục Anh sang Việt, một đoạn mẫu, và vòng tự đọc lại tám câu. Chuẩn đó rút từ bài báo hội thảo AI4Econ&Biz 2026 của Ban, bản văn tiếng Việt đã qua bảy vòng sửa và một vòng phản biện.
+**Chữ trong hình, slide, nhãn và ô bảng cũng là văn.** Các luật trên áp cho chúng y như cho một đoạn văn. Đây là chỗ hay bị bỏ sót nhất vì chữ ở đó trông giống dữ liệu: ngày 22/10/2026 cả ba lỗi vừa kể lọt vào một hình SWOT gửi Ban mà không qua bước tự đọc lại.
+
+**Tài liệu dài bằng tiếng Việt: đọc `tai-lieu-tieng-viet.md` cạnh tệp này trước khi viết.** Các gạch đầu dòng trên đủ cho tin nhắn và đoạn ngắn. Từ khoảng một trang trở lên (báo cáo, trang wiki, bài nghiên cứu, brief, tài liệu, thư dài) thì cần bộ đầy đủ: luật viết thẳng bằng tiếng Việt chứ không dịch, 19 luật kiểm bằng mắt (dấu thanh, số kiểu Việt, thuật ngữ chú tiếng Anh ở lần đầu mỗi mục và trong tiêu đề, nhịp câu, danh sách từ cấm, không bịa số), bảng tiêu đề mục Anh sang Việt, một đoạn mẫu, và vòng tự đọc lại tám câu. Chuẩn đó rút từ bài báo hội thảo AI4Econ&Biz 2026 của Ban, bản văn tiếng Việt đã qua bảy vòng sửa và một vòng phản biện.
 
 ## Hard limits
 

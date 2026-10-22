@@ -15,6 +15,10 @@ và README của một dự án Research, brief, báo cáo, trang ghi vào wiki 
 liệu Build, ghi chép Knowledge, thư dài của Keeper. Không áp cho tin chat, dòng
 dữ liệu, bảng, frontmatter, code, và chữ chép nguyên văn của người dùng.
 
+Chữ trong hình vẽ, slide và ô bảng tuy không áp trọn bộ này nhưng vẫn là văn:
+chúng theo các gạch đầu dòng tiếng Việt trong `SKILL.md`, nhất là luật viết
+thành câu chứ không dịch đầu đề, và luật không ghi "nháp" hay ngày vào tiêu đề.
+
 ## Luật số một: viết thẳng bằng tiếng Việt
 
 Chốt ngôn ngữ trước khi gõ chữ đầu tiên. Nếu là tiếng Việt thì nghĩ và viết bằng
