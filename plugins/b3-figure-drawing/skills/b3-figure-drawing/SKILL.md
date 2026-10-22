@@ -14,7 +14,7 @@ metadata:
 
 # b3-figure-drawing
 
-Seven builders that take content and own every coordinate. You never hand-write
+Eight builders that take content and own every coordinate. You never hand-write
 SVG, and you never pick colours, because there are none.
 
 Needs Node 18+ on PATH. No dependencies, no build step.
@@ -34,11 +34,12 @@ restates the paragraph above it just takes up room.
 | Two variables | `plot` | break-even threshold, trend line, crossing point |
 | One number measured twice | `gap` | "the source says 180K, verification says 247K" |
 | Points in time | `timeline` | a roadmap by week, product generations, historical eras |
+| Grid of lists | `matrix` | SWOT, a 2×2 matrix, pros and cons — each cell is its own bullet list |
 
 Two to four figures per document is the working ceiling. More than that is a
 sign of drawing to fill a quota.
 
-## Two pairs are easy to confuse
+## Three pairs are easy to confuse
 
 Picking wrong still produces a figure. It just loses the reason you drew it.
 
@@ -47,6 +48,12 @@ evenly apart because sequence is the point. Use `timeline` only when the
 distance between points carries meaning: six quiet years then three frantic
 months has to *look* like that. Eight weeks inserted at the front of a roadmap
 push everything after them, and only a real axis shows it.
+
+**`compare` vs `matrix`.** Both put boxes side by side. `compare` gives every
+item its own box and lines the rows up, so it only works when item 2 on the left
+*corresponds* to item 2 on the right. SWOT cells don't correspond: the third
+strength has nothing to do with the third weakness, and `compare` draws rows that
+imply they do. Lists that belong to a cell, not to a row → `matrix`.
 
 **`bars` vs `gap`.** Both compare numbers. `bars` ranks **independent**
 quantities. `gap` is **one** quantity measured twice, and the connector's length
@@ -62,6 +69,18 @@ and the verification disagree → `gap`.
   two figures; never invent a fifth grey, because adjacent greys stop being
   distinguishable.
 - **Legends are sentences** under the figure, not a key box in the corner.
+- **Text in a figure is prose, so the writing rules apply to it.** Labels and
+  list items get the same anti-AI pass as a paragraph. It's easy to skip,
+  because labels feel like data.
+- **A title is a name.** No "draft", no date, no status. The page and its
+  history already carry those, and a stamp inside the picture goes stale the
+  day it ships.
+- **A note says what the eye can't get.** Never describe the layout ("the top
+  four boxes are...") because the reader is looking at it. If deleting the note
+  loses nothing, leave `note` out.
+- **Vietnamese labels are written in Vietnamese, not translated.** Read each
+  one aloud. "Trường hợp Marvel Rivals" is an English heading in Vietnamese
+  words; "Tiền lệ xấu đã xảy ra với Marvel Rivals" is a sentence.
 - **Vietnamese numbers** in Vietnamese documents: `61,5%` not `61.5%`. `vnum()`
   handles it; pass `digits` when a money column needs even decimals.
 - Numbers in a figure must match numbers in the text and carry the same

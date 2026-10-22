@@ -5,7 +5,7 @@
  * một sắc màu nào, phân loại bằng độ đậm nhạt và gạch chéo, trục có vạch chia
  * thật, chú giải viết thành câu tiếng Việt dưới hình.
  *
- * Bảy khuôn, mỗi khuôn nhận nội dung và tự lo toàn bộ toạ độ:
+ * Tám khuôn, mỗi khuôn nhận nội dung và tự lo toàn bộ toạ độ:
  *
  *   compare()  hai hoặc ba cột đặt cạnh nhau, có thể kéo mũi tên giữa các cột
  *   flow()     chuỗi bước, hoặc vòng lặp khép kín khi bật `loop`
@@ -14,6 +14,7 @@
  *   plot()     đồ thị đường, có điểm đánh dấu và đường ngưỡng
  *   gap()      một đại lượng đo hai lần, chỗ đáng nhìn là khoảng chênh
  *   timeline() mốc và quãng đặt trên trục thời gian thật
+ *   matrix()   lưới khung chữ: SWOT, ma trận 2×2, mỗi khung một danh sách
  *
  * ## Hai cặp dễ chọn nhầm
  *
@@ -923,6 +924,107 @@ export function timeline({ title, axisNote, x, rows, marks = [], ticks: tickIn, 
   b += `<line x1='${r(x0)}' y1='${r(axisY)}' x2='${r(right)}' y2='${r(axisY)}' stroke='var(--tx)' stroke-width='1.4'/>`;
 
   return frame(W, { title, note, legend }, top, b, plotH + 40);
+}
+
+/* ─────────────────────── khuôn 8 — ma trận khung chữ ─────────────────────── */
+
+/**
+ * Lưới các khung, mỗi khung một đầu đề và một danh sách gạch đầu dòng căn trái.
+ * Dùng cho SWOT, ma trận 2×2, bảng ưu nhược: chỗ mà cái đáng nhìn là vị trí của
+ * khung trên lưới, còn chữ trong khung là danh sách để đọc chứ không phải ô để so.
+ *
+ *   matrix({
+ *     title: 'SWOT của đội A',
+ *     cols: 2,                                   // 2 hoặc 3, mặc định 2
+ *     cells: [
+ *       { head: 'STRENGTHS', tone: 'ink', items: ['Ý một', { title: 'Ý hai', sub: 'chú thích' }] },
+ *       { head: 'WEAKNESSES', tone: 'ink', items: ['...'] },
+ *       { head: 'S+O', tone: 'mid', items: ['...'] },  // khung hết hàng thì xuống hàng
+ *       ...
+ *     ],
+ *     note: 'Đầu đề đen là bốn mặt, đầu đề xám là hướng làm.',
+ *   })
+ *
+ * `tone` tô dải đầu đề; thân khung luôn để `open` để chữ dài đọc được ở cả hai
+ * nền. Các khung cùng hàng cao bằng nhau, bằng khung dài nhất hàng đó, nên một
+ * hàng đọc như một cặp. Mục là chuỗi, hoặc `{ title, sub }` khi cần một dòng phụ
+ * nhạt hơn ngay dưới.
+ *
+ * Khác `compare`: `compare` xếp mỗi mục thành một ô riêng để dóng hàng ngang
+ * giữa các cột, nên chỉ hợp khi mục ở cột trái tương ứng mục ở cột phải. Danh
+ * sách trong các khung SWOT không tương ứng nhau, ép vào `compare` là bày ra
+ * những hàng ngang không có nghĩa.
+ */
+export function matrix({ title, cols = 2, cells, note, legend } = {}) {
+  if (!Array.isArray(cells) || !cells.length) throw new Error('matrix: cần ít nhất một khung');
+  if (cols < 2 || cols > 3) throw new Error('matrix: cols là 2 hoặc 3');
+  const norm = cells.map((c) => ({
+    head: c.head ?? '',
+    tone: tone(c.tone ?? 'ink'),
+    items: (c.items ?? []).map((it) => (typeof it === 'string' ? { title: it } : it)),
+  }));
+
+  const cellW = cols === 2 ? 400 : 300;
+  const gap = 24;
+  const pad = 30;
+  const W = pad * 2 + cellW * cols + gap * (cols - 1);
+  const headH = 40;
+  const ts = 13.5;
+  const ss = 11.5;
+  const inner = cellW - 44; // lề trái 28 cho dấu gạch, lề phải 16
+  // Chữ căn trái nên được dùng gần hết bề ngang: 0,46 em mỗi ký tự là bề rộng
+  // trung bình của chữ Việt có dấu ở kiểu serif, hẹp hơn mức 0,5 dành cho chữ
+  // căn giữa. Để 0,5 thì dòng gãy sớm, chừa một chữ lẻ như "VR" xuống dòng dưới.
+  const fit = (size) => Math.floor(inner / (size * 0.46));
+  // Dòng cuối chỉ còn một chữ thì kéo thêm một chữ của dòng trên xuống,
+  // để không có "game" hay "token" đứng trơ trọi một mình.
+  const noWidow = (lines) => {
+    if (lines.length < 2) return lines;
+    const last = lines[lines.length - 1].split(' ');
+    const prev = lines[lines.length - 2].split(' ');
+    if (last.length > 1 || prev.length < 3) return lines;
+    return [...lines.slice(0, -2), prev.slice(0, -1).join(' '), `${prev[prev.length - 1]} ${last[0]}`];
+  };
+  const lay = (c) =>
+    c.items.map((it) => ({
+      t: noWidow(wrap(it.title, fit(ts))),
+      s: it.sub ? noWidow(wrap(it.sub, fit(ss))) : [],
+    }));
+  const bodyH = (lines) =>
+    lines.reduce((h, l) => h + l.t.length * (ts + 6) + l.s.length * (ss + 5) + 9, 0) + 18;
+
+  let y = title ? 62 : 26;
+  const top = y;
+  let b = '';
+  for (let i = 0; i < norm.length; i += cols) {
+    const row = norm.slice(i, i + cols).map((c) => ({ c, lines: lay(c) }));
+    const h = headH + Math.max(...row.map((x) => bodyH(x.lines)));
+    row.forEach(({ c, lines }, j) => {
+      const x = pad + j * (cellW + gap);
+      b += `<rect x='${r(x)}' y='${r(y)}' width='${r(cellW)}' height='${r(h)}' rx='8' ` +
+        `fill='var(--open-f)' stroke='var(--open-s)' stroke-width='1.4'/>`;
+      b += `<path d='M${r(x)},${r(y + headH)} V${r(y + 8)} Q${r(x)},${r(y)} ${r(x + 8)},${r(y)} ` +
+        `H${r(x + cellW - 8)} Q${r(x + cellW)},${r(y)} ${r(x + cellW)},${r(y + 8)} V${r(y + headH)} Z' ` +
+        `fill='${fillOf(c.tone)}' stroke='var(--${c.tone}-s)' stroke-width='1.4'/>`;
+      b += text(x + 18, y + 26, c.head, { size: 15, weight: 700, anchor: 'start', fill: `var(--${c.tone}-t)` });
+      let ty = y + headH + 24;
+      for (const l of lines) {
+        b += `<circle cx='${r(x + 19)}' cy='${r(ty - 4.5)}' r='2.6' fill='var(--tx)'/>`;
+        for (const ln of l.t) {
+          b += text(x + 30, ty, ln, { size: ts, anchor: 'start' });
+          ty += ts + 6;
+        }
+        for (const ln of l.s) {
+          b += text(x + 30, ty - 1, ln, { size: ss, anchor: 'start', cls: 'mu' });
+          ty += ss + 5;
+        }
+        ty += 9;
+      }
+    });
+    y += h + gap;
+  }
+
+  return frame(W, { title, note, legend }, top, b, y - gap - top);
 }
 
 /* ──────────────────────────────── ghi file ──────────────────────────────── */
