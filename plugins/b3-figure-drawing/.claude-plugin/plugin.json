@@ -1,6 +1,6 @@
 {
   "name": "b3-figure-drawing",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Vẽ hình cho tài liệu bằng tám khuôn dựng sẵn: so sánh, quy trình, dãy số, kiến trúc nhiều tầng, đồ thị hai biến, chênh lệch giữa lời khai và số kiểm chứng, mốc thời gian, ma trận khung chữ (SWOT). Ra SVG thang xám chữ có chân, trục thật, chú giải thành câu, tự đổi theo nền sáng tối.",
   "author": {
     "name": "ducban",
@@ -9,5 +9,14 @@
   "homepage": "https://github.com/ducban/b3-skills",
   "repository": "https://github.com/ducban/b3-skills",
   "license": "MIT",
-  "keywords": ["figures", "diagram", "chart", "svg", "greyscale", "vietnamese", "report", "swot"]
+  "keywords": [
+    "figures",
+    "diagram",
+    "chart",
+    "svg",
+    "greyscale",
+    "vietnamese",
+    "report",
+    "swot"
+  ]
 }

@@ -8,7 +8,7 @@ description: |
   deck that has a shape reading would lose. Not for decorative diagrams, and
   not for knowledge graphs.
 metadata:
-  version: "1.0.0"
+  version: "1.1.1"
   library: figlib.mjs
 ---
 
@@ -69,18 +69,19 @@ and the verification disagree → `gap`.
   two figures; never invent a fifth grey, because adjacent greys stop being
   distinguishable.
 - **Legends are sentences** under the figure, not a key box in the corner.
-- **Text in a figure is prose, so the writing rules apply to it.** Labels and
-  list items get the same anti-AI pass as a paragraph. It's easy to skip,
-  because labels feel like data.
-- **A title is a name.** No "draft", no date, no status. The page and its
-  history already carry those, and a stamp inside the picture goes stale the
-  day it ships.
-- **A note says what the eye can't get.** Never describe the layout ("the top
-  four boxes are...") because the reader is looking at it. If deleting the note
-  loses nothing, leave `note` out.
-- **Vietnamese labels are written in Vietnamese, not translated.** Read each
-  one aloud. "Trường hợp Marvel Rivals" is an English heading in Vietnamese
-  words; "Tiền lệ xấu đã xảy ra với Marvel Rivals" is a sentence.
+- **Every string you pass in is prose, and `b3-write-human` owns the prose
+  rules.** Load that skill before you write a title, label, legend, or note,
+  and don't restate its rules here: a second copy drifts. For Vietnamese,
+  its "Vietnamese output" bullets cover the three things that have actually
+  gone wrong in a figure (a label that is an English heading in Vietnamese
+  words, "nháp" or a date inside the title, a note that describes the
+  layout), and `van-ngan-tieng-viet.md` next to it covers short strings: one
+  concept keeps one name across the figure, a verb plus an object beats a
+  noun pile, no hook phrases. Labels feel like data, which is why they skip
+  the pass. They aren't.
+- **A title is a name and a note says what the eye can't get.** The page
+  carries status and date; the reader is already looking at the layout. If
+  deleting `note` loses nothing, leave it out.
 - **Vietnamese numbers** in Vietnamese documents: `61,5%` not `61.5%`. `vnum()`
   handles it; pass `digits` when a money column needs even decimals.
 - Numbers in a figure must match numbers in the text and carry the same
