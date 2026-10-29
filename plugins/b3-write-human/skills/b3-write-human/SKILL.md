@@ -3,13 +3,15 @@ name: b3-write-human
 description: |
   Write like a person from the first draft. Load BEFORE producing any
   user-facing prose: docs, README, blog posts, emails, PR descriptions,
-  commit bodies, marketing copy, wiki pages, slide text. Bans the
-  business-jargon vocabulary that makes generated text obvious, enforces
-  uneven sentence cadence, requires contractions, and gates every output
-  behind a self-audit. Complements `humanizer`, which cleans text that
-  already exists; this one governs text as it is being written.
+  commit bodies, marketing copy, UI strings and error messages, wiki
+  pages, slide text, and anything in Vietnamese, from a button label to
+  a long report. Bans the business-jargon vocabulary that makes generated
+  text obvious, enforces uneven sentence cadence, requires contractions,
+  keeps commands, placeholders and numbers verbatim, and gates every
+  output behind a self-audit. Complements `humanizer`, which cleans text
+  that already exists; this one governs text as it is being written.
 metadata:
-  version: "1.2.0"
+  version: "1.4.0"
   companion: humanizer
 ---
 
@@ -67,7 +69,17 @@ The banned list above is English. Vietnamese has its own tells, mostly translati
 
 **Chữ trong hình, slide, nhãn và ô bảng cũng là văn.** Các luật trên áp cho chúng y như cho một đoạn văn. Đây là chỗ hay bị bỏ sót nhất vì chữ ở đó trông giống dữ liệu: ngày 22/10/2026 cả ba lỗi vừa kể lọt vào một hình SWOT gửi Ban mà không qua bước tự đọc lại.
 
-**Tài liệu dài bằng tiếng Việt: đọc `tai-lieu-tieng-viet.md` cạnh tệp này trước khi viết.** Các gạch đầu dòng trên đủ cho tin nhắn và đoạn ngắn. Từ khoảng một trang trở lên (báo cáo, trang wiki, bài nghiên cứu, brief, tài liệu, thư dài) thì cần bộ đầy đủ: luật viết thẳng bằng tiếng Việt chứ không dịch, 19 luật kiểm bằng mắt (dấu thanh, số kiểu Việt, thuật ngữ chú tiếng Anh ở lần đầu mỗi mục và trong tiêu đề, nhịp câu, danh sách từ cấm, không bịa số), bảng tiêu đề mục Anh sang Việt, một đoạn mẫu, và vòng tự đọc lại tám câu. Chuẩn đó rút từ bài báo hội thảo AI4Econ&Biz 2026 của Ban, bản văn tiếng Việt đã qua bảy vòng sửa và một vòng phản biện.
+Two reference files sit next to this one. Which to read depends on what you're about to write:
+
+| Writing | Read first |
+|---|---|
+| Chat reply, one paragraph, commit body, label in a figure or slide | the bullets above are enough |
+| UI string, error message, ad, social post, landing page, work email | `van-ngan-tieng-viet.md` |
+| Anything from about a page up: report, wiki page, paper, brief, long letter | `tai-lieu-tieng-viet.md` |
+
+`van-ngan-tieng-viet.md` covers pronoun choice (`bạn`, `người dùng`, `chúng tôi`, `mình`), UX strings (buttons, errors, empty states, placeholders and character limits), when a copy framework like PAS or AIDA fits and when none does, the evidence guard for ads, and the shape of a work email.
+
+`tai-lieu-tieng-viet.md` is the long-form standard: write straight in Vietnamese rather than translate, 19 rules you can check by eye (diacritics, Vietnamese number format, English gloss on translated terms at first use in every section and in every heading, cadence, banned words, no invented numbers), a heading table English to Vietnamese, one sample paragraph, and an eight-question reread. It comes from Ban's AI4Econ&Biz 2026 conference paper, whose Vietnamese text went through seven rounds of edits and one round of review.
 
 ## Hard limits
 
@@ -75,7 +87,9 @@ Rewriting tone is allowed. Inventing content is not.
 
 - No fact, name, number, date, quote, statistic, or citation that isn't in the source material or from the user. A vague sentence gets cut, never decorated with a specific you made up.
 - Preserve the message. Compress the dull parts and dwell where a person would, but every claim in the source survives.
-- Don't touch quoted text, proper names, titles, code, or an example where a banned phrase is the thing being discussed.
+- Keep every literal verbatim: code, shell commands, flags, paths, file names, API and config keys, error codes, version numbers, URLs, and placeholders such as `{name}`, `{{count}}`, `%s`. Don't paraphrase a command into prose. A writing-only request never edits code or config.
+- Keep the hedges. "có thể", "tối đa", "up to", units, conditions and exceptions survive a rewrite. Polishing must not turn a maybe into a promise. A weak claim in the source gets flagged, not strengthened.
+- Don't touch quoted text, proper names, titles, or an example where a banned phrase is the thing being discussed.
 
 ## Self-audit gate
 
