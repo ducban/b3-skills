@@ -2,20 +2,24 @@
 
 Marketplace skill riêng của Ban cho Claude Code. Một repo, nhiều skill.
 
-## Cài
+## Cài cho Claude Code
 
 ```
 /plugin marketplace add ducban/b3-skills
 /plugin install b3-write-human@b3-skills
+/plugin install b3-figure-drawing@b3-skills
 ```
 
 Sau đó `/plugin` để bật tắt. Skill nạp theo description, không phải slash command.
+Plugin là đường duy nhất cho Claude Code. Đừng link thêm vào `~/.claude/skills/`,
+làm thế Claude nạp hai bản cùng tên và không chắc bản nào thắng.
 
 ## Có gì
 
 | Skill | Làm gì |
 |---|---|
 | `b3-write-human` | Chặn văn AI ngay lúc viết bản nháp đầu. Cấm ~60 từ business, ép nhịp câu lệch, hai tệp tra tiếng Việt cho văn ngắn và tài liệu dài, giữ nguyên lệnh và placeholder, bắt tự soi trước khi xuất. Bổ trợ cho [`humanizer`](https://github.com/blader/humanizer), vốn chỉ dọn text đã có. |
+| `b3-figure-drawing` | Tám khuôn vẽ hình cho tài liệu bằng `figlib.mjs`: so sánh, quy trình, dãy số, kiến trúc nhiều tầng, đồ thị hai biến, chênh lệch lời khai với số kiểm chứng, mốc thời gian, ma trận kiểu SWOT. SVG thang xám, trục thật, tự đổi theo nền sáng tối. Chữ trong hình theo luật của `b3-write-human`. |
 
 `b3-write-human` mang thêm hai tệp tra tiếng Việt, chỉ đọc khi cần nên không đội chi phí cho lượt viết ngắn.
 
@@ -35,20 +39,53 @@ Một lượt đủ là 12 case × 3 lần × 2 nhánh, đo 29/10/2026 hết 6 U
 
 ## Dùng ngoài Claude Code
 
-Skill viết theo chuẩn Agent Skills nên Codex, OpenCode, Crush đọc được. Clone rồi symlink vào hub chung:
+Skill viết theo chuẩn Agent Skills nên Codex, OpenCode, Crush, pi đọc được. Cài
+bằng `skills` CLI, cờ `-g` để cài cho cả máy:
 
 ```bash
-git clone https://github.com/ducban/b3-skills ~/Workspace/Projects/b3-skills
-ln -s ~/Workspace/Projects/b3-skills/plugins/b3-write-human/skills/b3-write-human \
-      ~/.agents/skills/b3-write-human
+npx skills add ducban/b3-skills -g
 ```
 
-Codex và OpenCode đọc thẳng `~/.agents/skills/`. Crush và pi cần link tiếp vào `~/.config/crush/skills/` và `~/.pi/agent/skills/`.
+CLI tìm thấy cả hai skill trong repo, **chép** chúng về `~/.agents/skills/`, rồi
+tùy agent mà đọc thẳng hay link vào:
 
-## Cập nhật
+```
+~/.agents/skills/b3-write-human/        ← bản chép, không phải symlink vào repo
+   đọc thẳng:  Codex, OpenCode, Cursor và các agent đọc .agents/skills
+   link tới:   ~/.config/crush/skills/   ~/.pi/agent/skills/
+~/.agents/.skill-lock.json              ← CLI nhớ nguồn và hash ở đây
+```
+
+Vì là bản chép nên nó không tự theo repo. Sau mỗi lần push:
+
+```bash
+npx skills update
+```
+
+Hai chỗ dễ vấp:
+
+- **Chạy từ bên trong một session Claude Code mà quên `-g`**, CLI tự nhận ra đang
+  có agent và cài im lặng vào thư mục hiện tại: `.agents/skills/`, `.claude/skills/`
+  và `skills-lock.json` mọc ngay trong repo. Xóa ba thứ đó đi rồi chạy lại với
+  `-g`. Ngày 29/10/2026 vấp đúng chỗ này.
+- Đừng symlink `~/.agents/skills/b3-write-human` thẳng vào thư mục repo. Lock của
+  CLI đang quản nhiều skill khác, một mục bị đổi thành symlink là `skills update`
+  báo lệch từ đó về sau. Một cơ chế thôi, `skills update` là đủ.
+
+## Cập nhật cho Claude Code
+
+Trong session:
 
 ```
 /plugin marketplace update b3-skills
+```
+
+Hoặc từ terminal, nhớ mở session mới sau đó thì bản mới mới được nạp:
+
+```bash
+claude plugin marketplace update b3-skills
+claude plugin update b3-write-human@b3-skills
+claude plugin update b3-figure-drawing@b3-skills
 ```
 
 ## Bản chép trong NanoClaw
