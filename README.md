@@ -11,8 +11,13 @@ Marketplace skill riêng của Ban cho Claude Code. Một repo, nhiều skill.
 ```
 
 Sau đó `/plugin` để bật tắt. Skill nạp theo description, không phải slash command.
-Plugin là đường duy nhất cho Claude Code. Đừng link thêm vào `~/.claude/skills/`,
-làm thế Claude nạp hai bản cùng tên và không chắc bản nào thắng.
+
+**Mỗi máy một cơ chế.** Máy chỉ chạy Claude Code thì cài plugin như trên. Máy còn
+chạy Codex, pi, Crush thì dùng `skills` CLI ở mục dưới và **không cài plugin**: CLI
+có `claude-code` trong danh sách agent nên tự link vào `~/.claude/skills/`, cài
+thêm plugin là Claude nạp hai bản cùng tên và không chắc bản nào thắng. Mac vấp
+đúng chỗ này từ 21/08 tới 29/10/2026, bản plugin kẹt ở 1.1.0 trong khi bản link
+đã lên 1.5.0. Đã gỡ plugin, giữ CLI.
 
 ## Có gì
 
@@ -52,7 +57,7 @@ tùy agent mà đọc thẳng hay link vào:
 ```
 ~/.agents/skills/b3-write-human/        ← bản chép, không phải symlink vào repo
    đọc thẳng:  Codex, OpenCode, Cursor và các agent đọc .agents/skills
-   link tới:   ~/.config/crush/skills/   ~/.pi/agent/skills/
+   link tới:   ~/.claude/skills/   ~/.config/crush/skills/   ~/.pi/agent/skills/
 ~/.agents/.skill-lock.json              ← CLI nhớ nguồn và hash ở đây
 ```
 
