@@ -31,7 +31,7 @@ Sau đó `/plugin` để bật tắt. Skill nạp theo description, không phả
 claude plugin eval plugins/b3-write-human --threshold 0.8 --no-publish
 ```
 
-Một lượt đủ là 12 case × 3 lần × 2 nhánh, ước 9 USD (đo 29/10/2026: một case một nhánh hết 0,36 USD). Thử một case trước bằng `--case '06-*' --ablation none`. Kết quả vào `evals/results/`, đã ignore.
+Một lượt đủ là 12 case × 3 lần × 2 nhánh, đo 29/10/2026 hết 6 USD và 7 phút với `-j 3`. Thử một case trước bằng `--case '06-*' --ablation none`. Kết quả vào `evals/results/`, đã ignore.
 
 ## Dùng ngoài Claude Code
 

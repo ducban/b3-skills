@@ -25,9 +25,12 @@ của người đọc để chọn từ. Không chêm "ạ", "nha", "ace", "mìn
 doanh nghiệp khi không ai yêu cầu. Trang trọng không phải quan liêu, thân mật
 không phải suồng sã.
 
-Câu lịch sự rỗng cắt thẳng. "Chúng tôi vô cùng hân hạnh được đồng hành cùng
-quý khách hàng" không nói được gì. Thay bằng điều sắp làm cho họ: "Đơn của bạn
-đang được đóng gói, dự kiến giao thứ Năm."
+Câu lịch sự rỗng cắt thẳng, không hạ tông. "Chúng tôi vô cùng hân hạnh được
+đồng hành cùng quý khách hàng" không nói được gì, và đổi "vô cùng hân hạnh"
+thành "rất vui" vẫn là câu rỗng, chỉ bớt trang trọng. "Đồng hành", "quý khách
+hàng", "trải nghiệm" là xác của câu đó, phải bỏ cả xác. Thay bằng điều sắp làm
+cho họ: "Đơn của bạn đang được đóng gói, dự kiến giao thứ Năm." Không có ngữ
+cảnh để biết sắp làm gì thì hỏi một dòng, đừng đánh bóng câu rỗng.
 
 ## Chuỗi giao diện
 
@@ -61,7 +64,9 @@ Trước và sau:
 ## Quảng cáo, bài giới thiệu, bài đăng
 
 **Chọn khuôn, đừng ép khuôn.** Khuôn chỉ là thứ tự sắp ý, và nhiều bài không
-cần khuôn nào.
+cần khuôn nào. Khuôn nằm trong đầu người viết, không in ra bài: không có nhãn
+"Vấn đề", "Khoét sâu", "Giải pháp" in đậm trước từng đoạn, người đọc quảng cáo
+không cần biết nó được viết theo PAS.
 
 | Khuôn | Khi nào hợp |
 |---|---|

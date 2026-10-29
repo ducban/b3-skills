@@ -14,8 +14,8 @@ claude plugin eval plugins/b3-write-human --threshold 0.8 --no-publish
 ```
 
 Mặc định mỗi case chạy ba lượt, hai nhánh (có và không có plugin), nên một
-lượt đủ là 72 lần gọi agent. Đo ngày 29/10/2026: case 06 một nhánh hết
-0,36 USD và 63 giây, nên cả bộ hai nhánh ước 9 USD. Muốn rẻ hơn:
+lượt đủ là 72 lần gọi agent. Đo ngày 29/10/2026: cả bộ hai nhánh với `-j 3`
+hết 5,96 USD và 7 phút. Muốn rẻ hơn:
 
 ```bash
 claude plugin eval plugins/b3-write-human --ablation none --case '06-*' --no-publish

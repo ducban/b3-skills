@@ -11,7 +11,7 @@ description: |
   output behind a self-audit. Complements `humanizer`, which cleans text
   that already exists; this one governs text as it is being written.
 metadata:
-  version: "1.4.0"
+  version: "1.5.0"
   companion: humanizer
 ---
 
@@ -74,12 +74,16 @@ Two reference files sit next to this one. Which to read depends on what you're a
 | Writing | Read first |
 |---|---|
 | Chat reply, one paragraph, commit body, label in a figure or slide | the bullets above are enough |
-| UI string, error message, ad, social post, landing page, work email | `van-ngan-tieng-viet.md` |
+| UI string, error message, ad, social post, landing page, work email, tone rewrite of a sentence | `van-ngan-tieng-viet.md` |
 | Anything from about a page up: report, wiki page, paper, brief, long letter | `tai-lieu-tieng-viet.md` |
 
 `van-ngan-tieng-viet.md` covers pronoun choice (`bạn`, `người dùng`, `chúng tôi`, `mình`), UX strings (buttons, errors, empty states, placeholders and character limits), when a copy framework like PAS or AIDA fits and when none does, the evidence guard for ads, and the shape of a work email.
 
 `tai-lieu-tieng-viet.md` is the long-form standard: write straight in Vietnamese rather than translate, 19 rules you can check by eye (diacritics, Vietnamese number format, English gloss on translated terms at first use in every section and in every heading, cadence, banned words, no invented numbers), a heading table English to Vietnamese, one sample paragraph, and an eight-question reread. It comes from Ban's AI4Econ&Biz 2026 conference paper, whose Vietnamese text went through seven rounds of edits and one round of review.
+
+## Hand over the thing, not a lecture about it
+
+When someone asks for a sentence, a string, an email, a translation, deliver that and stop. No "here's what I changed", no second and third variant "in case", no paragraph on why you kept a term. If something is missing or wrong in the source, say it in one line, then the artifact. The eval run of 29/10/2026 lost five of twelve cases to commentary appended after a correct answer.
 
 ## Hard limits
 
