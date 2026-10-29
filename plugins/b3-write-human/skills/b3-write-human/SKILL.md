@@ -11,7 +11,7 @@ description: |
   output behind a self-audit. Complements `humanizer`, which cleans text
   that already exists; this one governs text as it is being written.
 metadata:
-  version: "1.5.0"
+  version: "1.6.0"
   companion: humanizer
 ---
 
@@ -69,15 +69,18 @@ The banned list above is English. Vietnamese has its own tells, mostly translati
 
 **Chữ trong hình, slide, nhãn và ô bảng cũng là văn.** Các luật trên áp cho chúng y như cho một đoạn văn. Đây là chỗ hay bị bỏ sót nhất vì chữ ở đó trông giống dữ liệu: ngày 22/10/2026 cả ba lỗi vừa kể lọt vào một hình SWOT gửi Ban mà không qua bước tự đọc lại.
 
-Two reference files sit next to this one. Which to read depends on what you're about to write:
+Four reference files sit next to this one. Which to read depends on what you're about to write:
 
 | Writing | Read first |
 |---|---|
 | Chat reply, one paragraph, commit body, label in a figure or slide | the bullets above are enough |
 | UI string, error message, ad, social post, landing page, work email, tone rewrite of a sentence | `van-ngan-tieng-viet.md` |
 | Anything from about a page up: report, wiki page, paper, brief, long letter | `tai-lieu-tieng-viet.md` |
+| A technical term you're not sure whether to translate or keep in English | `bang-tu.md`, then `thuat-ngu.md` if the word isn't there |
 
 `van-ngan-tieng-viet.md` covers pronoun choice (`bạn`, `người dùng`, `chúng tôi`, `mình`), UX strings (buttons, errors, empty states, placeholders and character limits), when a copy framework like PAS or AIDA fits and when none does, the evidence guard for ads, and the shape of a work email.
+
+`thuat-ngu.md` decides translate-or-keep for one term with five yes/no gates in a fixed order (is it a string someone types or looks up; does the national standard have a Vietnamese word; does the trade already use one; can it be translated with an existing word; would it need a coined word), plus a back-translation test for a coined translation and the position rule: Vietnamese first, English in parentheses. `bang-tu.md` is the lookup table of terms already decided, with the gate each one stopped at. `agent` is "tác tử (agent)" per TCVN 13902:2023; `sandbox`, `compaction`, `front-end` stay in English.
 
 `tai-lieu-tieng-viet.md` is the long-form standard: write straight in Vietnamese rather than translate, 19 rules you can check by eye (diacritics, Vietnamese number format, English gloss on translated terms at first use in every section and in every heading, cadence, banned words, no invented numbers), a heading table English to Vietnamese, one sample paragraph, and an eight-question reread. It comes from Ban's AI4Econ&Biz 2026 conference paper, whose Vietnamese text went through seven rounds of edits and one round of review.
 

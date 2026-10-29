@@ -1,7 +1,7 @@
 {
   "name": "b3-write-human",
-  "version": "1.5.0",
-  "description": "Chặn văn AI ngay lúc sinh: cấm từ vựng business, ép nhịp câu lệch, hai tệp tra tiếng Việt cho văn ngắn (chuỗi UI, quảng cáo, email) và tài liệu dài, giữ nguyên lệnh và placeholder, gate self-audit trước khi xuất. Bổ trợ cho humanizer.",
+  "version": "1.6.0",
+  "description": "Chặn văn AI ngay lúc sinh: cấm từ vựng business, ép nhịp câu lệch, bốn tệp tra tiếng Việt: văn ngắn (chuỗi UI, quảng cáo, email), tài liệu dài, và thuật ngữ dịch hay giữ nguyên theo TCVN 13902:2023, giữ nguyên lệnh và placeholder, gate self-audit trước khi xuất. Bổ trợ cho humanizer.",
   "author": {
     "name": "ducban",
     "url": "https://github.com/ducban"

@@ -26,21 +26,23 @@ thêm plugin là Claude nạp hai bản cùng tên và không chắc bản nào 
 | `b3-write-human` | Chặn văn AI ngay lúc viết bản nháp đầu. Cấm ~60 từ business, ép nhịp câu lệch, hai tệp tra tiếng Việt cho văn ngắn và tài liệu dài, giữ nguyên lệnh và placeholder, bắt tự soi trước khi xuất. Bổ trợ cho [`humanizer`](https://github.com/blader/humanizer), vốn chỉ dọn text đã có. |
 | `b3-figure-drawing` | Tám khuôn vẽ hình cho tài liệu bằng `figlib.mjs`: so sánh, quy trình, dãy số, kiến trúc nhiều tầng, đồ thị hai biến, chênh lệch lời khai với số kiểm chứng, mốc thời gian, ma trận kiểu SWOT. SVG thang xám, trục thật, tự đổi theo nền sáng tối. Chữ trong hình theo luật của `b3-write-human`. |
 
-`b3-write-human` mang thêm hai tệp tra tiếng Việt, chỉ đọc khi cần nên không đội chi phí cho lượt viết ngắn.
+`b3-write-human` mang thêm bốn tệp tra tiếng Việt, chỉ đọc khi cần nên không đội chi phí cho lượt viết ngắn.
 
 `van-ngan-tieng-viet.md` lo **văn ngắn có người đọc cụ thể**: chuỗi giao diện và thông báo lỗi, quảng cáo và bài đăng, email việc. Có bảng chọn ngôi xưng, luật cho nút và trạng thái trống, khi nào khuôn PAS hay AIDA hợp và khi nào không cần khuôn, rào bằng chứng cho quảng cáo (không bịa số, không khan hiếm giả), và cách giữ nguyên placeholder kiểu `{name}` hay `{{count}}`. Gộp từ skill `vietnamese-writing` ngày 28/10/2026, chỉ giữ phần skill này chưa có.
+
+`thuat-ngu.md` và `bang-tu.md` lo **thuật ngữ nghề: dịch hay giữ nguyên**. Năm cửa ải hỏi theo thứ tự cố định (có ai gõ hay tra đúng chuỗi này không; tiêu chuẩn quốc gia có bản tiếng Việt chưa; nghề đã dùng từ nào chưa; dịch được bằng từ sẵn có không; phải dựng từ mới không), một phép thử tra ngược cho bản dịch vừa nghĩ ra, và luật vị trí tiếng Việt trước, tiếng Anh trong ngoặc. Bảng tra ghi từ đã chốt kèm cửa nó dừng: `agent` là "tác tử (agent)" theo TCVN 13902:2023, còn `sandbox`, `compaction`, `front-end` giữ tiếng Anh. Rút từ nghiên cứu 29/10/2026 trong vault.
 
 `tai-lieu-tieng-viet.md` lo **tài liệu dài bằng tiếng Việt** (từ khoảng một trang trở lên). Luật số một là viết thẳng bằng tiếng Việt chứ không dịch từ bản Anh; kèm 19 luật kiểm bằng mắt, bảng tiêu đề mục Anh sang Việt, một đoạn mẫu, và vòng tự đọc lại tám câu. Chuẩn rút từ một bài báo hội thảo đã qua bảy vòng sửa và một vòng phản biện.
 
 ## Eval
 
-`plugins/b3-write-human/evals/` có 12 case cho `claude plugin eval`: giữ lệnh và mã lỗi, giữ placeholder, không bịa số trong quảng cáo, không bỏ từ rào khi sửa câu. Case nào có literal thì chấm bằng regex làm sàn, chất lượng văn chấm bằng LLM.
+`plugins/b3-write-human/evals/` có 16 case cho `claude plugin eval`: giữ lệnh và mã lỗi, giữ placeholder, không bịa số trong quảng cáo, không bỏ từ rào khi sửa câu, và bốn case thuật ngữ (agent, sandbox, front-end, compaction). Case nào có literal thì chấm bằng regex làm sàn, chất lượng văn chấm bằng LLM.
 
 ```bash
 claude plugin eval plugins/b3-write-human --threshold 0.8 --no-publish
 ```
 
-Một lượt đủ là 12 case × 3 lần × 2 nhánh, đo 29/10/2026 hết 6 USD và 7 phút với `-j 3`. Thử một case trước bằng `--case '06-*' --ablation none`. Kết quả vào `evals/results/`, đã ignore.
+Một lượt đủ là 16 case × 3 lần × 2 nhánh. Bộ 12 case đo 29/10/2026 hết 6 USD và 7 phút với `-j 3`. Thử một case trước bằng `--case '06-*' --ablation none`. Kết quả vào `evals/results/`, đã ignore.
 
 ## Dùng ngoài Claude Code
 
