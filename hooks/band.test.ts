@@ -615,6 +615,30 @@ test('the cache cell counts the hour down from the last request, and says cold o
   await ui.unmount()
 })
 
+// --- the settings pane's shape -------------------------------------------------
+test('the settings pane groups its rows, boxes the preview, and drops the last column when narrow', async ($, on) => {
+  stand(on)
+  await $.classic.SessionStart({ source: 'startup' })
+
+  const wide = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...SETTINGS })
+  for (const title of ['Identity', 'Budget', 'Tokens and money', 'Behaviour', 'as the band will draw it']) {
+    expect(await wide.find({ type: 'Text', text: new RegExp(title) }), title).toBeDefined()
+  }
+  // The item row carries what it draws now; a switch row carries what it does.
+  expect(await wide.find({ type: 'Text', text: /^\(nothing to show yet\)$/ })).toBeDefined()
+  expect(await wide.find({ type: 'Text', text: /1 runs, 2 refuses/ })).toBeDefined()
+  expect(await wide.find({ type: 'Text', text: /^session$/ })).toBeDefined()
+  await wide.unmount()
+
+  // Under seventy columns the last column goes; the keys, names and states stay.
+  const narrow = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...SETTINGS, props: { ...SETTINGS.props, bodyColumns: 60 } })
+  expect(await narrow.find({ type: 'Text', text: /Identity/ })).toBeDefined()
+  expect(await narrow.find({ type: 'Text', text: /nothing to show yet/ })).toBeUndefined()
+  expect(await narrow.find({ type: 'Text', text: /1 runs, 2 refuses/ })).toBeUndefined()
+  expect(await narrow.find({ type: 'Text', text: /^line 1\s*$/ })).toBeDefined()
+  await narrow.unmount()
+})
+
 // --- speed and the last turn --------------------------------------------------
 test('the speed cell times the last request, and the turn cell prices the last turn', async ($, on) => {
   // The stand-in request yields a chunk, moves the clock two seconds, and

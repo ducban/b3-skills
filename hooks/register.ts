@@ -227,6 +227,14 @@ const ITEMS: { key: ItemKey; hotkey: string; name: string; about: string }[] = [
   { key: 'agents', hotkey: 'b', name: 'agents', about: 'how many subagents are running; /sl-agents lists them' },
 ]
 
+// How the settings pane groups the items: what you are, what you have left,
+// what it is costing. Every item is in exactly one group.
+const SETTINGS_GROUPS: { title: string; keys: ItemKey[] }[] = [
+  { title: 'Identity', keys: ['dir', 'model', 'git', 'version'] },
+  { title: 'Budget', keys: ['context', 'five_hour', 'seven_day', 'scoped', 'spend', 'other', 'cache', 'agents'] },
+  { title: 'Tokens and money', keys: ['input', 'output', 'cost', 'speed', 'turn'] },
+]
+
 // 0 is off; 1 to 4 is which line it sits on. Four lines is the cap.
 const MAX_LINES = 4
 type Layout = Record<ItemKey, number>
@@ -858,7 +866,7 @@ async function toggleReset($: EngineInterface) {
 // what turns the week's cell over. A redraw is a function call; while the
 // countdown is off there is nothing to move.
 function tickCountdown($: EngineInterface) {
-  if (showReset || (layout.cache > 0 && cacheWarmAt !== null)) $.ui.invalidate('ui.render')
+  if (showReset || (layout.cache > 0 && cacheWarmAt !== null) || agentsRunning() > 0) $.ui.invalidate('ui.render')
 }
 
 // --- A compaction nothing told the band about --------------------------------
@@ -2020,30 +2028,40 @@ export const register: Register = on => {
       now,
     }
 
-    const itemRow = (item: (typeof ITEMS)[number]) => {
-      const n = layout[item.key]
-      const parts = partsFor(item.key, ctx)
-      const preview = parts.length > 0 ? parts.map(plain).join('  ') : '(nothing to show yet)'
-
-      return Box({
+    // One row shape for everything on this pane: the key, the button, the
+    // state, then what the item draws or what the switch does. Under seventy
+    // columns the last column goes, as the band's bars do.
+    const narrow = e.props.bodyColumns < 70
+    const row = (
+      hotkey: string,
+      key: string,
+      label: string,
+      state: string,
+      isOn: boolean,
+      tail: string,
+      tailColor: string,
+      onPress: () => void,
+    ) =>
+      Box({
         flexDirection: 'row',
         columnGap: 1,
         children: [
-          Button({
-            key: `item-${item.key}`,
-            label: item.name.padEnd(9),
-            hotkey: item.hotkey,
-            plain: true,
-            onPress: () => void cycleItem($, item.key),
-          }),
-          Text({
-            color: n > 0 ? BLUE : MUTED,
-            children: [n > 0 ? `line ${n}` : 'off   '],
-          }),
-          Text({ color: parts.length > 0 ? FG : MUTED, wrap: 'truncate-end', children: [preview] }),
+          Text({ color: MUTED, children: [` ${hotkey}`] }),
+          Button({ key, label: label.padEnd(10), hotkey, plain: true, onPress }),
+          Text({ color: isOn ? BLUE : MUTED, children: [state.padEnd(7)] }),
+          ...(narrow ? [] : [Text({ color: tailColor, wrap: 'truncate-end', children: [tail] })]),
         ],
       })
+    const itemRow = (key: ItemKey) => {
+      const item = ITEMS.find(i => i.key === key)!
+      const n = layout[key]
+      const parts = partsFor(key, ctx)
+      const preview = parts.length > 0 ? parts.map(plain).join('  ') : '(nothing to show yet)'
+
+      return row(item.hotkey, `item-${key}`, item.name, n > 0 ? `line ${n}` : 'off', n > 0, preview, parts.length > 0 ? FG : MUTED, () => void cycleItem($, key))
     }
+    const header = (title: string) => Text({ color: BLUE, bold: true, children: [title] })
+    const rule = () => Text({ color: MUTED, children: ['\u2500'.repeat(Math.max(20, e.props.bodyColumns - 2))] })
 
     const lines = buildLines(ctx, e.props.bodyColumns)
 
@@ -2059,111 +2077,51 @@ export const register: Register = on => {
     return Box({
       flexDirection: 'column',
       children: [
-        Text({ color: MUTED, wrap: 'wrap', children: ['A key moves its item on: 1, 2, 3, 4, off.'] }),
-        Text({ children: [' '] }),
-        ...ITEMS.map(itemRow),
-        Box({
-          flexDirection: 'row',
-          columnGap: 1,
-          children: [
-            Button({
-              key: 'item-reset',
-              label: 'reset'.padEnd(9),
-              hotkey: 't',
-              plain: true,
-              onPress: () => void toggleReset($),
-            }),
-            Text({ color: showReset ? BLUE : MUTED, children: [showReset ? 'on    ' : 'off   '] }),
-            Text({
-              color: MUTED,
-              wrap: 'wrap',
-              children: [`${ICON.reset} after 5h and 7d: time to the reset; the week also turns to a date`],
-            }),
-          ],
-        }),
-        Box({
-          flexDirection: 'row',
-          columnGap: 1,
-          children: [
-            Button({
-              key: 'item-guard',
-              label: 'guard'.padEnd(9),
-              hotkey: 'a',
-              plain: true,
-              onPress: () => void toggleGuard($),
-            }),
-            Text({ color: guardOn ? BLUE : MUTED, children: [guardOn ? 'on    ' : 'off   '] }),
-            Text({
-              color: MUTED,
-              wrap: 'wrap',
-              children: ['hold rm -rf, git reset --hard, git clean and a force push; 1 runs, 2 refuses'],
-            }),
-          ],
-        }),
-        Box({
-          flexDirection: 'row',
-          columnGap: 1,
-          children: [
-            Button({
-              key: 'item-cold-gate',
-              label: 'cold gate'.padEnd(9),
-              hotkey: 'k',
-              plain: true,
-              onPress: () => void toggleColdGate($),
-            }),
-            Text({ color: coldGateOn ? BLUE : MUTED, children: [coldGateOn ? 'on    ' : 'off   '] }),
-            Text({
-              color: MUTED,
-              wrap: 'wrap',
-              children: ['cold cache: drop the next prompt once, with the re-read; enter again sends it'],
-            }),
-          ],
-        }),
-        Text({ children: [' '] }),
-        Text({ color: BLUE, bold: true, children: ['Effort'] }),
-        Box({
-          flexDirection: 'row',
-          columnGap: 1,
-          children: [
-            Button({
-              key: 'item-effort',
-              label: 'effort'.padEnd(9),
-              hotkey: 'e',
-              plain: true,
-              onPress: () => cycleEffort($),
-            }),
-            Text({ color: effortOverride === null ? MUTED : BLUE, children: [choices] }),
-          ],
-        }),
+        Text({ color: MUTED, wrap: 'wrap', children: ['A key moves its item on: line 1, 2, 3, 4, off. The switches turn on and off.'] }),
+        rule(),
+        ...SETTINGS_GROUPS.flatMap(group => [header(group.title), ...group.keys.map(itemRow)]),
+        header('Behaviour'),
+        row('t', 'item-reset', 'reset', showReset ? 'on' : 'off', showReset, `${ICON.reset} after 5h and 7d: time to the reset; the week also turns to a date`, MUTED, () => void toggleReset($)),
+        row('a', 'item-guard', 'guard', guardOn ? 'on' : 'off', guardOn, 'hold rm -rf, git reset --hard, git clean and a force push; 1 runs, 2 refuses', MUTED, () => void toggleGuard($)),
+        row('k', 'item-cold-gate', 'cold gate', coldGateOn ? 'on' : 'off', coldGateOn, 'cold cache: drop the next prompt once, with the re-read; enter again sends it', MUTED, () => void toggleColdGate($)),
+        row('e', 'item-effort', 'effort', effortOverride ?? 'session', effortOverride !== null, choices, effortOverride === null ? MUTED : BLUE, () => cycleEffort($)),
         Text({
           color: MUTED,
           wrap: 'wrap',
           children: [
-            `the session itself reports ${effort ?? 'nothing yet -- it is read off the first tool call or the end of the first turn'}`,
+            `             the session itself reports ${effort ?? 'nothing yet -- it is read off the first tool call or the end of the first turn'}`,
           ],
         }),
-        Text({ children: [' '] }),
-        Text({ color: BLUE, bold: true, children: ['As the band will draw it'] }),
-        ...(lines.length === 0
-          ? [Text({ color: MUTED, children: ['nothing switched on'] })]
-          : lines.map((line, i) =>
-              Text({ color: FG, wrap: 'truncate-end', children: [`${i + 1}  ${line.map(plain).join('  ')}`] }),
-            )),
-        Text({ children: [' '] }),
+        rule(),
+        Box({
+          flexDirection: 'column',
+          borderStyle: 'round',
+          borderColor: MUTED,
+          paddingX: 1,
+          children: [
+            Text({ color: BLUE, bold: true, children: ['as the band will draw it'] }),
+            ...(lines.length === 0
+              ? [Text({ color: MUTED, children: ['nothing switched on'] })]
+              : lines.map((line, i) =>
+                  Text({ color: FG, wrap: 'truncate-end', children: [`${i + 1}  ${line.map(plain).join('  ')}`] }),
+                )),
+          ],
+        }),
         Box({
           flexDirection: 'row',
-          columnGap: 2,
+          columnGap: 1,
           children: [
+            Text({ color: MUTED, children: [' r'] }),
             Button({
               key: 'reset',
-              label: 'defaults',
+              label: 'defaults'.padEnd(10),
               hotkey: 'r',
               plain: true,
               onPress: () => void resetLayout($),
             }),
             Text({
               color: MUTED,
-              children: [`${ICON.dot} esc closes ${ICON.dot} tab to the sl help tab and enter, or click it`],
+              children: [`${ICON.dot} esc closes ${ICON.dot} tab to help or agents and enter, or click a tab`],
             }),
           ],
         }),
@@ -2200,17 +2158,29 @@ export const register: Register = on => {
       const span = elapsed((run.endedAt ?? now) - run.startedAt)
       const figures = `${run.steps} req ${ICON.dot} ${tk(run.tokens)} tok ${ICON.dot} ${span}`
 
+      const live = run.status === 'running'
+
       return Box({
         flexDirection: 'row',
         columnGap: 1,
         children: [
           Text({ color: g.fg, children: [g.text] }),
-          Text({ color: FG, children: [run.type.slice(0, 16).padEnd(16)] }),
-          Text({ color: MUTED, children: [figures.padEnd(30)] }),
+          Text({ color: live ? AMBER : FG, children: [run.type.slice(0, 16).padEnd(16)] }),
+          Text({ color: live ? AMBER : MUTED, children: [figures.padEnd(30)] }),
           Text({ color: FG, wrap: 'truncate-end', children: [run.description] }),
         ],
       })
     }
+    const head = Box({
+      flexDirection: 'row',
+      columnGap: 1,
+      children: [
+        Text({ color: MUTED, children: [' '] }),
+        Text({ color: MUTED, children: ['type'.padEnd(16)] }),
+        Text({ color: MUTED, children: [`requests ${ICON.dot} tokens ${ICON.dot} ran`.padEnd(30)] }),
+        Text({ color: MUTED, children: ['task'] }),
+      ],
+    })
 
     return Box({
       flexDirection: 'column',
@@ -2218,7 +2188,7 @@ export const register: Register = on => {
         Text({ color: BLUE, bold: true, children: [`Subagents this session ${ICON.dot} ${agentsRunning()} running`] }),
         Text({ color: MUTED, wrap: 'wrap', children: [`${ICON.dirty} running  ${ICON.clean} answered  ${ICON.cross} failed, aborted or killed; requests, tokens over them, and how long the loop ran`] }),
         Text({ children: [' '] }),
-        ...(agents.length === 0 ? [Text({ color: MUTED, children: ['none spawned yet'] })] : agents.map(row)),
+        ...(agents.length === 0 ? [Text({ color: MUTED, children: ['none spawned yet'] })] : [head, ...agents.map(row)]),
         Text({ children: [' '] }),
         Text({ color: MUTED, children: [`${ICON.dot} esc closes ${ICON.dot} tab to the other sl tabs and enter, or click one`] }),
       ],
@@ -2241,10 +2211,11 @@ export const register: Register = on => {
       flexDirection: 'column',
       children: [
         Text({ color: BLUE, bold: true, children: ['What can be on the band'] }),
+        Text({ color: MUTED, wrap: 'wrap', children: ['what each item means; which line it is on, and the switches, are in /sl-settings'] }),
         ...ITEMS.map(item =>
-          line(`${item.name} (${item.hotkey})`, `${item.about} ${ICON.dot} ${layout[item.key] > 0 ? `line ${layout[item.key]}` : 'off'}`),
+          line(`${item.name} (${item.hotkey})`, item.about),
         ),
-        line('reset (t)', `${ICON.reset}2h14m after 5h, ${ICON.reset}3d15h or ${ICON.reset}Oct 6 11:00pm after 7d, turn by turn ${ICON.dot} ${showReset ? 'on' : 'off'}`),
+        line('reset (t)', `${ICON.reset}2h14m after 5h, ${ICON.reset}3d15h or ${ICON.reset}Oct 6 11:00pm after 7d, turn by turn`),
         line('reset colour', 'cyan when the reset is close, blue midway, plain further out -- never the gauge colours'),
         line('narrow', 'a line the terminal has no room for drops its bars: `5h 8%` for `5h ▰▱▱▱▱ 8%`'),
         line('theme', 'Tokyo Night Moon on a dark theme, Day on a light one; follows /config'),
@@ -2267,13 +2238,14 @@ export const register: Register = on => {
         gap,
         Text({ color: BLUE, bold: true, children: ['Keys and commands'] }),
         line('effort (e)', 'in /sl-settings: session, low, medium, high, xhigh, max -- picked outright, never nudged'),
-        line('guard (a)', `in /sl-settings: hold a risky shell command in the band until 1 runs it or 2 refuses it ${ICON.dot} ${guardOn ? 'on' : 'off'}`),
-        line('cold gate (k)', `in /sl-settings: after a cold hour, the next prompt is dropped once with the re-read in tokens; enter again sends it ${ICON.dot} ${coldGateOn ? 'on' : 'off'}`),
+        line('guard (a)', 'in /sl-settings: hold a risky shell command in the band until 1 runs it or 2 refuses it'),
+        line('cold gate (k)', 'in /sl-settings: after a cold hour, the next prompt is dropped once with the re-read in tokens; enter again sends it'),
+        line('/sl-agents', 'the subagents this session has run, one row each'),
         line('/sl', 'hide or show the band'),
         line('/sl-settings', 'choose what shows, and on which line'),
         line('/sl-effort <level>', 'set it outright, or `off` to stop overriding'),
         line('/sl-debug', 'print what the engine reports -- text, so it can be copied out'),
-        line('tabs', 'help and settings open together; click a tab, or tab onto it and enter'),
+        line('tabs', 'help, settings and agents open together; click a tab, or tab onto it and enter'),
         line('Esc', 'close this pane'),
         gap,
         Text({

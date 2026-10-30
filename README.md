@@ -327,11 +327,14 @@ straight through.
 
 ## What goes where
 
-`/sl-settings` draws one row per item. Its key moves that item on: line 1, 2, 3,
-4, off, and round again. One key per item and no cursor to lose. Under the
-items sit `reset (t)`, an on/off for the resets after the `5h` and `7d` bars,
-`guard (a)`, the on/off for the hold above, and `cold gate (k)`, the on/off for
-the ask below; the effort control sits at the bottom of the same pane.
+`/sl-settings` draws one row per item, grouped as Identity, Budget, and Tokens
+and money, every row the same shape: the key, the name, where it is, and what
+it draws right now. A key moves its item on: line 1, 2, 3, 4, off, and round
+again. One key per item and no cursor to lose. Under the items, in the same
+shape, sit the switches: `reset (t)` for the resets after the `5h` and `7d`
+bars, `guard (a)` for the hold above, `cold gate (k)` for the ask below, and
+`effort (e)`. A boxed preview at the bottom shows the band as it will draw.
+Under seventy columns the last column goes, as the band's bars do.
 
 The layout is stored in `$.store`, so it is per machine and outlives the
 session.
