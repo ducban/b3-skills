@@ -9,7 +9,7 @@ Chỉ ghi từ đã chạy qua chuỗi trên một bài thật, đừng điền 
 
 | Tiếng Việt | Tiếng Anh | Cửa | Nguồn |
 |---|---|---|---|
-| tác tử | agent | 2 | TCVN 13902:2023, mục 3.1.1 "Tác tử AI (AI agent)" |
+| tác tử | agent | 2 | TCVN 13902:2023, mục 3.1.1 "Tác tử AI (AI agent)"; chương diễn giải của chính tiêu chuẩn lại dùng "tác nhân", xem `tcvn-13902.md` |
 | hệ thống AI | AI system | 2 | TCVN 13902:2023, mục 3.1.4 ghi đủ "hệ thống trí tuệ nhân tạo", chính văn rút gọn "hệ thống AI" |
 | phần tử AI | AI component | 2 | TCVN 13902:2023, mục 3.1.2 |
 | học máy | machine learning | 2 | TCVN 13902:2023, mục 3.3.5 |
