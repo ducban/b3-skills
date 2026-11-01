@@ -8,7 +8,7 @@ description: |
   deck that has a shape reading would lose. Not for decorative diagrams, and
   not for knowledge graphs.
 metadata:
-  version: "1.1.1"
+  version: "1.1.2"
   library: figlib.mjs
 ---
 
@@ -72,13 +72,16 @@ and the verification disagree → `gap`.
 - **Every string you pass in is prose, and `b3-write-human` owns the prose
   rules.** Load that skill before you write a title, label, legend, or note,
   and don't restate its rules here: a second copy drifts. For Vietnamese,
-  its "Vietnamese output" bullets cover the three things that have actually
-  gone wrong in a figure (a label that is an English heading in Vietnamese
-  words, "nháp" or a date inside the title, a note that describes the
-  layout), and `van-ngan-tieng-viet.md` next to it covers short strings: one
-  concept keeps one name across the figure, a verb plus an object beats a
-  noun pile, no hook phrases. Labels feel like data, which is why they skip
-  the pass. They aren't.
+  its "Vietnamese output" section ends with four rules written for text
+  inside a figure: every label is a sentence with a subject, full
+  diacritics everywhere, the title is a name with no "nháp" or date, and a
+  label may drop the English gloss in parentheses when the paragraph beside
+  the figure or the caption already carries it. Those four come from the
+  three things that actually went wrong in a figure on 22/10/2026.
+  `van-ngan-tieng-viet.md` next to it covers short strings: one concept
+  keeps one name across the figure, a verb plus an object beats a noun pile,
+  no hook phrases. Labels feel like data, which is why they skip the pass.
+  They aren't.
 - **A title is a name and a note says what the eye can't get.** The page
   carries status and date; the reader is already looking at the layout. If
   deleting `note` loses nothing, leave it out.

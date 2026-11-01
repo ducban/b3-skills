@@ -16,8 +16,9 @@ liệu Build, ghi chép Knowledge, thư dài của Keeper. Không áp cho tin ch
 dữ liệu, bảng, frontmatter, code, và chữ chép nguyên văn của người dùng.
 
 Chữ trong hình vẽ, slide và ô bảng tuy không áp trọn bộ này nhưng vẫn là văn:
-chúng theo các gạch đầu dòng tiếng Việt trong `SKILL.md`, nhất là luật viết
-thành câu chứ không dịch đầu đề, và luật không ghi "nháp" hay ngày vào tiêu đề.
+chúng theo bốn luật ở cuối mục "Vietnamese output" của `SKILL.md` (câu có chủ
+ngữ, đủ dấu, tiêu đề không "nháp" hay ngày, được bỏ chú tiếng Anh khi đoạn
+cạnh hình đã chú). Chú thích hình thì theo trọn bộ này.
 
 ## Luật số một: viết thẳng bằng tiếng Việt
 
@@ -49,7 +50,9 @@ kiểu Anh. Nếu đã lỡ có bản Anh, viết lại từ ý, đừng dịch 
    đầu bài thì tới Phần 4 họ gặp "việc nền" mà không biết đó là background
    jobs; Ban vấp đúng chỗ này ngày 18/09/2026.
    Tiêu đề chung của khuôn (Tóm tắt, Bước tiếp theo, các dòng trong bảng tiêu
-   đề chuẩn bên dưới) không phải thuật ngữ, không chú.
+   đề chuẩn bên dưới) không phải thuật ngữ, không chú. Nhãn trong hình và ô
+   bảng được bỏ chú khi đoạn cạnh hình đã chú, theo luật 4 cho chữ trong hình
+   ở `SKILL.md`.
 5. Tên riêng giữ nguyên bản: tên công ty, sản phẩm, framework, người, mô hình.
 6. Từ đã quen dùng nguyên bản trong nghề (sprint, backlog, deadline, token, API)
    giữ nguyên, không dịch cứng. Ngược lại, chỗ tiếng Việt đã có từ tự nhiên thì

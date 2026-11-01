@@ -26,7 +26,7 @@ thêm plugin là Claude nạp hai bản cùng tên và không chắc bản nào 
 | `b3-write-human` | Chặn văn AI ngay lúc viết bản nháp đầu. Cấm ~60 từ business, ép nhịp câu lệch, hai tệp tra tiếng Việt cho văn ngắn và tài liệu dài, giữ nguyên lệnh và placeholder, bắt tự soi trước khi xuất. Bổ trợ cho [`humanizer`](https://github.com/blader/humanizer), vốn chỉ dọn text đã có. |
 | `b3-figure-drawing` | Tám khuôn vẽ hình cho tài liệu bằng `figlib.mjs`: so sánh, quy trình, dãy số, kiến trúc nhiều tầng, đồ thị hai biến, chênh lệch lời khai với số kiểm chứng, mốc thời gian, ma trận kiểu SWOT. SVG thang xám, trục thật, tự đổi theo nền sáng tối. Chữ trong hình theo luật của `b3-write-human`. |
 
-`b3-write-human` mang thêm năm tệp tra tiếng Việt, chỉ đọc khi cần nên không đội chi phí cho lượt viết ngắn.
+`b3-write-human` mang thêm năm tệp tra tiếng Việt, chỉ đọc khi cần nên không đội chi phí cho lượt viết ngắn. Riêng chữ trong hình, slide và ô bảng có bốn luật ngắn nằm ngay trong `SKILL.md` (câu có chủ ngữ, đủ dấu, tiêu đề không ghi nháp hay ngày, được bỏ chú tiếng Anh khi đoạn cạnh hình đã chú), vì `b3-figure-drawing` trỏ sang đó cho mọi nhãn nó vẽ.
 
 `van-ngan-tieng-viet.md` lo **văn ngắn có người đọc cụ thể**: chuỗi giao diện và thông báo lỗi, quảng cáo và bài đăng, email việc. Có bảng chọn ngôi xưng, luật cho nút và trạng thái trống, khi nào khuôn PAS hay AIDA hợp và khi nào không cần khuôn, rào bằng chứng cho quảng cáo (không bịa số, không khan hiếm giả), và cách giữ nguyên placeholder kiểu `{name}` hay `{{count}}`. Gộp từ skill `vietnamese-writing` ngày 28/10/2026, chỉ giữ phần skill này chưa có.
 
@@ -38,13 +38,13 @@ thêm plugin là Claude nạp hai bản cùng tên và không chắc bản nào 
 
 ## Eval
 
-`plugins/b3-write-human/evals/` có 16 case cho `claude plugin eval`: giữ lệnh và mã lỗi, giữ placeholder, không bịa số trong quảng cáo, không bỏ từ rào khi sửa câu, và bốn case thuật ngữ (agent, sandbox, front-end, compaction). Case nào có literal thì chấm bằng regex làm sàn, chất lượng văn chấm bằng LLM.
+`plugins/b3-write-human/evals/` có 17 case cho `claude plugin eval`: giữ lệnh và mã lỗi, giữ placeholder, không bịa số trong quảng cáo, không bỏ từ rào khi sửa câu, bốn case thuật ngữ (agent, sandbox, front-end, compaction), và một case chữ trong hình SWOT. Case nào có literal thì chấm bằng regex làm sàn, chất lượng văn chấm bằng LLM.
 
 ```bash
 claude plugin eval plugins/b3-write-human --threshold 0.8 --no-publish
 ```
 
-Một lượt đủ là 16 case × 3 lần × 2 nhánh. Bộ 12 case đo 29/10/2026 hết 6 USD và 7 phút với `-j 3`. Thử một case trước bằng `--case '06-*' --ablation none`. Kết quả vào `evals/results/`, đã ignore.
+Một lượt đủ là 17 case × 3 lần × 2 nhánh. Bộ 12 case đo 29/10/2026 hết 6 USD và 7 phút với `-j 3`. Thử một case trước bằng `--case '06-*' --ablation none`. Kết quả vào `evals/results/`, đã ignore.
 
 ## Đo lường
 

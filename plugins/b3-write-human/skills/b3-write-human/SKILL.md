@@ -11,7 +11,7 @@ description: |
   output behind a self-audit. Complements `humanizer`, which cleans text
   that already exists; this one governs text as it is being written.
 metadata:
-  version: "1.7.0"
+  version: "1.8.0"
   companion: humanizer
 ---
 
@@ -67,7 +67,12 @@ The banned list above is English. Vietnamese has its own tells, mostly translati
 - Viết "trường hợp", không viết "ca": "trường hợp Marvel Rivals", không "ca Marvel Rivals".
 - Chữ ghi thừa vào chính sản phẩm: "(nháp 22/10)" trong tiêu đề, câu chú thích tả lại bố cục người đọc đang nhìn ("bốn khung trên là..."). Trạng thái và ngày đã nằm ở metadata với lịch sử; xoá câu đó mà không mất tin gì thì đừng viết.
 
-**Chữ trong hình, slide, nhãn và ô bảng cũng là văn.** Các luật trên áp cho chúng y như cho một đoạn văn. Đây là chỗ hay bị bỏ sót nhất vì chữ ở đó trông giống dữ liệu: ngày 22/10/2026 cả ba lỗi vừa kể lọt vào một hình SWOT gửi Ban mà không qua bước tự đọc lại.
+**Chữ trong hình, slide, nhãn và ô bảng cũng là văn.** Đây là chỗ hay bị bỏ sót nhất vì chữ ở đó trông giống dữ liệu: ngày 22/10/2026 cả ba lỗi vừa kể (gạch đầu dòng dịch từ đầu đề, "nháp" kèm ngày trong tiêu đề, câu tả bố cục) lọt vào một hình SWOT gửi Ban mà không qua bước tự đọc lại. Chữ ở đó không áp trọn bộ `tai-lieu-tieng-viet.md`, mà theo bốn luật này:
+
+1. Mỗi nhãn, mỗi ô là một câu có chủ ngữ và động từ. "Tiền lệ xấu đã xảy ra với Marvel Rivals", không "Trường hợp Marvel Rivals".
+2. Đủ dấu thanh ở mọi chữ, kể cả nhãn trục, chú giải, tên tệp hiển thị.
+3. Tiêu đề hình là một cái tên. Không "nháp", không ngày, không trạng thái; trang chứa hình đã mang những thứ đó.
+4. Nhãn và ô bảng được bỏ phần tiếng Anh trong ngoặc khi đoạn văn ngay cạnh hình, hoặc chú thích hình, đã chú thuật ngữ đó. Nhãn không có bề ngang để dài. Chú thích hình và câu dẫn trong bài vẫn chú theo luật 4 của `tai-lieu-tieng-viet.md`.
 
 Five reference files sit next to this one. Which to read depends on what you're about to write:
 
