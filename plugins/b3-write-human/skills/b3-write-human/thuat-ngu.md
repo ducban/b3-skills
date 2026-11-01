@@ -18,7 +18,7 @@ mọi cửa thì giữ nguyên tiếng Anh, không dịch thử.
 | # | Câu hỏi | Trả lời "có" thì |
 |---|---|---|
 | 1 | Có ai gõ, tra hay đối chiếu đúng chuỗi này không? | Giữ nguyên. Tên lệnh, nhãn nút, tham số, API endpoint, tên định dạng, tên vị trí tuyển dụng. |
-| 2 | Tiêu chuẩn quốc gia đã có bản tiếng Việt chưa? | Theo tiêu chuẩn, không tự nghĩ bản khác. TCVN 13902:2023 cho thuật ngữ AI. |
+| 2 | Tiêu chuẩn quốc gia đã có bản tiếng Việt chưa? | Theo tiêu chuẩn, không tự nghĩ bản khác. Thuật ngữ AI tra `tcvn-13902.md`, 104 mục của TCVN 13902:2023. |
 | 3 | Nghề tiếng Việt đã dùng sẵn một từ chưa? | Dùng từ đó: máy chủ, đường dẫn, con trỏ, cơ sở dữ liệu. |
 | 4 | Dịch được bằng từ sẵn có, hay bằng liên tưởng người đọc nhận ra ngay? | Dịch, chú tiếng Anh trong ngoặc ở lần đầu mỗi mục. |
 | 5 | Phải dựng một từ mới mà chưa ai trong nghề dùng? | Giữ nguyên tiếng Anh. |
@@ -34,7 +34,7 @@ Bốn trường hợp đã chạy qua chuỗi:
 
 | Từ | Dừng ở | Viết là |
 |---|---|---|
-| agent | cửa 2, TCVN 13902:2023 mục 3.1.7 | tác tử (agent) |
+| agent | cửa 2, TCVN 13902:2023 mục 3.1.1 | tác tử (agent) |
 | sandbox | cửa 5, dịch là phải dựng mới | sandbox |
 | front-end | cửa 1, là nhãn người ta tra và đối chiếu | front-end |
 | compaction | cửa 5 | compaction |

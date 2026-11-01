@@ -26,11 +26,13 @@ thêm plugin là Claude nạp hai bản cùng tên và không chắc bản nào 
 | `b3-write-human` | Chặn văn AI ngay lúc viết bản nháp đầu. Cấm ~60 từ business, ép nhịp câu lệch, hai tệp tra tiếng Việt cho văn ngắn và tài liệu dài, giữ nguyên lệnh và placeholder, bắt tự soi trước khi xuất. Bổ trợ cho [`humanizer`](https://github.com/blader/humanizer), vốn chỉ dọn text đã có. |
 | `b3-figure-drawing` | Tám khuôn vẽ hình cho tài liệu bằng `figlib.mjs`: so sánh, quy trình, dãy số, kiến trúc nhiều tầng, đồ thị hai biến, chênh lệch lời khai với số kiểm chứng, mốc thời gian, ma trận kiểu SWOT. SVG thang xám, trục thật, tự đổi theo nền sáng tối. Chữ trong hình theo luật của `b3-write-human`. |
 
-`b3-write-human` mang thêm bốn tệp tra tiếng Việt, chỉ đọc khi cần nên không đội chi phí cho lượt viết ngắn.
+`b3-write-human` mang thêm năm tệp tra tiếng Việt, chỉ đọc khi cần nên không đội chi phí cho lượt viết ngắn.
 
 `van-ngan-tieng-viet.md` lo **văn ngắn có người đọc cụ thể**: chuỗi giao diện và thông báo lỗi, quảng cáo và bài đăng, email việc. Có bảng chọn ngôi xưng, luật cho nút và trạng thái trống, khi nào khuôn PAS hay AIDA hợp và khi nào không cần khuôn, rào bằng chứng cho quảng cáo (không bịa số, không khan hiếm giả), và cách giữ nguyên placeholder kiểu `{name}` hay `{{count}}`. Gộp từ skill `vietnamese-writing` ngày 28/10/2026, chỉ giữ phần skill này chưa có.
 
 `thuat-ngu.md` và `bang-tu.md` lo **thuật ngữ nghề: dịch hay giữ nguyên**. Năm cửa ải hỏi theo thứ tự cố định (có ai gõ hay tra đúng chuỗi này không; tiêu chuẩn quốc gia có bản tiếng Việt chưa; nghề đã dùng từ nào chưa; dịch được bằng từ sẵn có không; phải dựng từ mới không), một phép thử tra ngược cho bản dịch vừa nghĩ ra, và luật vị trí tiếng Việt trước, tiếng Anh trong ngoặc. Bảng tra ghi từ đã chốt kèm cửa nó dừng: `agent` là "tác tử (agent)" theo TCVN 13902:2023, còn `sandbox`, `compaction`, `front-end` giữ tiếng Anh. Rút từ nghiên cứu 29/10/2026 trong vault.
+
+`tcvn-13902.md` là bảng 104 cặp thuật ngữ AI Việt - Anh của TCVN 13902:2023 (ISO/IEC 22989:2022), kèm số mục, không chép định nghĩa. Đây là cửa 2 của chuỗi: từ AI nào có trong đó thì viết theo đó, không tự nghĩ bản khác. Đọc từ bản chép chính văn ngày 02/11/2026, thiếu khoảng 19 mục bị cắt.
 
 `tai-lieu-tieng-viet.md` lo **tài liệu dài bằng tiếng Việt** (từ khoảng một trang trở lên). Luật số một là viết thẳng bằng tiếng Việt chứ không dịch từ bản Anh; kèm 19 luật kiểm bằng mắt, bảng tiêu đề mục Anh sang Việt, một đoạn mẫu, và vòng tự đọc lại tám câu. Chuẩn rút từ một bài báo hội thảo đã qua bảy vòng sửa và một vòng phản biện.
 

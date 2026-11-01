@@ -1,16 +1,22 @@
 # Bảng tra thuật ngữ
 
-Tra bảng này trước khi chạy chuỗi cửa ải trong `thuat-ngu.md`. Từ nào chưa
-có thì chạy chuỗi, rồi thêm vào đây kèm cửa nó dừng, để lần sau khỏi xét lại.
+Tra bảng này trước khi chạy chuỗi cửa ải trong `thuat-ngu.md`. Từ AI nào chưa
+có ở đây thì tra tiếp `tcvn-13902.md`, bảng 104 mục của tiêu chuẩn quốc gia.
+Vẫn chưa có thì chạy chuỗi, rồi thêm vào đây kèm cửa nó dừng, để lần sau khỏi xét lại.
 Chỉ ghi từ đã chạy qua chuỗi trên một bài thật, đừng điền sẵn cho đủ.
 
 ## Dịch, tiếng Anh trong ngoặc lần đầu mỗi mục
 
 | Tiếng Việt | Tiếng Anh | Cửa | Nguồn |
 |---|---|---|---|
-| tác tử | agent | 2 | TCVN 13902:2023, mục 3.1.7 "Tác tử AI (AI agent)" |
-| hệ thống AI | AI system | 2 | TCVN 13902:2023 |
-| phần tử AI | AI component | 2 | TCVN 13902:2023 |
+| tác tử | agent | 2 | TCVN 13902:2023, mục 3.1.1 "Tác tử AI (AI agent)" |
+| hệ thống AI | AI system | 2 | TCVN 13902:2023, mục 3.1.4 ghi đủ "hệ thống trí tuệ nhân tạo", chính văn rút gọn "hệ thống AI" |
+| phần tử AI | AI component | 2 | TCVN 13902:2023, mục 3.1.2 |
+| học máy | machine learning | 2 | TCVN 13902:2023, mục 3.3.5 |
+| mạng nơ-ron | neural network | 2 | TCVN 13902:2023, mục 3.4.8 |
+| huấn luyện | training | 2 | TCVN 13902:2023, mục 3.3.15 |
+| suy luận | inference | 2 | TCVN 13902:2023, mục 3.1.17 |
+| thiên vị | bias | 2 | TCVN 13902:2023, mục 3.5.4 |
 | máy chủ | server | 3 | nghề đã dùng |
 | đường dẫn | path | 3 | nghề đã dùng |
 | con trỏ | cursor | 3 | nghề đã dùng |
