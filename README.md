@@ -44,6 +44,15 @@ claude plugin eval plugins/b3-write-human --threshold 0.8 --no-publish
 
 Một lượt đủ là 16 case × 3 lần × 2 nhánh. Bộ 12 case đo 29/10/2026 hết 6 USD và 7 phút với `-j 3`. Thử một case trước bằng `--case '06-*' --ablation none`. Kết quả vào `evals/results/`, đã ignore.
 
+## Đo lường
+
+`plugins/b3-write-human/do-luong/` là cấu hình Vale soi một tệp `.md` tiếng Việt có sẵn theo đúng luật của skill: từ sáo, cấu trúc dịch, bản dịch thuật ngữ đã loại, từ tiếng Anh đứng trơn. Trả về số lỗi trên 1.000 chữ. Khác eval ở chỗ nó chạy trên bài đã viết, không tốn tiền, và chỉ bắt được bề mặt. Bài hội thảo làm mốc chuẩn đo 02/11/2026 được 0,3 lỗi/1.000 chữ, trong đó một lỗi thật.
+
+```bash
+brew install vale
+python3 plugins/b3-write-human/do-luong/do.py bai.md
+```
+
 ## Dùng ngoài Claude Code
 
 Skill viết theo chuẩn Agent Skills nên Codex, OpenCode, Crush, pi đọc được. Cài

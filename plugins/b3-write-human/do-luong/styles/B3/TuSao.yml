@@ -1,0 +1,37 @@
+# Nguồn thật của danh sách này là luật 10 trong skills/b3-write-human/tai-lieu-tieng-viet.md
+# (22 từ) và mục "Vietnamese output" trong SKILL.md (cụm rỗng). Sửa ở đó trước rồi chép
+# sang đây; kiem-dong-bo.py bắt khi hai bên lệch.
+extends: existence
+message: "Từ sáo '%s'. Muốn nhấn thì đưa số hoặc so sánh cụ thể (luật 10, tai-lieu-tieng-viet.md)."
+level: error
+ignorecase: true
+nonword: true
+tokens:
+  - 'đóng vai trò quan trọng'
+  - 'không chỉ[^.;]{1,80}mà còn'
+  - 'đáng chú ý là'
+  - 'nhìn chung'
+  - 'có thể nói rằng'
+  - 'mang lại giá trị thiết thực'
+  - 'góp phần không nhỏ'
+  - 'trong bối cảnh hiện nay'
+  - 'một cách hiệu quả'
+  - 'vô cùng'
+  - 'hết sức'
+  - 'toàn diện'
+  - 'nâng tầm'
+  - 'bứt phá'
+  - 'điểm nhấn'
+  - 'dấu ấn'
+  - 'hành trình'
+  - 'then chốt'
+  - 'đột phá'
+  - 'mạnh mẽ'
+  - 'sâu sắc'
+  - 'tuyệt vời'
+  - 'trong thời đại số hiện nay'
+  - 'góp phần nâng cao'
+  - 'mang tính đột phá'
+  - 'tối ưu hoá trải nghiệm'
+  - 'tối ưu hóa trải nghiệm'
+  - 'giải pháp toàn diện'

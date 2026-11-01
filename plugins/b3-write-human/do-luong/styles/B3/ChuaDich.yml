@@ -1,0 +1,19 @@
+# Từ tiếng Anh đứng trơn trong câu mà bang-tu.md đã có bản dịch (cửa 2, 3, 4).
+# Bỏ qua khi đứng ngay sau "(" vì đó là chú tiếng Anh hợp lệ: "máy chủ (server)".
+# Phân biệt hoa thường có chủ ý: "Cursor" viết hoa là tên trình soạn thảo, không phải con trỏ.
+extends: existence
+message: "'%s' đã có tiếng Việt trong bang-tu.md. Dịch, chú tiếng Anh trong ngoặc ở lần đầu mỗi mục."
+level: warning
+ignorecase: false
+nonword: true
+tokens:
+  - '(?:^|[^(\w-])servers?\b'
+  - '(?:^|[^(\w-])databases?\b'
+  - '(?:^|[^(\w-])cursors?\b'
+  - '(?:^|[^(\w-])accounts?\b'
+  - '(?:^|[^(\w-])backups?\b'
+  - '(?:^|[^(\w-])background jobs?\b'
+  - '(?:^|[^(\w-])large language models?\b'
+  - '(?:^|[^(\w-])inference boundar(?:y|ies)\b'
+  - '(?:^|[^(\w-])AI systems?\b'
+  - '(?:^|[^(\w-])AI components?\b'

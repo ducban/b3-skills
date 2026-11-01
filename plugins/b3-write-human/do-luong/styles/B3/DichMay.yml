@@ -1,0 +1,11 @@
+# Cấu trúc dịch từ tiếng Anh, mục "Vietnamese output" trong SKILL.md.
+extends: existence
+message: "Văn dịch: '%s'. Viết thẳng chủ ngữ, bỏ động từ đệm (SKILL.md, Vietnamese output)."
+level: warning
+ignorecase: true
+nonword: true
+tokens:
+  - 'được thực hiện bởi'
+  - 'được xem như là'
+  - 'tiến hành kiểm tra'
+  - 'thực hiện việc'

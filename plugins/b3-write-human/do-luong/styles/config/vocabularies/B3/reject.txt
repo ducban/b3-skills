@@ -1,0 +1,2 @@
+# Trống có chủ ý. Nhóm "nên dịch" nằm ở styles/B3/ChuaDich.yml để bỏ qua được chú trong ngoặc;
+# reject.txt của Vale không bỏ qua được nên sẽ báo oan "máy chủ (server)".

@@ -1,0 +1,18 @@
+# Giữ nguyên tiếng Anh, theo bang-tu.md mục "Giữ nguyên tiếng Anh". Vale không báo các chuỗi này.
+sandbox
+compaction
+front-end
+back-end
+API
+SDK
+endpoint
+token
+framework
+host
+zero-shot
+agentic
+iterative
+workflow
+sprint
+backlog
+deadline

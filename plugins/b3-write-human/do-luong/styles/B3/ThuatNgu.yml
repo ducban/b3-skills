@@ -1,0 +1,20 @@
+# Bản dịch đã loại, mục cuối bang-tu.md. Khớp cả cụm, không khớp từ đơn: "mặt tiền căn nhà"
+# là tiếng Việt bình thường, "lập trình viên mặt tiền" mới sai.
+extends: substitution
+message: "Viết '%s', không viết '%s' (bang-tu.md, mục Bản dịch đã loại)."
+level: error
+ignorecase: true
+nonword: true
+swap:
+  'lập trình viên mặt tiền': lập trình viên front-end
+  'phát triển mặt tiền': phát triển front-end
+  'mặt tiền web': front-end web
+  'lập trình viên hậu trường': lập trình viên back-end
+  'phát triển hậu trường': phát triển back-end
+  'hệ thống hậu trường': hệ thống back-end
+  'hộp cát': sandbox
+  'bền qua sập': compaction
+  'tác nhân AI': tác tử AI
+  'các tác nhân AI': các tác tử AI
+  'AI tác thể': tác tử AI
+  'agent \(tác tử\)': tác tử (agent)

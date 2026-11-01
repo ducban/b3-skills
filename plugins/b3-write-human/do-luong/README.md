@@ -1,0 +1,52 @@
+# Đo lường: Vale cho văn tiếng Việt
+
+Lớp soi luật bằng máy, chạy được trên bất kỳ tệp `.md` nào, miễn phí, một giây.
+Nó không đo giọng máy; nó đếm chỗ vi phạm luật bề mặt: từ sáo, cấu trúc dịch,
+bản dịch thuật ngữ đã loại, từ tiếng Anh đứng trơn khi đã có tiếng Việt. Eval ở
+`../evals/` đo skill có làm agent viết đúng không; thư mục này đo một bài đã có.
+
+```bash
+brew install vale                                     # một lần
+python3 plugins/b3-write-human/do-luong/do.py bai.md  # số lỗi trên 1.000 chữ, 8 lỗi gặp nhiều nhất
+vale --config plugins/b3-write-human/do-luong/.vale.ini bai.md   # từng dòng
+python3 plugins/b3-write-human/do-luong/kiem-dong-bo.py          # TuSao.yml còn khớp nguồn không
+```
+
+## Bốn luật
+
+| Tệp | Mức | Bắt gì | Nguồn thật |
+|---|---|---|---|
+| `styles/B3/TuSao.yml` | error | 22 từ sáo của luật 10 cộng 6 cụm rỗng | `tai-lieu-tieng-viet.md` luật 10, `SKILL.md` mục Vietnamese output |
+| `styles/B3/DichMay.yml` | warning | "được thực hiện bởi", "tiến hành kiểm tra"… | `SKILL.md` mục Vietnamese output |
+| `styles/B3/ThuatNgu.yml` | error | "lập trình viên mặt tiền", "hộp cát", "tác nhân AI", "agent (tác tử)" | `bang-tu.md` mục Bản dịch đã loại |
+| `styles/B3/ChuaDich.yml` | warning | server, database, account… đứng trơn, bỏ qua khi ngay sau `(` | `bang-tu.md` mục Dịch |
+
+Danh sách từ sáo có hai bản: trong skill và trong `TuSao.yml`. Bản trong skill là
+nguồn thật, sửa ở đó trước; `kiem-dong-bo.py` thoát 1 khi hai bản lệch.
+`ThuatNgu.yml` khớp cả cụm, không khớp từ đơn, vì "mặt tiền căn nhà" là tiếng
+Việt bình thường.
+
+## Số đo ngày 02/11/2026
+
+| Tệp | Chữ | Lỗi/1.000 | Thật | Oan |
+|---|---|---|---|---|
+| Bài hội thảo AI4Econ&Biz, bản đã qua 7 vòng sửa | 10.990 | 0,3 | 1 | 2 |
+| FINDINGS.md của nghiên cứu 29/10 | 4.840 | 2,7 | 0 | 13 |
+| POLICY.md của vault | 7.004 | 0,3 | 0 | 2 |
+| README.md kho này | 972 | 0,0 | 0 | 0 |
+
+Bài hội thảo là mốc chuẩn: một lỗi thật duy nhất, "được thực hiện bởi các tác tử"
+ở dòng 148. Số "sau" chưa có vì chưa ai sửa bài theo kết quả này.
+
+## Ba kiểu báo oan đã biết
+
+- **Nhắc tới chứ không dùng.** Tệp nào bàn về từ cấm thì bị bắt chính từ đó:
+  `tai-lieu-tieng-viet.md` 29 lỗi, FINDINGS.md 13 lỗi, toàn là ví dụ trong bài.
+  Soi tài liệu về luật viết thì bỏ qua số này.
+- **Tiếng Anh trong ngoặc không đứng ngay sau `(`.** "(Evolution of enterprise AI
+  systems)" bị bắt "AI systems". Regex không đếm được ngoặc.
+- **Danh mục tham khảo.** Tên bài tiếng Anh in nghiêng bị bắt như văn tiếng Việt.
+
+"Cursor" viết hoa từng bị bắt là "con trỏ" ở POLICY.md và OPERATIONS.md. Đã đổi
+`ChuaDich.yml` sang phân biệt hoa thường, POLICY.md về 0. OPERATIONS.md còn một
+lỗi oan: "cursor" viết thường trong danh sách tên agent của skills CLI.
