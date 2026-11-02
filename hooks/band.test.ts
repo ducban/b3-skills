@@ -59,8 +59,8 @@ const stand = (
   // Answers a process the test cares about (the guard's measuring and its
   // sleeps); one it leaves `undefined` gets the git answers below.
   processes?: (argv: readonly string[], init?: ProcessRunInit) => Promise<ProcessRunResult | undefined>,
-  // Every text the mod puts in the prompt box, for the cold gate test; the box
-  // itself reads empty, as a headless one does.
+  // Every text the mod puts in the prompt box; the cold gate test checks it
+  // stays empty, since the engine keeps a dropped draft itself.
   fills?: string[],
 ) => {
   // mock answers clock, store and env from memory; `on` is how it registers.
@@ -130,7 +130,7 @@ const stand = (
   // against: nothing, so the ledger is what the test drives.
   on('agent.list', () => ({ value: [] }))
 
-  // The prompt box beneath the cold gate: empty to read, and a fill is kept.
+  // The prompt box: empty to read, and a fill is kept for the test to see.
   on('prompt.read', () => ({ value: { text: '', cursor: 0 } }))
   on('prompt.fill', ($, e) => {
     fills?.push(e.text)
@@ -824,13 +824,14 @@ test('with the cold gate on, the prompt after a cold hour is dropped once, and t
   expect(sent).toEqual(['hello', 'warm'])
 
   // The hour goes. The first prompt typed is asked for once: the reason names
-  // the re-read, the draft is put back, and the cell says what answers it.
+  // the re-read, the draft is the engine's to keep, and the cell says what
+  // answers it.
   await clock.advance(61 * 60_000)
   expect(await ui.find({ type: 'Text', text: /cache cold/ })).toBeDefined()
   const asked = await submit('do the thing')
   expect(asked.drop).toMatch(/cold for 1m/)
   expect(asked.drop).toMatch(/about 660\.0k tokens/)
-  expect(fills).toEqual(['do the thing'])
+  expect(fills).toEqual([])
   expect(sent).toEqual(['hello', 'warm'])
   expect(await ui.find({ type: 'Text', text: /cache cold . enter sends it/ })).toBeDefined()
 
@@ -846,7 +847,7 @@ test('with the cold gate on, the prompt after a cold hour is dropped once, and t
   expect((await submit('/compact')).drop).toBeUndefined()
   expect((await submit('tick', 'scheduled-trigger')).drop).toBeUndefined()
   expect((await submit('typed')).drop).toMatch(/cold gate/)
-  expect(fills).toEqual(['do the thing', 'typed'])
+  expect(fills).toEqual([])
 
   await ui.unmount()
 })

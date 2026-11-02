@@ -389,8 +389,8 @@ The cell says `cache cold`. With the gate on, that costs a keystroke:
  > fix the flaky test in band.test.ts                      ⏎  → sent
 ```
 
-The first prompt typed after the hour has gone is dropped once, the draft is put
-back in the box, and the next Enter sends it. Nothing is asked twice in one
+The first prompt typed after the hour has gone is dropped once, the draft stays
+in the box, and the next Enter sends it. Nothing is asked twice in one
 cold spell, and a request clears the ask. The figure is the last response's
 input, which is what the next request re-reads; it is in tokens and not
 dollars, for the reason the next section gives.

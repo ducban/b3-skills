@@ -1911,11 +1911,9 @@ export const register: Register = on => {
     if (size !== undefined && size < COLD_GATE_FLOOR) return next(e)
     coldAskedAt = now
     $.ui.invalidate('ui.render')
-    // Whether a dropped prompt's draft stays in the box is the engine's to say,
-    // and it does not say: so the text is put back if the box is empty, and
-    // left alone if it is not.
-    const box = await $.prompt.read()
-    if (box.text.trim() === '') await $.prompt.fill({ text: e.text })
+    // The engine empties the box at Enter and puts the draft back on a drop,
+    // so the text is left to it: a fill here reads an empty box mid-submit and
+    // ends with the prompt twice over (0.1.17).
 
     return { drop: coldReason(countdown(now, coldAt), size) }
   })
