@@ -38,6 +38,26 @@ Việt bình thường.
 Bài hội thảo là mốc chuẩn: một lỗi thật duy nhất, "được thực hiện bởi các tác tử"
 ở dòng 148. Số "sau" chưa có vì chưa ai sửa bài theo kết quả này.
 
+### Cặp trước sau đầu tiên
+
+Chạy ngày 02/11/2026 trên máy Mac, Vale 3.26.0, luật của kho ở bản 1.8.0. So bản
+nháp đầu của bài hội thảo với bản đã qua bảy vòng sửa:
+
+| Bản | Chữ | Lỗi/1.000 | Thật | Oan |
+|---|---|---|---|---|
+| Bản 1, nháp 09/08/2026 (`versions/PAPER-vi-v1-10300tu-2026-08-09.md`) | 11.470 | 0,2 | 1 | 1 |
+| Bản cuối (`PAPER-vi-final.md`) | 10.990 | 0,3 | 1 | 2 |
+
+Lỗi thật của bản 1 là "không chỉ áp dụng công nghệ mà còn" ở dòng 77, nằm trong
+danh sách từ sáo. Các vòng sửa gỡ được nó nhưng lại sinh ra "được thực hiện bởi
+các tác tử". Lỗi oan của bản 1 là một tên bài tiếng Anh trong danh mục tham khảo.
+Hai bản cùng nằm ở mức sàn, nên cặp số này không cho thấy bảy vòng sửa đã làm gì:
+chỗ các vòng ấy sửa nằm ngoài tầm của luật bề mặt. Muốn lớp này tách được trước
+với sau thì phải đo trên một bài nháp chưa viết theo skill.
+
+Cột "Chữ" là số mảnh `do.py` tách theo khoảng trắng, tính cả cú pháp Markdown, nên
+không khớp với số chữ ghi ở nơi khác cho cùng bài.
+
 ## Ba kiểu báo oan đã biết
 
 - **Nhắc tới chứ không dùng.** Tệp nào bàn về từ cấm thì bị bắt chính từ đó:

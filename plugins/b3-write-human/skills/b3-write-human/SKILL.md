@@ -11,7 +11,7 @@ description: |
   output behind a self-audit. Complements `humanizer`, which cleans text
   that already exists; this one governs text as it is being written.
 metadata:
-  version: "1.8.0"
+  version: "1.9.0"
   companion: humanizer
 ---
 
@@ -85,7 +85,7 @@ Five reference files sit next to this one. Which to read depends on what you're 
 
 `van-ngan-tieng-viet.md` covers pronoun choice (`bạn`, `người dùng`, `chúng tôi`, `mình`), UX strings (buttons, errors, empty states, placeholders and character limits), when a copy framework like PAS or AIDA fits and when none does, the evidence guard for ads, and the shape of a work email.
 
-`thuat-ngu.md` decides translate-or-keep for one term with five yes/no gates in a fixed order (is it a string someone types or looks up; does the national standard have a Vietnamese word; does the trade already use one; can it be translated with an existing word; would it need a coined word), plus a back-translation test for a coined translation and the position rule: Vietnamese first, English in parentheses. `bang-tu.md` is the lookup table of terms already decided, with the gate each one stopped at. `agent` is "tác tử (agent)" per TCVN 13902:2023; `sandbox`, `compaction`, `front-end` stay in English. `tcvn-13902.md` is the 104-entry term table of that national standard (ISO/IEC 22989:2022 in Vietnamese), pairs and section numbers only, for any AI term the short table lacks.
+`thuat-ngu.md` decides translate-or-keep for one term with five yes/no gates in a fixed order (is it a string someone types or looks up; does the national standard have a Vietnamese word; does the trade already use one; can it be translated with an existing word; would it need a coined word), plus a back-translation test for every translation, the standard's own included; the three ways gate 2 falls short (the standard is silent, its translation fails the back-translation test, or it names one concept two ways, where the definition entry beats running text); the head-noun-first word order rule (six of six AI entries in the standard); and the position rule: Vietnamese first, English in parentheses. `bang-tu.md` is the lookup table of terms already decided, with the gate each one stopped at, and a list of the standard's translations the skill doesn't follow (`heteronomy`, `imputation`) with the reason. `agent` is "tác tử (agent)" per TCVN 13902:2023; `sandbox`, `compaction`, `front-end` stay in English. `tcvn-13902.md` is the 104-entry term table of that national standard (ISO/IEC 22989:2022 in Vietnamese), pairs and section numbers only, for any AI term the short table lacks.
 
 `tai-lieu-tieng-viet.md` is the long-form standard: write straight in Vietnamese rather than translate, 19 rules you can check by eye (diacritics, Vietnamese number format, English gloss on translated terms at first use in every section and in every heading, cadence, banned words, no invented numbers), a heading table English to Vietnamese, one sample paragraph, and an eight-question reread. It comes from Ban's AI4Econ&Biz 2026 conference paper, whose Vietnamese text went through seven rounds of edits and one round of review.
 

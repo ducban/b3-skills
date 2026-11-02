@@ -1,12 +1,14 @@
 # Eval cho b3-write-human
 
-Mười bảy case. Mười hai case đầu gốc từ bộ eval của skill `vietnamese-writing`
+Mười tám case. Mười hai case đầu gốc từ bộ eval của skill `vietnamese-writing`
 (28/10/2026), chuyển sang khuôn `claude plugin eval`. Bốn case 13 tới 16 kiểm
 chuỗi cửa ải thuật ngữ trong `thuat-ngu.md`, mỗi case một từ đã chạy qua chuỗi:
 agent phải thành "tác tử (agent)", còn sandbox, front-end, compaction phải giữ
 tiếng Anh. Case 17 kiểm bốn luật cho chữ trong hình: ô SWOT là câu có chủ ngữ,
 tiêu đề không mang "nháp" hay ngày dù đề bài nói đó là bản nháp gửi ngày 05/11,
-và ô được bỏ "(agent)" vì đoạn cạnh hình đã chú. Mỗi case một thư mục: `prompt.md` là đề,
+và ô được bỏ "(agent)" vì đoạn cạnh hình đã chú. Case 18 kiểm một bản dịch của chính tiêu chuẩn mà trượt
+phép thử tra ngược: heteronomy phải giữ tiếng Anh, không theo "dị thường" của
+TCVN 13902:2023 mục 3.1.16. Mỗi case một thư mục: `prompt.md` là đề,
 `graders/` là cách chấm. Case nào có literal (lệnh, mã lỗi, placeholder, số)
 thì có grader `regex` làm sàn; chất lượng văn chấm bằng grader `llm`.
 `skill-fired.md` chỉ báo skill có nạp hay không, không tính điểm khi chạy
@@ -19,7 +21,7 @@ claude plugin eval plugins/b3-write-human --threshold 0.8 --no-publish
 ```
 
 Mặc định mỗi case chạy ba lượt, hai nhánh (có và không có plugin), nên một
-lượt đủ là 102 lần gọi agent. Đo ngày 29/10/2026: cả bộ hai nhánh với `-j 3`
+lượt đủ là 108 lần gọi agent. Đo ngày 29/10/2026: cả bộ hai nhánh với `-j 3`
 hết 5,96 USD và 7 phút. Muốn rẻ hơn:
 
 ```bash
