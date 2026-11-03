@@ -1,5 +1,7 @@
 # sl-mod
 
+[Bản tiếng Việt](README.vi.md)
+
 A status line for Claude Code drawn in the band above the prompt, as a mod
 instead of a `statusLine` command.
 
@@ -11,12 +13,36 @@ starting up, before it reads 127 MB of transcripts to total the tokens. A mod
 is a module the engine loads once, so a redraw is a function call, and the
 expensive reads move onto a timer instead of sitting on the draw path.
 
+![A statusLine command forks a process and reads the transcripts on every redraw; the mod loads once and reads memory](docs/figures/statusline-vs-mod.svg)
+
+*Figure 1. What each redraw costs under a `statusLine` command and under this
+mod. The 57 ms and the 127 MB were measured on this machine.*
+
 The trade: there is no render site under the prompt, so the band sits **above**
 it. The two lines move; they do not stay where `statusLine` put them.
 
 What it keeps from `claude-powerline`, and every idea taken from another mod
 since, is listed in `ACKNOWLEDGEMENTS.md`, one line each with the person and
 the licence.
+
+## How it is wired
+
+Everything the band draws was written to memory before the redraw asked for
+it. The engine raises an event for each request, each reading, each compaction
+and each subagent, and a hook writes the figure down as it lands. One timer of
+the mod's own ticks every ten seconds to check the gauge, and one fetch every
+three minutes, shared across the sessions on a machine, brings in the quota
+windows the engine does not hand out. Only the layout is stored, in `$.store`,
+so it outlives the session.
+
+![Three layers: the events the engine hands the mod, the state the mod keeps, and the band and panes it draws](docs/figures/wiring.svg)
+
+*Figure 2. The events the mod listens to, what it keeps from them, and what it
+draws. The dashed line is where a bundled module can sit in front of the mod
+on a managed machine; the sections on compaction say what gets lost there.*
+
+The rest of this file is the particulars: what each cell reads, what it cannot
+know, and what went wrong on the way.
 
 ## What it shows
 
@@ -29,16 +55,16 @@ Up to four lines, and what sits on which is set in `/sl-settings`. The default
 is identity on line one and budget on line two. Nothing is drawn under the
 prompt: the engine keeps its own hint line.
 Each bar is five segments of 20%, rounded **up**, so 19% shows one segment
-rather than none — a quota must never read lower than it is.
+rather than none. A quota must never read lower than it is.
 
 The `5h` bar carries `↻2h14m`: how long until the window resets, minutes rounded
 up, and `↻now` once the moment has passed and the engine has not sent the next
-reset yet — it comes with the next reading, not at the stroke of the hour. The
-`7d` bar turns over once a minute between its countdown, `↻3d15h`, and the date
-it lands on, `↻Oct 6 11:00pm` in the terminal's own zone: the week is days off,
-and the date is the one you would put in a calendar. Both readings carry the
-reset (`resetsAt` from the engine, `resets_at` from the endpoint), so it and the
-percent always come off the same reading. The `reset` key in `/sl-settings`
+reset yet. That one comes with the next reading, not at the stroke of the hour.
+The `7d` bar turns over once a minute between its countdown, `↻3d15h`, and the
+date it lands on, `↻Oct 6 11:00pm` in the terminal's own zone: the week is days
+off, and the date is the one you would put in a calendar. Both readings carry
+the reset (`resetsAt` from the engine, `resets_at` from the endpoint), so it and
+the percent always come off the same reading. The `reset` key in `/sl-settings`
 turns both off, and while they are on the band ticks once a minute, since
 nothing else redraws it between events.
 
@@ -64,16 +90,16 @@ keeps to its countdown, the shorter of its two faces.
 
 Two palettes: Tokyo Night Moon on a dark theme, which is what the old status
 line used, and Tokyo Night Day on a light one. The band paints its own
-backgrounds, so it was readable on a light theme before — a dark bar on a light
-page — but it looked pasted on. The theme is read from the `/config` row at
+backgrounds, so it was readable on a light theme before, a dark bar on a light
+page, but it looked pasted on. The theme is read from the `/config` row at
 start and again on the `config.set` that changes it, so switching redraws the
 band without a restart. The Moon background steps were a shade too close to the
-terminal's own background — on 2026-10-22 a reader could not make the cells out
-from the row behind them — so each is one notch up the palette now.
+terminal's own background: on 2026-10-22 a reader could not make the cells out
+from the row behind them, so each is one notch up the palette now.
 
 The reset sits in the bar's cell but not in its colour. It goes cyan when the
 reset is close (inside a fifth of the window: the last hour of 5h, the last
-day and a bit of 7d), blue midway, and plain further out — and never green,
+day and a bit of 7d), blue midway, and plain further out. It is never green,
 amber or red, which are the quota's. A red countdown next to a green bar would
 read as a quota in trouble.
 
@@ -85,7 +111,7 @@ the status line payload too.
 `$.session.authorize()` gets round that. It answers an opaque handle for the
 session's own Anthropic credential, and `$.http.fetch(url, { auth: handle })`
 spends it against a first-party host. The credential never reaches the mod, which
-also means the mod never refreshes it — so the token rotation that can cost you a
+also means the mod never refreshes it, so the token rotation that can cost you a
 Claude Code session isn't in play. Nothing to install, on any machine.
 
 One reading per machine, not per session. Each open session runs its own copy
@@ -104,7 +130,7 @@ number.
 ## Compaction
 
 `session.measure` does **not** fire for a compaction, so the context gauge used
-to keep the figure from before it — 38% on a session that had just emptied its
+to keep the figure from before it: 38% on a session that had just emptied its
 window. True when it was taken, which is the worst kind of wrong, because it
 reads as current.
 
@@ -119,7 +145,7 @@ moved down, on the theory that a reading which had not caught up would still hol
 the pre-compaction figure. It does not: the engine **drops the field**, so right
 after a compaction `usage.context` is `{ window }` and nothing else until the next
 response lands. On 2026-10-19 a session read `/context` at 9% while the band held
-20% from before its compaction — the backstop had asked, been handed no `percent`,
+20% from before its compaction. The backstop had asked, been handed no `percent`,
 and kept what it had. One response later the engine reported 10% and the gauge
 caught up on its own, so the hole was exactly the gap between a compaction and
 the next response, which is also exactly when you look at the gauge.
@@ -128,13 +154,13 @@ Both hooks now fall back to `$.session.usage({ breakdown: 'summary' })` and take
 `breakdown.percentage`: the fill as `/context` estimates it, computed locally
 with no request sent, and the only figure that exists in that gap. It measures
 against the compaction window rather than the model's, so it may read a point
-above `percent` for the same transcript — the same as `/context` does. The
+above `percent` for the same transcript, the same as `/context` does. The
 moved-down guard stays as the last resort for a breakdown that is not there.
 
-`/sl-debug` now prints `band ct:` — the gauge's own number, which hook wrote it
-and how long ago — next to the engine's raw `context:`, so "the engine stopped
-reporting" and "the band stopped listening" no longer look the same. It prints
-the breakdown's figure too.
+`/sl-debug` now prints `band ct:` next to the engine's raw `context:`. That is
+the gauge's own number, which hook wrote it and how long ago, so "the engine
+stopped reporting" and "the band stopped listening" no longer look the same. It
+prints the breakdown's figure too.
 
 Then on 2026-10-26 neither hook ran at all. On a machine with managed settings,
 or a Team or Enterprise account, Claude Code 2.1.310 seats its bundled
@@ -148,7 +174,7 @@ notice that opens every session on such a machine; those two are harmless here,
 because `session.start` takes the first readings.)
 
 So the gauge now checks its own premise, on a timer, which is the mod's own and
-has nothing seated in front of it. Every ten seconds it reads the plain usage —
+has nothing seated in front of it. Every ten seconds it reads the plain usage,
 one local call. The engine drops `context.percent` the moment a compaction lands
 and does not put it back until the next response, so a gauge holding a number
 while the reading has none has missed a compaction, and it takes the breakdown
@@ -161,8 +187,8 @@ The tick can still be ten seconds late, and the request you send right after a
 compaction is when you look at the gauge. So `turn.step`, the one event every
 mod is handed, is read for it too: each main-loop request says how many
 messages it carries (`messageCount`), and a request carrying fewer than half of
-what the last one did is the first after a compaction — the transcript was
-rewritten under it. The gauge then takes the breakdown the same way, on the
+what the last one did is the first after a compaction, because the transcript
+was rewritten under it. The gauge then takes the breakdown the same way, on the
 request itself rather than on the next tick; `/sl-debug` shows it as
 `from=turn.step breakdown`. A subagent's loop carries its own small count and is
 skipped, and a `/clear` halves it too, which lands on an emptied window and is
@@ -181,8 +207,8 @@ one, then the main loop's falling to a third and the gauge taking the breakdown.
 
 ## State
 
-Version 0.1.8, installed from this repo's own marketplace at scope **user**, so
-it draws in every session on this box. All five commands work. Twenty-two tests
+Version 0.1.17, installed from this repo's own marketplace at scope **user**, so
+it draws in every session on this box. All six commands work. Thirty-two tests
 pass under `claude plugin test`, `tsc -p .` is clean and `claude plugin validate`
 passes.
 
@@ -193,7 +219,7 @@ or threw on the way to asking, and that silence has cost time here before.
 ## Help and settings are tabs
 
 Nothing was built for this. The engine draws no title for a lone pane and a tab
-strip the moment a second one is open -- `PaneOpenArgs.title` says so outright:
+strip the moment a second one is open. `PaneOpenArgs.title` says so outright:
 "The pane's tab while more than one pane is open (with one, no title is drawn)",
 and the `Pane` render event: "one shown, the rest tabs".
 
@@ -218,9 +244,9 @@ one wrapped line with the engine's text broken across it:
                     (shift+tab to cycle)
 ```
 
-And `4`, `5` and `0` never fired there — measured, not assumed. The types say a
-bare digit from an empty composer presses a band Button and only a band Button,
-and that is what happens.
+And `4`, `5` and `0` never fired there; that was measured, not assumed. The
+types say a bare digit from an empty composer presses a band Button and only a
+band Button, and that is what happens.
 
 So the site is left alone. The controls live in `/sl-settings` instead, where a
 pane holds the keyboard and a Button's hotkey works.
@@ -228,8 +254,8 @@ pane holds the keyboard and a Button's hotkey works.
 ## Effort is picked, never nudged
 
 A relative control needs a baseline, and the baseline was a guess. `turn.step`
-carries `effort` only where the request names one — *"the session's setting or
-the model's default, absent for a model without effort"* — and in this session it
+carries `effort` only where the request names one, *"the session's setting or
+the model's default, absent for a model without effort"*, and in this session it
 never did. So one press of "more" from an unknown start computed `medium + 1`
 and drew `(H)` for a session that was not on high.
 
@@ -271,9 +297,14 @@ destroy is measured, and the report takes row one's place in the band:
  ct ▰▰▰▰▱ 66%   5h ▰▱▱▱▱ 9% ↻2h14m   7d ▰▰▱▱▱ 39% ↻3d15h
 ```
 
+![Five steps: the Bash call, the hold, the measuring, the report in the band, and Claude reading the answer](docs/figures/guard.svg)
+
+*Figure 3. What happens to a risky Bash call between Claude issuing it and the
+shell running it, or not.*
+
 `1` runs it as written. `2`, Esc on the turn, ten minutes of silence, or an
-error in the guard itself all refuse it, and Claude reads why — *"the user
-pressed refuse. It would have: delete 1,204 files"* — so it does not try the
+error in the guard itself all refuse it, and Claude reads why, *"the user
+pressed refuse. It would have: delete 1,204 files"*, so it does not try the
 same line again. `refuse` holds the focus, so Enter refuses. The budget row
 stays under the report; the identity row is the one you need least just then.
 A held command is drawn even while the band is hidden with `/sl`: it is a
@@ -303,9 +334,9 @@ a `.catch`, so it does, and the handler refuses.
 
 What it does not do: it reads the command text and does not parse shell.
 `$(...)`, `eval`, `bash -c "..."`, `xargs rm`, `find -delete`, and scripts that
-call `rm` are not caught. It is a net, not a permission system; a hard block
-belongs in the permission rules. It is **off** by default and switched on with
-`guard (a)` in `/sl-settings`, stored like the layout.
+call `rm` are not caught. It is a net. A hard block belongs in the permission
+rules. It is **off** by default and switched on with `guard (a)` in
+`/sl-settings`, stored like the layout.
 
 The idea, and the shape of the hold, are Blast Radius's, by Claude Code DevRel
 at Anthropic, in
@@ -350,7 +381,7 @@ Two rules the pane obeys:
 
 The prompt cache lives an hour from the last request that touched it, and the
 first request after that hour re-reads the whole transcript at the uncached
-price — on a 330k-token session that is a few dollars for a two-line recap. So
+price: on a 330k-token session that is a few dollars for a two-line recap. So
 the `cache` cell counts the hour down from the main loop's last request, which
 `turn.step` sees go out and come back:
 
@@ -362,7 +393,7 @@ the `cache` cell counts the hour down from the main loop's last request, which
 ```
 
 The bar drains, five segments of the hour left, rounded up like the quotas. The
-colours here are the gauge's own — green, amber, red — because running out *is*
+colours here are the gauge's own, green, amber, red, because running out *is*
 the trouble, unlike a reset, which is only a date. A subagent's requests do not
 restart it: they are not the main transcript's cache. Nothing is drawn before
 the first request, since there is no cache to time yet. On a narrow line the bar
@@ -373,6 +404,12 @@ timing the hour from the last request is Karan Bansal's, from cache-tax.
 One thing the cell cannot know: a session in usage overage drops to a
 five-minute cache, and nothing tells a mod. The cell then reads warm for longer
 than it is.
+
+![A loop of six steps: a request goes out, the hour counts down, amber then red, cache cold, the gate drops the first prompt once, Enter sends it and re-warms the cache](docs/figures/cache-hour.svg)
+
+*Figure 4. The cache cell and the cold gate over one hour. The loop closes
+because the prompt that gets through is the request that warms the cache
+again.*
 
 ### cold gate
 
@@ -408,11 +445,11 @@ are Karan Bansal's, from
 [cache-tax](https://github.com/karanb192/cache-tax); the gate here is written
 again without its price table, and off until `k` in `/sl-settings` turns it on.
 
-`ch` — the hit rate — joins the same cell only under **70%**. Above that it
+`ch`, the hit rate, joins the same cell only under **70%**. Above that it
 reads 98–100% and says nothing, and a permanent cell for a constant is spent
 width. It is also the one figure here that reports the past: by the time it
 drops, the money is gone. It is summed over the session rather than read off the
-last response, which needs a dedup signal — `session.measure` naming `cost` in
+last response, which needs a dedup signal: `session.measure` naming `cost` in
 `changed`, the engine's own word for "a priced response landed".
 
 ### input and output are tokens, not dollars
@@ -423,7 +460,7 @@ table in this file, and a price table in a file is a number that goes wrong
 silently the day the prices change. So `i` and `o` are token counts and `$` is
 the session total.
 
-A lifetime total -- spend and tokens across every session, not just this one --
+A lifetime total, spend and tokens across every session rather than this one,
 is out of reach entirely. It needs either the transcript scan this mod exists to
 avoid, or `ccuc`, which is not on every machine.
 
@@ -477,11 +514,11 @@ their panel also plans and reports a flow, which this one does not.
 
 `⌂ 0.1.2` is the **open project's** version, not the engine's, read in this
 order: `package.json`, `.claude-plugin/plugin.json`, `pyproject.toml`,
-`Cargo.toml`, then `git describe --tags`. Nothing found means no cell — `⌂ ?`
-says less than nothing does.
+`Cargo.toml`, then `git describe --tags`. Nothing found means no cell, since
+`⌂ ?` says less than nothing does.
 
 `dotfiles/arch` declares no version and has no tags, so it draws no cell. That
-is the intended answer, not a failure — `/sl-debug` spells out which it is.
+is the intended answer, and `/sl-debug` spells out which it is.
 
 A version from a git tag gets `+N` when HEAD has moved past it, because then the
 thing running is not the thing the tag names. A version from a file gets no
@@ -505,7 +542,7 @@ one project.
 
 ### Update
 
-A machine that already has it picks up a new version in two lines — the first
+A machine that already has it picks up a new version in two lines. The first
 re-clones the marketplace, the second swaps the installed copy:
 
 ```bash
@@ -524,8 +561,8 @@ is three path strings across this box, the Mac and the VPS, three things to go
 stale, and the point of the mod was to stop depending on local wiring.
 
 The repo is **public**, so `marketplace add` clones over plain HTTPS and no
-machine needs GitHub auth for it — checked, not assumed: a clone with the
-credential helper and the global git config both switched off succeeds. That
+machine needs GitHub auth for it. That was checked, not assumed: a clone with
+the credential helper and the global git config both switched off succeeds. It
 matters most for the VPS, which is headless and would otherwise need a device
 flow or a token.
 
@@ -541,7 +578,7 @@ claude plugin update sl-mod
 # then /reload-plugins, or restart
 ```
 
-While actually writing code, skip all of that and load the folder directly — one
+While actually writing code, skip all of that and load the folder directly. One
 flag on one command, nothing tracked:
 
 ```bash
@@ -557,9 +594,14 @@ tsc -p .
 ```
 
 `validate` prints `gating hook without .catch: ...` for the hooks that take the
-chain. Those lines are not noise — one of them was on screen from the first
+chain. Those lines are not noise: one of them was on screen from the first
 commit while an unguarded `$.process.run` in a gating hook took three probes
 down, and it was read past every time.
+
+The figures in `docs/figures/` are drawn by a script, not by hand, from the
+`b3-figure-drawing` skill's `figlib.mjs`; the Vietnamese copies sit under
+`docs/figures/vi/`. Each SVG carries both palettes and follows the reader's
+`prefers-color-scheme`.
 
 ## Commands
 
@@ -581,8 +623,8 @@ Two things held that slot before this mod, not one.
 
 `reference/statusline-command.sh` is the first: 92 lines of bash Ban wrote by
 hand, reading the engine's JSON on stdin with `jq`. Its shape is the shape of
-this mod -- line one `folder | model | Ctx:%`, line two `5h` and `7d` with the
-reset time and a countdown -- which is why it is kept here rather than thrown
+this mod (line one `folder | model | Ctx:%`, line two `5h` and `7d` with the
+reset time and a countdown), which is why it is kept here rather than thrown
 away. It was the only copy; no repo on either machine tracked it, and it sat
 unread in `~/.claude/` after the `statusLine` block went. It is archived, not
 wired to anything: nothing in this mod reads it.
@@ -605,9 +647,9 @@ that one back, the block was:
 ## Icons on row one, words on row two
 
 Row one takes Nerd Font icons. They draw a shade smaller than the text beside
-them and a mod can't fix that: a mod does not choose the font. A glyph JetBrains
-Mono does not carry is drawn by whichever fallback font fontconfig reaches, at
-that font's metrics.
+them and a mod can't fix that, since a mod does not choose the font. A glyph
+JetBrains Mono does not carry is drawn by whichever fallback font fontconfig
+reaches, at that font's metrics.
 
 Measured with `fc-list :charset=<cp>`, so it is checkable rather than folklore:
 
@@ -617,12 +659,12 @@ Measured with `fc-list :charset=<cp>`, so it is checkable rather than folklore:
 | gauges | `■ □ █ ░ ▓` | `▰ ▱` (in use), `▮ ▯` (effort) |
 
 Two things fall out of that table. The powerline separator **is** in JetBrains
-Mono, so it draws at the right size — it was simply missing, as an empty string,
+Mono, so it draws at the right size; it was simply missing, as an empty string,
 for four commits. And both bar pairs in use are fallback glyphs: `██░░░` or
 `■■□□□` would be the same-size swap, one line each, not taken because the
 current pair was asked for.
 
-Row two takes words — `ct`, `5h`, `7d`, and the model's own name for a scoped
+Row two takes words: `ct`, `5h`, `7d`, and the model's own name for a scoped
 window. A word renders at the row's own size, and the budget row is the half
 that has to be read fast.
 
