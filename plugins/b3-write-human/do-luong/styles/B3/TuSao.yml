@@ -1,6 +1,6 @@
-# Nguồn thật của danh sách này là luật 10 trong skills/b3-write-human/tai-lieu-tieng-viet.md
-# (22 từ) và mục "Vietnamese output" trong SKILL.md (cụm rỗng). Sửa ở đó trước rồi chép
-# sang đây; kiem-dong-bo.py bắt khi hai bên lệch.
+# SINH TỰ ĐỘNG bởi sinh-tu-sao.py, đừng sửa tay. Nguồn duy nhất: luật 10 trong
+# skills/b3-write-human/tai-lieu-tieng-viet.md và gạch "Cụm rỗng" trong SKILL.md.
+# Sửa ở đó rồi chạy lại script; do.py tự sinh lại trước mỗi lần đo.
 extends: existence
 message: "Từ sáo '%s'. Muốn nhấn thì đưa số hoặc so sánh cụ thể (luật 10, tai-lieu-tieng-viet.md)."
 level: error

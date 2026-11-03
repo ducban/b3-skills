@@ -3,7 +3,9 @@
 Dùng:  python3 plugins/b3-write-human/do-luong/do.py file1.md [file2.md ...]"""
 import json, subprocess, sys, pathlib
 from collections import Counter
-ini = pathlib.Path(__file__).resolve().parent / ".vale.ini"
+here = pathlib.Path(__file__).resolve().parent
+ini = here / ".vale.ini"
+subprocess.run([sys.executable, str(here / "sinh-tu-sao.py")], check=True, capture_output=True)  # TuSao.yml luôn sinh từ nguồn
 for f in sys.argv[1:]:
     text = pathlib.Path(f).read_text()
     words = len(text.split())
