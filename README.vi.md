@@ -2,51 +2,53 @@
 
 [English](README.md)
 
-Dòng trạng thái (status line) cho Claude Code, vẽ vào dải (band) phía trên ô gõ,
-dưới dạng một mod thay vì một lệnh `statusLine`.
+Dòng trạng thái (status line) cho Claude Code, nhưng làm dưới dạng mod chứ không
+phải lệnh `statusLine`. Nó vẽ vào dải (band) ngay phía trên ô gõ (prompt box).
 
-Tên các ô và các công tắc (`cache`, `cold gate`, `guard`, `effort`, `reset`,
-`speed`, `turn`, `agents`) giữ nguyên tiếng Anh suốt tài liệu, vì đó là chữ bạn
-sẽ thấy trong `/sl-settings` và cần tra đúng.
+Tên các ô và công tắc như `cache`, `cold gate`, `guard`, `effort`, `reset`,
+`speed`, `turn`, `agents` để nguyên tiếng Anh suốt tài liệu này. Đó là chữ hiện
+trong `/sl-settings`, dịch ra thì bạn không dò được.
 
-## Vì sao
+## Vì sao làm mod
 
-Cài đặt `statusLine` chạy một lệnh ngoài ở mỗi lần màn hình vẽ lại. Lệnh nó thay
-thế, `claude-powerline`, tốn **khoảng 57 ms** một lần vẽ trên máy này, gần hết
-là thời gian Node khởi động, rồi mới đọc 127 MB bản ghi hội thoại để cộng token.
-Mod là một module engine nạp đúng một lần, nên mỗi lần vẽ lại chỉ là một lời gọi
-hàm, còn việc đọc tốn kém dời sang bộ hẹn giờ (timer), không nằm trên đường vẽ.
+Dùng `statusLine` kiểu cũ thì mỗi lần Claude Code vẽ lại màn hình (redraw), nó
+phải chạy một lệnh bên ngoài. Trước đây máy này chạy `claude-powerline`, mỗi lần
+vẽ mất **khoảng 57 ms**. Phần lớn thời gian đó là Node khởi động. Khởi động xong
+nó còn đọc 127 MB bản ghi hội thoại (transcript) để cộng token. Lần nào cũng vậy.
 
-![Lệnh statusLine chạy một tiến trình và đọc bản ghi ở mỗi lần vẽ; mod nạp một lần và đọc bộ nhớ](docs/figures/vi/statusline-vs-mod.svg)
+Mod thì khác. Engine nạp nó một lần duy nhất, nên mỗi lần vẽ lại chỉ là gọi một
+hàm. Mấy việc đọc nặng dời sang bộ hẹn giờ (timer), không dính vào lúc vẽ.
 
-*Hình 1. Một lần vẽ lại tốn gì dưới lệnh `statusLine` và dưới mod này. Số 57 ms
-và 127 MB đo trên máy này.*
+![Lệnh statusLine chạy một tiến trình và đọc bản ghi mỗi lần vẽ; mod nạp một lần và chỉ đọc bộ nhớ](docs/figures/vi/statusline-vs-mod.svg)
 
-Cái phải đánh đổi: phía dưới ô gõ không có chỗ để vẽ, nên dải nằm **phía trên**.
-Hai dòng đó đi theo ô gõ chứ không đứng yên như chỗ `statusLine` từng đặt.
+*Hình 1. Một lần vẽ lại tốn gì khi dùng lệnh `statusLine` và khi dùng mod này.
+Hai con số 57 ms và 127 MB đo trên máy này.*
 
-Những gì mod giữ lại từ `claude-powerline`, và mọi ý tưởng lấy từ mod khác sau
-này, đều ghi trong `ACKNOWLEDGEMENTS.md`, mỗi thứ một dòng kèm tên người và giấy
-phép.
+Đổi lại có một điểm phải chịu: bên dưới ô gõ không có chỗ cho mod vẽ, nên dải
+phải nằm **phía trên**. Dải đi theo ô gõ, không đứng yên một chỗ như dòng
+`statusLine` cũ.
 
-## Mod nối dây thế nào
+Mod lấy gì từ `claude-powerline`, và sau này lấy ý từ mod nào khác, đều ghi
+trong `ACKNOWLEDGEMENTS.md`. Mỗi thứ một dòng, có tên người và giấy phép.
 
-Mọi thứ dải vẽ ra đều đã nằm sẵn trong bộ nhớ trước khi lần vẽ lại hỏi tới.
-Engine phát một sự kiện cho mỗi yêu cầu, mỗi lần đo, mỗi lần compaction và mỗi
-tác tử con (subagent), và một hook ghi con số xuống ngay khi sự kiện tới. Mod có
-một bộ hẹn giờ của riêng nó, mười giây một nhịp, để soát lại đồng hồ ngữ cảnh.
-Thêm một lần gọi mạng ba phút một, chia chung cho mọi phiên trên cùng máy, để
-lấy các cửa sổ hạn mức (quota) mà engine không đưa. Chỉ bố cục được lưu, ở
-`$.store`, nên nó sống qua phiên.
+## Mod nối với engine thế nào
 
-![Ba tầng: sự kiện engine đưa cho mod, trạng thái mod giữ, và dải cùng các khung mod vẽ](docs/figures/vi/wiring.svg)
+Lúc vẽ, dải không đi hỏi ai cả. Mọi con số đã nằm sẵn trong bộ nhớ từ trước.
+Engine phát sự kiện mỗi khi có yêu cầu đi, mỗi lần đo, mỗi lần compaction, mỗi
+lần tác tử con (subagent) chạy. Hook của mod bắt sự kiện đó và ghi số xuống
+ngay. Ngoài ra mod có bộ hẹn giờ riêng, mười giây chạy một lần, để soát lại đồng
+hồ ngữ cảnh (context gauge). Thêm một lần gọi mạng ba phút một, dùng chung cho
+mọi phiên trên cùng máy, để lấy hạn mức (quota) mà engine không đưa. Chỉ có bố
+cục là lưu vào `$.store`, nên đóng phiên mở lại vẫn còn.
 
-*Hình 2. Các sự kiện mod lắng nghe, mod giữ lại gì từ đó, và vẽ ra gì. Đường
-đứt là chỗ một module đi kèm có thể đứng chắn trước mod trên máy có quản trị;
-mục compaction nói rõ mất gì ở đó.*
+![Ba tầng: engine đưa sự kiện, mod giữ số, rồi dải và các khung vẽ ra](docs/figures/vi/wiring.svg)
 
-Phần còn lại của tài liệu là chi tiết: mỗi ô đọc gì, không biết được gì, và đã
-hỏng ở đâu trên đường đi.
+*Hình 2. Mod nghe những sự kiện nào, giữ lại gì, và vẽ ra gì. Đường đứt là chỗ
+một module cài sẵn có thể chắn trước mod trên máy có quản trị. Mục Compaction
+nói rõ mất gì ở đó.*
+
+Phần còn lại của tài liệu là chi tiết từng ô: đọc từ đâu, cái gì không biết
+được, và đã hỏng ở đâu.
 
 ## Dải hiện gì
 
@@ -55,224 +57,227 @@ hỏng ở đâu trên đường đi.
  ct ▰▰▰▰▱ 66%   5h ▰▱▱▱▱ 9% ↻2h14m   7d ▰▰▱▱▱ 39% ↻3d15h   fable ▰▰▱▱▱ 26%
 ```
 
-Tối đa bốn dòng; ô nào nằm dòng nào thì chỉnh trong `/sl-settings`. Mặc định
-dòng một là danh tính, dòng hai là ngân sách. Không vẽ gì dưới ô gõ: engine giữ
-dòng gợi ý của riêng nó. Mỗi thanh là năm nấc 20%, làm tròn **lên**, nên 19%
-hiện một nấc chứ không trống. Hạn mức không bao giờ được đọc thấp hơn thực tế.
+Nhiều nhất bốn dòng. Ô nào nằm dòng nào thì vào `/sl-settings` mà xếp. Mặc định
+dòng một là mình đang ở đâu, dùng model gì; dòng hai là ngân sách. Dưới ô gõ
+không vẽ gì hết, chỗ đó engine giữ cho dòng gợi ý của nó. Mỗi thanh có năm nấc,
+mỗi nấc 20%, và làm tròn **lên**: 19% vẫn hiện một nấc chứ không để trống. Hạn
+mức (quota) không bao giờ hiện thấp hơn thực tế.
 
-Thanh `5h` mang theo `↻2h14m`: còn bao lâu tới lúc cửa sổ reset, phút làm tròn
-lên, và `↻now` khi mốc đó đã qua mà engine chưa gửi mốc kế tiếp. Mốc mới tới
-cùng lần đọc sau, không phải đúng giờ chẵn. Thanh `7d` mỗi phút đổi một lần giữa
-đếm ngược `↻3d15h` và ngày nó rơi vào, `↻Oct 6 11:00pm` theo múi giờ của
-terminal: tuần tính bằng ngày, và ngày là thứ bạn ghi vào lịch. Cả hai lần đọc
-đều mang mốc reset (`resetsAt` từ engine, `resets_at` từ endpoint), nên mốc và
-phần trăm luôn lấy từ cùng một lần đọc. Phím `reset` trong `/sl-settings` tắt
-cả hai; lúc đang bật, dải tự vẽ lại mỗi phút, vì giữa hai sự kiện không có gì
-khác vẽ nó.
+Thanh `5h` có thêm `↻2h14m`, tức còn bấy nhiêu nữa thì cửa sổ reset, phút làm
+tròn lên. Khi mốc đã qua mà engine chưa đưa mốc mới thì hiện `↻now`. Mốc mới chỉ
+tới cùng với lần đọc sau, không phải đúng giờ chẵn. Thanh `7d` thì cứ mỗi phút
+đổi một lần giữa đếm ngược `↻3d15h` và ngày giờ thật `↻Oct 6 11:00pm` theo múi
+giờ của terminal. Lý do: tuần thì người ta tính bằng ngày, và ngày là thứ bạn
+ghi vào lịch được. Cả hai nguồn đọc đều có mốc reset (`resetsAt` từ engine,
+`resets_at` từ endpoint), nên mốc và phần trăm luôn cùng một lần đọc. Phím
+`reset` trong `/sl-settings` tắt cả hai mốc. Khi đang bật thì dải tự vẽ lại mỗi
+phút, vì giữa hai sự kiện không có gì khác kích nó vẽ.
 
-Một lần đọc chia chung do phiên chạy mod cũ hơn ghi ra thì không mang mốc reset.
-Ngày 22/10/2026, một VPS chạy 0.1.6 và 0.1.4 cạnh nhau chỉ vẽ mốc khi bản mới
-hơn là bên vừa gọi mạng. Cửa sổ nào không nói thì nay lấy mốc từ cửa sổ cùng kỳ
-của engine, vốn luôn có; tuần theo mô hình không có bản sống nào tương ứng nên
-giữ nguyên như nhận được. Cập nhật mọi phiên trên máy là hết chuyện.
+Có một trường hợp thiếu mốc: lần đọc dùng chung do phiên chạy bản mod cũ hơn ghi
+ra. Ngày 22/10/2026, một VPS chạy 0.1.6 và 0.1.4 cạnh nhau, mốc chỉ hiện khi bản
+mới hơn là bên vừa gọi mạng. Nay cửa sổ nào thiếu mốc thì mượn mốc từ cửa sổ
+cùng kỳ của engine, cái đó lúc nào cũng có. Riêng tuần theo model thì engine
+không có bản tương ứng, nên nhận sao để vậy. Cập nhật hết mọi phiên trên máy là
+hết chuyện.
 
-## Terminal hẹp, và giao diện màu
+## Terminal hẹp, và nền sáng
 
-Dòng nào terminal không đủ chỗ thì vẽ không có thanh:
+Dòng nào không đủ chỗ thì bỏ thanh, chỉ giữ số:
 
 ```
  ct 14%   5h 8% ↻2h08m   7d 8% ↻5d20h   fable 1%
 ```
 
-Cùng số liệu trong nửa bề ngang. Quyết định theo từng dòng, dựa vào `bodyColumns`
-mà bề mặt đưa cho dải, nên một dòng chật không kéo các dòng khác mất thanh theo,
-và dòng nào vừa thì giữ thanh. Trên dòng hẹp, ô `7d` chỉ giữ đếm ngược, mặt
-ngắn hơn trong hai mặt của nó.
+Cùng số liệu, tốn nửa bề ngang. Mod quyết từng dòng, dựa vào `bodyColumns` mà
+bề mặt vẽ đưa cho dải. Một dòng chật không kéo dòng khác mất thanh theo. Trên
+dòng hẹp, ô `7d` chỉ giữ đếm ngược, vì đó là mặt ngắn hơn.
 
-Hai bảng màu: Tokyo Night Moon cho nền tối, là màu dòng trạng thái cũ từng dùng,
-và Tokyo Night Day cho nền sáng. Dải tự tô nền, nên trước đây trên nền sáng vẫn
-đọc được, một thanh tối trên trang sáng, nhưng trông như dán lên. Màu nền đọc từ
-dòng `/config` lúc khởi động và đọc lại ở `config.set` khi đổi, nên đổi giao
-diện là dải vẽ lại ngay, không cần mở phiên mới. Các nấc nền của Moon từng sát
-màu nền terminal quá: ngày 22/10/2026 có người không phân biệt nổi ô với hàng
-phía sau, nên nay mỗi nấc lên một bậc trong bảng màu.
+Hai bảng màu. Nền tối dùng Tokyo Night Moon, đúng màu dòng trạng thái cũ. Nền
+sáng dùng Tokyo Night Day. Trước đây dải chỉ có một bảng, trên nền sáng vẫn đọc
+được nhưng trông như một thanh đen dán lên trang trắng. Mod đọc màu nền từ
+`/config` lúc khởi động, và đọc lại ở `config.set` khi bạn đổi, nên đổi giao diện
+là dải đổi theo ngay, không cần mở phiên mới. Có một chỉnh nhỏ: các nấc nền của
+Moon từng sát màu nền terminal quá, ngày 22/10/2026 có người không phân biệt nổi
+ô với hàng phía sau, nên nay mỗi nấc lên một bậc trong bảng màu.
 
-Mốc reset nằm trong ô của thanh nhưng không ăn theo màu thanh. Nó xanh lơ khi
-sắp tới (trong một phần năm cửa sổ: giờ cuối của 5h, hơn một ngày cuối của 7d),
-xanh dương ở giữa, và màu thường khi còn xa. Không bao giờ xanh lá, vàng hay đỏ,
-vì ba màu đó là của hạn mức. Một đếm ngược đỏ cạnh thanh xanh lá sẽ bị đọc
-thành hạn mức đang có chuyện.
+Mốc reset nằm trong ô của thanh nhưng không ăn theo màu thanh. Sắp tới thì xanh
+lơ (trong một phần năm cuối cửa sổ: giờ cuối của 5h, hơn một ngày cuối của 7d),
+giữa chừng thì xanh dương, còn xa thì màu thường. Không bao giờ dùng xanh lá,
+vàng, đỏ, vì ba màu đó dành cho hạn mức. Đếm ngược đỏ nằm cạnh thanh xanh lá thì
+ai cũng tưởng hạn mức có chuyện.
 
-Dòng hai đi qua mọi cửa sổ trả về, chứ không gọi đích danh hai cái. Chuyện này
-quan trọng: engine đưa cho mod `five_hour` và `seven_day` và bỏ tuần theo mô
-hình, tức dòng `Current week (Fable)` trong `/usage`. Dữ liệu cho status line
-cũng bị lọc mất dòng đó.
+Dòng hai duyệt qua mọi cửa sổ mà endpoint trả về, không gọi đích danh hai cái.
+Chỗ này quan trọng: engine chỉ đưa cho mod `five_hour` và `seven_day`, bỏ mất
+tuần theo model, tức dòng `Current week (Fable)` trong `/usage`. Dữ liệu đưa cho
+status line cũng bị lọc mất dòng đó.
 
-`$.session.authorize()` đi vòng được. Nó trả một tay cầm mờ cho chính chứng thực
-Anthropic của phiên, và `$.http.fetch(url, { auth: handle })` tiêu tay cầm đó
-với một host chính chủ. Chứng thực không bao giờ tới tay mod, nghĩa là mod cũng
-không bao giờ làm mới nó, nên chuyện xoay token có thể làm bạn mất phiên Claude
-Code không dính vào đây. Không phải cài gì, trên máy nào cũng vậy.
+Đi vòng được nhờ `$.session.authorize()`. Nó trả một tay cầm (handle) mờ, đại
+diện cho chứng thực Anthropic của phiên. Rồi `$.http.fetch(url, { auth: handle })`
+dùng tay cầm đó với một host chính chủ. Chứng thực không bao giờ lọt vào tay
+mod, nên mod cũng không bao giờ làm mới nó. Chuyện xoay token đôi khi làm bạn
+văng khỏi Claude Code không liên quan gì tới đây. Không phải cài thêm gì, máy
+nào cũng chạy.
 
-Một lần đọc cho mỗi máy, không phải mỗi phiên. Mỗi phiên đang mở chạy một bản mod
-riêng với bộ hẹn giờ ba phút riêng, nên bốn phiên là bốn lần gọi một kỳ trên
-cùng một token, cộng một lần ở mỗi lần mở phiên, mà giới hạn của endpoint tính
-theo token: ngày 11/10/2026 một máy Mac bị 429 hàng giờ trong khi cùng tài khoản
-từ máy khác vẫn 200. Lần đọc nay nằm ở `$.store`, nơi mọi phiên trên máy dùng
-chung: ai thấy nó cũ hơn ba phút thì gọi rồi ghi lại, những phiên còn lại nhận
-theo, và thời gian lùi sau một 429 cũng chia chung như vậy. `/sl-debug` in
-`source=` để bạn thấy lần đọc đến từ đâu.
+Mỗi máy chỉ gọi mạng một lần, không phải mỗi phiên. Lý do: mỗi phiên mở ra là
+một bản mod riêng với bộ hẹn giờ ba phút riêng. Bốn phiên là bốn lần gọi mỗi kỳ
+trên cùng một token, cộng thêm một lần mỗi khi mở phiên, mà endpoint tính giới
+hạn theo token. Ngày 11/10/2026 một máy Mac bị 429 suốt mấy tiếng, trong khi
+cùng tài khoản ở máy khác vẫn 200. Giờ lần đọc nằm ở `$.store`, chỗ mọi phiên
+trên máy dùng chung. Phiên nào thấy nó cũ hơn ba phút thì gọi rồi ghi lại, các
+phiên khác dùng ké. Thời gian lùi (backoff) sau một lần 429 cũng dùng chung kiểu
+đó. `/sl-debug` in `source=` để bạn biết lần đọc từ đâu ra.
 
-Lần đọc cũ hơn mười lăm phút thì không vẽ, thay bằng hai cửa sổ sống của engine.
-Hai thanh đúng hơn ba thanh ôm một con số cũ.
+Lần đọc cũ quá mười lăm phút thì không vẽ, quay về hai cửa sổ sống của engine.
+Hai thanh đúng còn hơn ba thanh mà một thanh ôm số cũ.
 
 ## Compaction
 
-`session.measure` **không** phát khi compaction, nên đồng hồ ngữ cảnh từng giữ
-con số trước đó: 38% trên một phiên vừa dọn trống cửa sổ. Đúng lúc đo, và đó là
-kiểu sai tệ nhất, vì nó trông như đang đúng.
+`session.measure` **không** phát khi compaction. Thế nên đồng hồ ngữ cảnh
+(context gauge) từng giữ nguyên số cũ, kiểu 38% trên một phiên vừa dọn trống
+cửa sổ. Đúng lúc đo, sai lúc nhìn, và kiểu sai này tệ nhất vì trông y như đang
+đúng.
 
-Hai hook lo việc này. `session.compact` lấy số từ chính kết quả compaction
-(`tokensAfter`), là nguồn tốt hơn: hỏi lại không giúp gì, vì `context.tokens` là
-*"số token đầu vào mà phản hồi gần nhất được trả lời trên đó"* và ngay sau
-compaction chưa có phản hồi nào. `classic.PostCompact` là lưới dự phòng cho lần
-compaction không báo số.
+Hai hook lo chuyện này. `session.compact` lấy số ngay từ kết quả compaction
+(`tokensAfter`), nguồn tốt nhất. Hỏi lại engine không ích gì, vì `context.tokens`
+là *"số token đầu vào mà phản hồi gần nhất dựa trên"*, mà ngay sau compaction thì
+chưa có phản hồi nào. `classic.PostCompact` là lưới đỡ cho lần compaction nào
+không báo số.
 
-Lưới dự phòng lúc đầu đọc `context.percent` và chỉ nhận khi số đã đi xuống, với
-giả định là lần đọc chưa bắt kịp vẫn giữ số trước compaction. Không phải vậy:
-engine **bỏ hẳn trường đó**, nên ngay sau compaction `usage.context` chỉ còn
-`{ window }` cho tới khi phản hồi kế tiếp về. Ngày 19/10/2026 một phiên đọc
-`/context` ra 9% trong khi dải giữ 20% từ trước compaction. Lưới dự phòng đã
-hỏi, không nhận được `percent`, và giữ nguyên cái nó có. Một phản hồi sau, engine
-báo 10% và đồng hồ tự bắt kịp, nên lỗ hổng nằm đúng ở khoảng giữa compaction và
-phản hồi kế tiếp, cũng là đúng lúc bạn nhìn đồng hồ.
+Lưới đỡ lúc đầu đọc `context.percent`, chỉ nhận khi số đi xuống, với giả định là
+lần đọc chưa bắt kịp sẽ còn giữ số trước compaction. Không phải. Engine **bỏ
+hẳn trường đó**: ngay sau compaction, `usage.context` chỉ còn `{ window }` cho
+tới khi phản hồi kế tiếp về. Ngày 19/10/2026, `/context` nói 9% mà dải vẫn giữ
+20% từ trước compaction. Lưới đỡ đã hỏi, không thấy `percent`, nên giữ nguyên
+cái cũ. Một phản hồi sau engine báo 10% và đồng hồ tự bắt kịp. Lỗ hổng nằm đúng
+khoảng giữa compaction và phản hồi kế tiếp, mà đó cũng là lúc bạn nhìn đồng hồ.
 
-Cả hai hook nay lùi về `$.session.usage({ breakdown: 'summary' })` và lấy
-`breakdown.percentage`: mức đầy như `/context` ước tính, tính tại chỗ không gửi
-yêu cầu nào, và là con số duy nhất tồn tại trong khoảng trống đó. Nó đo theo
-cửa sổ compaction chứ không theo cửa sổ của mô hình, nên có thể cao hơn `percent`
-một điểm trên cùng bản ghi, y như `/context`. Phép kiểm "đã đi xuống" giữ lại
+Giờ cả hai hook lùi về `$.session.usage({ breakdown: 'summary' })` và lấy
+`breakdown.percentage`. Đó là mức đầy như `/context` ước, tính tại chỗ không gửi
+yêu cầu nào, và là con số duy nhất tồn tại trong khoảng trống đó. Nó đo theo cửa
+sổ compaction chứ không theo cửa sổ của model, nên có thể cao hơn `percent` một
+điểm trên cùng bản ghi, giống hệt `/context`. Phép kiểm "số đi xuống" giữ lại
 làm đường cuối khi không có breakdown.
 
-`/sl-debug` nay in `band ct:` cạnh `context:` thô của engine. Đó là con số của
-chính đồng hồ, hook nào ghi và ghi cách đây bao lâu, nên "engine ngừng báo" và
-"dải ngừng nghe" không còn trông giống nhau. Nó in cả con số của breakdown.
+`/sl-debug` giờ in `band ct:` cạnh `context:` thô của engine: số của chính đồng
+hồ, hook nào ghi, ghi cách đây bao lâu. Nhờ vậy "engine ngừng báo" và "dải ngừng
+nghe" không còn giống nhau. Nó in cả số của breakdown.
 
-Rồi ngày 26/10/2026 cả hai hook không chạy. Trên máy có cài đặt quản trị, hoặc
-tài khoản Team hay Enterprise, Claude Code 2.1.310 đặt module đi kèm
+Rồi tới 26/10/2026 cả hai hook không chạy. Trên máy có cài đặt quản trị, hoặc
+tài khoản Team hay Enterprise, Claude Code 2.1.310 đặt module cài sẵn
 `cc-plugin-sec-default@builtin` ở ngoài cùng, và module đó không chuyển tiếp
-`session.compact` lẫn `classic.PostCompact`: engine ghi *"sl-mod: its
+`session.compact` lẫn `classic.PostCompact`. Engine ghi *"sl-mod: its
 session.compact hook was skipped. \"cc-plugin-sec-default\" runs first and sent
-the event on past it"* và dải không bao giờ nghe thấy. Một lần `/compact` đưa
-phiên từ 202k token xuống 15k mà đồng hồ giữ 20% trong khi `/context` nói 6%.
-(Cùng module đó giữ cả `classic.SessionStart` và `classic.PostToolUse`, chính
-là thông báo mở đầu mọi phiên trên máy như vậy; hai cái đó vô hại ở đây, vì
-`session.start` lấy các số đo đầu tiên.)
+the event on past it"*, dải không nghe thấy gì. Một lần `/compact` đưa phiên từ
+202k token xuống 15k, đồng hồ vẫn 20% trong khi `/context` nói 6%. (Module đó
+cũng giữ `classic.SessionStart` và `classic.PostToolUse`, chính là mấy thông báo
+mở đầu mọi phiên trên máy như vậy. Hai cái đó vô hại ở đây, vì `session.start`
+đã lấy số đo đầu tiên.)
 
-Nên đồng hồ nay tự soát tiền đề của mình, theo bộ hẹn giờ của riêng mod, thứ
-không có gì đứng chắn trước. Mười giây một lần nó đọc mức dùng thô, một lời gọi
-tại chỗ. Engine bỏ `context.percent` ngay khi compaction xảy ra và không trả lại
-cho tới phản hồi kế tiếp, nên một đồng hồ đang giữ số trong khi lần đọc không có
-số là đã bỏ lỡ một compaction, và nó lấy breakdown y như hai hook kia sẽ làm.
-Lúc khác nhịp này không làm gì: không ước, không vẽ lại. `/sl-debug` hiện đồng
-hồ ghi theo lối này là `from=tick breakdown`. Chỗ sửa thuộc về Claude Code là
-module đi kèm phải gọi `next(e)`; mod này chỉ thôi phụ thuộc vào nó.
+Nên đồng hồ giờ tự soát lại giả định của mình, theo bộ hẹn giờ riêng của mod,
+thứ không ai chắn trước được. Mười giây một lần nó đọc mức dùng thô, một lời gọi
+tại chỗ. Engine bỏ `context.percent` ngay khi compaction xảy ra và chỉ trả lại ở
+phản hồi kế tiếp. Vậy nếu đồng hồ đang giữ số mà lần đọc không có số, tức là vừa
+lỡ một compaction, và nó lấy breakdown y như hai hook kia. Lúc bình thường nhịp
+này không làm gì: không ước, không vẽ lại. `/sl-debug` hiện đồng hồ ghi theo lối
+này là `from=tick breakdown`. Chỗ sửa đúng thuộc về Claude Code, module cài sẵn
+phải gọi `next(e)`. Mod này chỉ thôi trông chờ vào đó.
 
-Nhịp đó vẫn có thể trễ mười giây, mà yêu cầu bạn gửi ngay sau compaction lại là
-lúc bạn nhìn đồng hồ. Nên `turn.step`, sự kiện duy nhất mọi mod đều được đưa,
-cũng được đọc cho việc này: mỗi yêu cầu của vòng chính nói nó mang bao nhiêu tin
-nhắn (`messageCount`), và yêu cầu nào mang chưa tới một nửa yêu cầu trước là
-yêu cầu đầu tiên sau compaction, vì bản ghi đã bị viết lại bên dưới. Đồng hồ khi
-đó lấy breakdown theo cùng cách, ngay trên yêu cầu đó chứ không đợi nhịp kế;
-`/sl-debug` hiện là `from=turn.step breakdown`. Vòng của tác tử con mang số
-nhỏ riêng nên được bỏ qua, và `/clear` cũng làm số giảm một nửa, rơi vào cửa sổ
-vừa dọn trống, là đúng. Phép thử "giảm một nửa" là của Karan Bansal, từ
+Nhịp đó vẫn trễ được tới mười giây, mà yêu cầu bạn gửi ngay sau compaction lại
+là lúc bạn nhìn đồng hồ. Nên mod đọc thêm `turn.step`, sự kiện duy nhất mà mod
+nào cũng nhận được. Mỗi yêu cầu của vòng chính nói nó mang bao nhiêu tin nhắn
+(`messageCount`). Yêu cầu nào mang chưa tới một nửa so với yêu cầu trước thì là
+yêu cầu đầu tiên sau compaction, vì bản ghi bên dưới đã bị viết lại. Đồng hồ lấy
+breakdown ngay trên yêu cầu đó, không đợi nhịp kế. `/sl-debug` hiện là
+`from=turn.step breakdown`. Vòng của tác tử con (subagent) mang số nhỏ riêng nên
+bỏ qua. `/clear` cũng làm số giảm một nửa và cũng rơi vào cửa sổ vừa dọn trống,
+đúng ý. Phép thử "giảm một nửa" là của Karan Bansal, từ
 [cache-tax](https://github.com/karanb192/cache-tax); xem `ACKNOWLEDGEMENTS.md`.
 
-Đường `session.compact` không có test: bộ thử không có bản ghi, nên `e.messages`
-không phải danh sách và mọi hook trong chuỗi bị bỏ qua. Lưới dự phòng được thử
-với đúng hình dạng thật của lần đọc sau compaction: không `percent`, breakdown
-chỉ khi hỏi, và phép kiểm trên một `percent` có mặt. Bộ hẹn giờ thử riêng: lần
-đọc mất `percent` trong khi đồng hồ đang giữ số, nhịp lấy breakdown, bám theo
-nó khi khoảng trống còn, và rút lui khi số đẩy tới trở lại. Test `turn.step`
-dẫn luồng từ một đáy giả: số tăng dần, số nhỏ của tác tử con, rồi vòng chính
-rớt xuống một phần ba và đồng hồ lấy breakdown.
+Đường `session.compact` không có test. Bộ thử không có bản ghi, nên `e.messages`
+không phải danh sách và mọi hook trong chuỗi bị bỏ qua. Lưới đỡ thì thử với đúng
+hình dạng thật của lần đọc sau compaction: không có `percent`, breakdown chỉ có
+khi hỏi, và phép kiểm khi `percent` có mặt. Bộ hẹn giờ thử riêng: lần đọc mất
+`percent` trong khi đồng hồ đang giữ số, nhịp lấy breakdown, bám theo nó khi
+khoảng trống còn, rồi rút lui khi số đẩy tới trở lại. Test `turn.step` dẫn luồng
+từ một đáy giả: số tăng dần, số nhỏ của tác tử con, rồi vòng chính rớt xuống một
+phần ba và đồng hồ lấy breakdown.
 
 ## Trạng thái
 
-Phiên bản 0.1.17, cài từ chính marketplace của repo này ở scope **user**, nên
-vẽ trong mọi phiên trên máy. Cả sáu lệnh chạy. Ba mươi hai test qua dưới
-`claude plugin test`, `tsc -p .` sạch và `claude plugin validate` qua.
+Bản 0.1.17, cài từ marketplace của chính repo này ở scope **user**, nên phiên
+nào trên máy cũng có. Sáu lệnh đều chạy. 32 test qua `claude plugin test`,
+`tsc -p .` sạch, `claude plugin validate` qua.
 
-Mỗi con số lấy định kỳ đều kèm một ghi chú nói vì sao nó trống, và `/sl-debug`
-in ghi chú đó. Một ô trống trông y hệt nhau dù phép dò trả lời "không có nhánh"
-hay ném lỗi trên đường hỏi, và sự im lặng đó từng tốn thời gian ở đây.
+Số nào lấy định kỳ đều kèm một ghi chú nói vì sao nó trống, và `/sl-debug` in
+ghi chú đó ra. Lý do: ô trống trông giống hệt nhau dù phép dò trả lời "không có
+nhánh" hay ném lỗi giữa đường, và im lặng kiểu đó từng tốn khá nhiều thời gian ở
+đây.
 
-## Help và settings là các tab
+## Help và settings là tab
 
-Không phải dựng gì cho việc này. Engine không vẽ tiêu đề cho một khung (pane)
-đứng một mình, và vẽ dải tab ngay khi khung thứ hai mở ra. `PaneOpenArgs.title`
-nói thẳng: "The pane's tab while more than one pane is open (with one, no title
-is drawn)", và sự kiện vẽ `Pane`: "one shown, the rest tabs".
+Không phải dựng gì thêm. Engine không vẽ tiêu đề cho một khung (pane) đứng một
+mình, nhưng vừa mở khung thứ hai là nó vẽ dải tab. `PaneOpenArgs.title` ghi:
+"The pane's tab while more than one pane is open (with one, no title is drawn)",
+và sự kiện vẽ `Pane` ghi: "one shown, the rest tabs".
 
-Nên `/sl-help`, `/sl-settings` và `/sl-agents` mỗi lệnh mở cả ba khung rồi đưa
-khung của mình lên. `focus: true` vừa đưa lên vừa lấy tiêu điểm, vì thế khung
-được gọi mở sau cùng. Bấm vào tab kia thì nó hiện, hoặc Tab tới rồi Enter.
+Nên `/sl-help`, `/sl-settings` và `/sl-agents` lệnh nào cũng mở cả ba khung rồi
+đưa khung của mình lên trước. `focus: true` vừa đưa lên vừa lấy tiêu điểm, nên
+khung được gọi mở sau cùng. Muốn xem tab kia thì bấm vào, hoặc Tab rồi Enter.
 
-`/sl-debug` vẫn là chữ thuần. Nó là bản đổ ra để chọn và dán đi chỗ khác, mà
-thân một khung thì không chép ra được.
+`/sl-debug` vẫn là chữ thuần. Nó là bản đổ ra để bạn chọn, chép rồi dán sang chỗ
+khác, mà thân khung thì không chép được.
 
-## Dòng gợi ý, và vì sao không vẽ gì ở đó nữa
+## Dòng gợi ý: vì sao không vẽ gì ở đó nữa
 
-Đã thử hai cách và không cách nào chạy.
+Thử hai cách, không cách nào ăn.
 
-Một cây `flexDirection: 'column'` ở `PromptHint` **không** cho hai hàng. Cây
-mang cả các nút điều khiển lẫn chuỗi `hint` của engine ra thành một dòng bị gập,
-chữ của engine gãy ngang:
+Một cây `flexDirection: 'column'` ở `PromptHint` **không** cho ra hai hàng. Nó
+nhét cả nút điều khiển lẫn chuỗi `hint` của engine vào một dòng rồi gập, chữ của
+engine gãy ngang:
 
 ```
 ⏵⏵ auto mode on · effort: [ ▲ ] [ ▼ ] · [ help ]
                     (shift+tab to cycle)
 ```
 
-Và `4`, `5`, `0` không bao giờ bắn ở đó; chuyện này đo được chứ không đoán.
-Kiểu dữ liệu nói một chữ số gõ từ ô trống bấm một Button của dải và chỉ của dải,
-và đúng là vậy.
+Phím `4`, `5`, `0` cũng không bao giờ bắn ở đó, đo được chứ không đoán. Kiểu dữ
+liệu ghi rõ: gõ một chữ số từ ô trống thì bấm Button của dải, và chỉ của dải.
+Đúng là vậy.
 
-Nên chỗ đó để yên. Các nút điều khiển dời vào `/sl-settings`, nơi khung giữ bàn
-phím và phím tắt của Button chạy.
+Nên chỗ đó để yên. Nút điều khiển dời vào `/sl-settings`, nơi khung giữ bàn phím
+và phím tắt của Button chạy được.
 
-## Effort là chọn, không phải đẩy lên xuống
+## Effort là chọn, không phải bấm lên xuống
 
-Nút điều khiển tương đối cần một mốc xuất phát, mà mốc đó là đoán. `turn.step`
-chỉ mang `effort` khi yêu cầu nêu tên một mức, *"cài đặt của phiên hoặc mặc định
-của mô hình, vắng với mô hình không có effort"*, và trong phiên này nó chưa bao
-giờ mang. Nên một lần bấm "tăng" từ mốc chưa biết tính ra `medium + 1` và vẽ
-`(H)` cho một phiên không hề ở high.
+Nút tăng giảm cần biết đang ở mức nào, mà mức đó là đoán. `turn.step` chỉ mang
+`effort` khi yêu cầu nêu tên một mức, *"cài đặt của phiên hoặc mặc định của
+model, vắng với model không có effort"*, và trong phiên này nó chưa mang bao giờ.
+Bấm "tăng" từ mốc không biết thì ra `medium + 1`, vẽ `(H)` cho một phiên chẳng
+hề ở high.
 
-Hai chỗ sửa, và cần cả hai:
+Sửa hai chỗ, thiếu một là không xong:
 
-- **Mức nay được đọc.** Các hook classic mang `effort.level`, *"sau mọi lần hạ
-  ngầm"*, ở bất cứ gì phát trong ngữ cảnh dùng công cụ. `classic.PostToolUse`
+- **Giờ đọc được mức.** Các hook classic mang `effort.level`, *"sau mọi lần hạ
+  ngầm"*, trong bất cứ sự kiện nào phát ra lúc dùng công cụ. `classic.PostToolUse`
   lo lượt có dùng công cụ, `classic.Stop` lo lượt không dùng. Mỗi hook đọc một
-  chuỗi rồi chuyển sự kiện đi thẳng.
+  chuỗi rồi chuyển sự kiện đi tiếp.
 - **Nút điều khiển là danh sách, không phải nút đẩy.** `/sl-settings` liệt kê
-  `session`, `L`, `M`, `H`, `X`, `✦` và `e` bước qua từng mức. `session` đứng
-  đầu và nghĩa là mod này không có ý kiến: `turn.step` cho mọi yêu cầu qua
-  nguyên vẹn và dải báo đúng cái phiên đang làm. Một danh sách để chọn thì không
-  thể sai về chỗ nó xuất phát.
+  `session`, `L`, `M`, `H`, `X`, `✦`, và phím `e` bước qua từng mức. `session`
+  đứng đầu, nghĩa là mod không có ý kiến: `turn.step` cho mọi yêu cầu qua nguyên
+  vẹn và dải báo đúng cái phiên đang làm. Chọn từ danh sách thì không sai được
+  chỗ xuất phát.
 
-Khác với bố cục, lựa chọn effort **không** được lưu. Bố cục là sở thích sống qua
-phiên; effort của những yêu cầu phiên này gửi thì không.
+Khác với bố cục, lựa chọn effort **không** lưu. Bố cục là sở thích, giữ qua
+phiên; effort là của những yêu cầu phiên này gửi, hết phiên là thôi.
 
 ## Guard
 
-Dải trước giờ chỉ là thứ để đọc. Đây là thứ đầu tiên trên đó biết hỏi.
+Dải trước giờ chỉ để đọc. Guard là thứ đầu tiên trên đó biết hỏi lại.
 
-Bốn lệnh shell vứt đi thứ mà cả git lẫn đĩa đều không trả lại: `rm -rf`,
-`git reset --hard`, `git clean`, và force push. Khi guard bật, một lời gọi Bash
-cho một trong bốn lệnh đó bị giữ lại trước khi chạy, mod đo thứ nó sẽ phá, và
-bản báo cáo chiếm chỗ dòng một của dải:
+Có bốn lệnh shell vứt đi thứ mà git lẫn đĩa đều không trả lại: `rm -rf`,
+`git reset --hard`, `git clean`, và force push. Bật guard lên, một lời gọi Bash
+dính một trong bốn lệnh đó sẽ bị giữ lại trước khi chạy. Mod đo thứ nó sắp phá,
+rồi bản báo cáo chiếm dòng một của dải:
 
 ```
  ╭─ ⚠ guard · rm -rf ────────────────────────────────────────────────╮
@@ -287,17 +292,18 @@ bản báo cáo chiếm chỗ dòng một của dải:
  ct ▰▰▰▰▱ 66%   5h ▰▱▱▱▱ 9% ↻2h14m   7d ▰▰▱▱▱ 39% ↻3d15h
 ```
 
-![Năm bước: lời gọi Bash, giữ lại, đo, báo cáo trong dải, và Claude đọc câu trả lời](docs/figures/vi/guard.svg)
+![Năm bước: Claude gọi Bash, mod giữ lệnh, đo, báo cáo trong dải, Claude đọc câu trả lời](docs/figures/vi/guard.svg)
 
-*Hình 3. Một lệnh Bash nguy hiểm đi qua những gì, từ lúc Claude gọi tới lúc
-shell chạy, hoặc không chạy.*
+*Hình 3. Một lệnh Bash nguy hiểm đi qua những bước nào, từ lúc Claude gọi tới
+lúc shell chạy, hoặc không chạy.*
 
-`1` chạy đúng như viết. `2`, Esc trên lượt đó, mười phút im lặng, hay chính
-guard bị lỗi đều từ chối, và Claude đọc được vì sao, *"the user pressed refuse.
-It would have: delete 1,204 files"*, nên nó không thử lại đúng dòng đó. `refuse`
-giữ tiêu điểm, nên Enter là từ chối. Dòng ngân sách vẫn nằm dưới báo cáo; dòng
-danh tính là dòng bạn ít cần nhất lúc ấy. Lệnh đang bị giữ vẫn được vẽ kể cả
-khi dải đã ẩn bằng `/sl`: đó là một câu hỏi, và im lặng sẽ thành câu trả lời.
+Bấm `1` thì chạy đúng như viết. Bấm `2`, hoặc Esc ở lượt đó, hoặc im lặng mười
+phút, hoặc chính guard bị lỗi, đều là từ chối. Claude đọc được lý do, *"the user
+pressed refuse. It would have: delete 1,204 files"*, nên không thử lại đúng dòng
+đó. `refuse` giữ tiêu điểm, nên Enter cũng là từ chối. Dòng ngân sách vẫn nằm
+dưới báo cáo; dòng danh tính là dòng bạn ít cần nhất lúc đó. Lệnh đang bị giữ
+vẫn hiện kể cả khi bạn đã ẩn dải bằng `/sl`: đó là một câu hỏi, không trả lời
+thì im lặng thành câu trả lời.
 
 Mỗi lệnh đo gì:
 
@@ -308,67 +314,68 @@ Mỗi lệnh đo gì:
 | `git clean` | thứ `git clean -n` với cùng cờ sẽ xoá |
 | `git push --force`, `-f`, `--force-with-lease`, `+ref` | các commit trên nhánh remote mà lần push sẽ làm mất, tính tới lần fetch gần nhất |
 
-Một `cd dir &&` hay `git -C dir` đứng trước trên dòng lệnh dời chỗ đo. Đường dẫn
-đưa cho `bash`, `find`, `du` và `git` dưới dạng **tham số**, không bao giờ là mã
-nguồn, nên không có gì trong tên file được chạy. Đường dẫn tương đối được thêm
-`./` phía trước, nên `find` không bao giờ đọc một cái tên kiểu `-delete` thành
-hành động.
+`cd dir &&` hay `git -C dir` đứng trước thì chỗ đo dời theo. Đường dẫn đưa cho
+`bash`, `find`, `du`, `git` dưới dạng **tham số**, không bao giờ là mã, nên không
+có gì trong tên file chạy được. Đường dẫn tương đối được thêm `./` phía trước,
+nên `find` không đọc nhầm tên file kiểu `-delete` thành hành động.
 
-Giữ lại bằng cách nào: một hook có mười giây của riêng nó, không đủ để đợi một
-người, nhưng thời gian bên trong một lời gọi `$` không tính vào đó. Nên phần giữ
-là một vòng ngủ từng phần tư giây qua `$.process.run(['sleep'])` cho tới khi
-`onPress` của một nút đặt quyết định, `next.signal` của lượt huỷ, hoặc hết mười
-phút. Mỗi lúc chỉ giữ một lệnh; lời gọi nguy hiểm thứ hai đợi lời gọi thứ nhất.
-Guard mà ném lỗi thì *mở* cửa cho qua, trừ khi đăng ký của nó có `.catch`, nên
-nó có, và handler đó từ chối.
+Giữ lại bằng cách nào: hook chỉ có mười giây, không đủ đợi người, nhưng thời
+gian nằm trong một lời gọi `$` không tính vào đó. Nên phần giữ là một vòng lặp
+ngủ từng phần tư giây qua `$.process.run(['sleep'])`, tới khi `onPress` của một
+nút đặt quyết định, hoặc `next.signal` của lượt báo huỷ, hoặc hết mười phút. Mỗi
+lúc chỉ giữ một lệnh; lệnh nguy hiểm thứ hai xếp hàng sau lệnh thứ nhất. Guard
+mà ném lỗi thì *mở* cửa cho qua, trừ khi đăng ký của nó có `.catch`. Nên nó có,
+và handler đó từ chối.
 
-Thứ nó không làm: nó đọc chuỗi lệnh và không phân tích cú pháp shell. `$(...)`,
-`eval`, `bash -c "..."`, `xargs rm`, `find -delete`, và script có gọi `rm` đều
-không bị bắt. Nó là một tấm lưới. Chặn cứng thì thuộc về luật quyền hạn. Mặc
-định **tắt**, bật bằng `guard (a)` trong `/sl-settings`, lưu như bố cục.
+Thứ guard không làm: nó đọc chuỗi lệnh, không phân tích cú pháp shell. `$(...)`,
+`eval`, `bash -c "..."`, `xargs rm`, `find -delete`, script có gọi `rm` bên
+trong, đều lọt. Guard là tấm lưới. Muốn chặn cứng thì dùng luật quyền hạn
+(permission rules). Mặc định **tắt**, bật bằng `guard (a)` trong `/sl-settings`,
+lưu như bố cục.
 
-Ý tưởng, và hình dạng của phần giữ, là của Blast Radius, do Claude Code DevRel
-tại Anthropic viết, trong
+Ý tưởng và hình dạng phần giữ lấy từ Blast Radius, do Claude Code DevRel tại
+Anthropic viết, trong
 [claude-code-playground](https://github.com/anthropics/claude-code-playground/tree/main/claude-code/mods/blast-radius)
-(Apache-2.0). Mã ở đây là của repo này, viết sau khi đọc của họ; xem
-`ACKNOWLEDGEMENTS.md`. Lý do nó nằm trong mod này chứ không đứng cạnh: Blast
-Radius vẽ báo cáo vào dải khi terminal quá hẹp cho một khung, và README của họ
-nói dải mỗi lúc chỉ thuộc về một mod. Mod này là mod đó. Ở trong, không có gì
+(Apache-2.0). Mã ở đây là của repo này, viết sau khi đọc mã của họ; xem
+`ACKNOWLEDGEMENTS.md`. Vì sao nó nằm trong mod này chứ không đứng riêng: Blast
+Radius vẽ báo cáo vào dải khi terminal quá hẹp cho một khung, mà README của họ
+nói dải mỗi lúc chỉ thuộc về một mod. Mod này là mod đó. Ở trong thì không có gì
 để tranh.
 
-Ba test đứng thay engine bên dưới: Bash do một bộ ghi trả lời, tiến trình do
-một script, các lần ngủ của vòng giữ do chờ trên đồng hồ giả, nên mỗi `advance`
-là một vòng lặp. Một test giữ `rm -rf build`, kiểm báo cáo và việc dòng ngân
-sách còn đó, bấm từ chối và đọc lời từ chối. Một test cho `ls` qua nguyên vẹn,
-rồi giữ `cd sub && git push --force origin main`, kiểm phép đo chạy trong `sub`
-với `main..origin/main`, bấm chạy và thấy Bash được gọi. Một test tắt guard và
-thấy `git reset --hard` đi thẳng.
+Ba test đứng thay engine bên dưới: Bash do một bộ ghi trả lời, tiến trình do một
+script, các lần ngủ của vòng giữ chờ trên đồng hồ giả, nên mỗi `advance` là một
+vòng lặp. Test một giữ `rm -rf build`, kiểm báo cáo và dòng ngân sách còn đó,
+bấm từ chối rồi đọc lời từ chối. Test hai cho `ls` qua nguyên vẹn, rồi giữ
+`cd sub && git push --force origin main`, kiểm phép đo chạy trong `sub` với
+`main..origin/main`, bấm chạy và thấy Bash được gọi. Test ba tắt guard và thấy
+`git reset --hard` đi thẳng.
 
 ## Cái gì nằm đâu
 
-`/sl-settings` vẽ mỗi ô một hàng, gom thành Identity, Budget, và Tokens and
-money, hàng nào cũng cùng một dạng: phím, tên, đang ở đâu, và lúc này vẽ ra gì.
-Bấm phím thì ô dời tiếp: dòng 1, 2, 3, 4, tắt, rồi quay vòng. Mỗi ô một phím,
-không có con trỏ để lạc. Dưới các ô, cùng dạng, là các công tắc: `reset (t)`
-cho mốc reset sau thanh `5h` và `7d`, `guard (a)` cho phần giữ ở trên,
-`cold gate (k)` cho câu hỏi ở dưới, và `effort (e)`. Một khung xem trước ở
-cuối cho thấy dải sẽ vẽ ra sao. Dưới bảy mươi cột, cột cuối biến mất, như thanh
-của dải.
+`/sl-settings` vẽ mỗi ô một hàng, gom thành ba nhóm Identity, Budget, và Tokens
+and money. Hàng nào cũng cùng dạng: phím, tên, đang ở đâu, lúc này vẽ gì. Bấm
+phím là ô dời tiếp: dòng 1, 2, 3, 4, tắt, rồi quay vòng. Mỗi ô một phím, không
+có con trỏ để lạc. Dưới các ô là các công tắc, cùng dạng: `reset (t)` cho mốc
+reset sau thanh `5h` và `7d`, `guard (a)` cho phần giữ nói ở trên, `cold gate (k)`
+cho câu hỏi nói ở dưới, và `effort (e)`. Cuối khung có bản xem trước, cho thấy
+dải sẽ vẽ ra sao. Dưới bảy mươi cột thì cột cuối biến mất, giống như thanh của
+dải.
 
-Bố cục lưu ở `$.store`, nên theo từng máy và sống qua phiên.
+Bố cục lưu ở `$.store`, theo từng máy, giữ qua phiên.
 
-Hai luật khung này tuân theo:
+Hai luật khung này theo:
 
-- Ô đang **bật** mà thiếu dữ liệu thì không vẽ gì. Một thanh trống bị đọc thành
-  "chưa tiêu gì", cũng là kiểu đọc xanh-vì-đã-thử mà repo này cứ gặp ở chỗ khác.
-- Dòng không có gì thì bỏ, không chừa khoảng trống.
+- Ô đang **bật** mà không có dữ liệu thì không vẽ gì. Thanh trống dễ bị đọc
+  thành "chưa tiêu gì", cũng là kiểu xanh-vì-có-chạy mà repo này gặp hoài ở chỗ
+  khác.
+- Dòng nào không có gì thì bỏ luôn, không chừa chỗ trống.
 
 ### cache
 
-Cache của prompt sống một giờ kể từ yêu cầu gần nhất chạm vào nó, và yêu cầu
-đầu tiên sau giờ đó đọc lại cả bản ghi hội thoại với giá chưa cache: trên một
-phiên 330k token là vài đô cho hai dòng tóm tắt. Nên ô `cache` đếm ngược một
-giờ từ yêu cầu gần nhất của vòng chính, thứ `turn.step` thấy đi và về:
+Cache của prompt sống một giờ tính từ yêu cầu gần nhất chạm vào nó. Yêu cầu đầu
+tiên sau giờ đó phải đọc lại cả bản ghi hội thoại với giá chưa cache. Phiên 330k
+token thì mất vài đô cho hai dòng tóm tắt. Nên ô `cache` đếm ngược một giờ từ
+yêu cầu gần nhất của vòng chính, cái mà `turn.step` thấy đi và về:
 
 ```
  cache ▰▰▰▰▰ 1h00m     vừa gửi
@@ -377,18 +384,17 @@ giờ từ yêu cầu gần nhất của vòng chính, thứ `turn.step` thấy 
  cache cold            giờ đã hết; yêu cầu kế tiếp trả tiền để làm ấm lại
 ```
 
-Thanh vơi dần, năm nấc của phần giờ còn lại, làm tròn lên như hạn mức. Màu ở đây
-là màu của đồng hồ, xanh lá, vàng, đỏ, vì hết giờ *chính là* rắc rối, khác với
-mốc reset, chỉ là một ngày tháng. Yêu cầu của tác tử con không khởi động lại
-nó: chúng không phải cache của bản ghi chính. Trước yêu cầu đầu tiên không vẽ
-gì, vì chưa có cache để đếm. Trên dòng hẹp, thanh mất và `cache 15m` ở lại. Đếm
-ngược là ý của johnnyvizz, từ
+Thanh vơi dần, năm nấc của phần giờ còn lại, làm tròn lên như hạn mức. Màu ở
+đây là màu đồng hồ, xanh lá, vàng, đỏ, vì hết giờ *chính là* rắc rối, khác với
+mốc reset chỉ là một ngày tháng. Yêu cầu của tác tử con (subagent) không khởi
+động lại đồng hồ, vì chúng không dùng cache của bản ghi chính. Trước yêu cầu đầu
+tiên không vẽ gì, chưa có cache thì đếm cái gì. Dòng hẹp thì mất thanh, còn
+`cache 15m`. Đếm ngược là ý của johnnyvizz, từ
 [session-band](https://github.com/JohnnyVizz/claude-kit/tree/main/plugins/session-band);
 đếm giờ từ yêu cầu gần nhất là của Karan Bansal, từ cache-tax.
 
-Một thứ ô này không biết được: phiên đang vượt mức dùng (usage overage) rớt
-xuống cache năm phút, và không có gì báo cho mod. Khi đó ô đọc là ấm lâu hơn
-thực tế.
+Một điều ô này không biết: phiên đang vượt mức dùng (usage overage) rớt xuống
+cache năm phút, mà không có gì báo cho mod. Lúc đó ô báo ấm lâu hơn thực tế.
 
 ![Vòng sáu bước: yêu cầu đi, giờ đếm ngược, vàng rồi đỏ, cache cold, cổng chặn prompt đầu một lần, Enter gửi và làm ấm lại](docs/figures/vi/cache-hour.svg)
 
@@ -397,7 +403,7 @@ qua chính là yêu cầu làm ấm cache trở lại.*
 
 ### cold gate
 
-Ô nói `cache cold`. Khi cổng bật, chữ đó tốn thêm một lần bấm phím:
+Ô báo `cache cold`. Bật cổng lên thì chữ đó tốn thêm một lần bấm phím:
 
 ```
  > fix the flaky test in band.test.ts                      ⏎
@@ -410,58 +416,57 @@ qua chính là yêu cầu làm ấm cache trở lại.*
  > fix the flaky test in band.test.ts                      ⏎  → sent
 ```
 
-Prompt đầu tiên gõ sau khi hết giờ bị chặn một lần, bản nháp còn nguyên trong ô,
-và lần Enter kế gửi nó đi. Trong một đợt nguội không hỏi hai lần, và một yêu
-cầu đi qua là xoá câu hỏi. Con số là đầu vào của phản hồi gần nhất, cũng là thứ
-yêu cầu kế tiếp phải đọc lại; nó tính bằng token chứ không bằng đô, vì lý do
-mục sau nói.
+Prompt đầu tiên bạn gõ sau khi hết giờ bị chặn một lần, bản nháp còn nguyên
+trong ô, Enter lần nữa là đi. Mỗi đợt nguội chỉ hỏi một lần, và một yêu cầu đi
+qua là xoá câu hỏi. Con số là đầu vào của phản hồi gần nhất, cũng là thứ yêu cầu
+kế phải đọc lại. Tính bằng token chứ không bằng đô, lý do ở mục sau.
 
-Không bao giờ hỏi với: lệnh gạch chéo, vốn không phải yêu cầu tới mô hình;
-prompt gõ khi một lượt đang chạy, vì nó rơi vào cache mà lượt đó đang giữ ấm;
-kích hoạt theo lịch, tin từ phiên ngang hàng hay prompt của chính một plugin,
-vì không có ai ở bàn phím để gửi lại; và cửa sổ dưới 50k token, chỗ đọc lại chỉ
-tốn vài xu. Cổng mà hỏng thì cho prompt qua, là mặc định của engine và là lựa
-chọn đúng cho một lời nhắc về tiền. Compaction trước cũng không giúp: chính yêu
-cầu compaction đọc lại cùng bản ghi đó.
+Không bao giờ hỏi khi: lệnh gạch chéo (slash command), vì không phải yêu cầu tới
+model; prompt gõ lúc một lượt đang chạy, vì nó rơi vào cache mà lượt đó đang giữ
+ấm; kích hoạt theo lịch, tin từ phiên khác, hay prompt của chính một plugin, vì
+không có ai ở bàn phím để gửi lại; và cửa sổ dưới 50k token, đọc lại chỉ tốn vài
+xu. Cổng mà hỏng thì cho prompt qua, đúng mặc định của engine và đúng cho một
+lời nhắc về tiền. Compaction trước cũng không giúp, vì chính yêu cầu compaction
+đọc lại cùng bản ghi đó.
 
-Hỏi một lần, mức sàn, và cho lệnh gạch chéo cùng prompt không người gõ đi qua
-là của Karan Bansal, từ [cache-tax](https://github.com/karanb192/cache-tax);
-cổng ở đây viết lại không có bảng giá, và tắt cho tới khi `k` trong
-`/sl-settings` bật nó.
+Hỏi một lần, mức sàn, và cho lệnh gạch chéo cùng prompt không người gõ đi qua là
+của Karan Bansal, từ [cache-tax](https://github.com/karanb192/cache-tax). Cổng ở
+đây viết lại, không có bảng giá, và tắt cho tới khi bạn bấm `k` trong
+`/sl-settings`.
 
-`ch`, tỷ lệ trúng cache, chỉ vào cùng ô khi dưới **70%**. Trên mức đó nó đọc
-98–100% và không nói gì, mà một ô cố định cho một hằng số là phí bề ngang. Nó
-cũng là con số duy nhất ở đây kể chuyện đã qua: lúc nó tụt thì tiền đã mất. Nó
-cộng dồn cả phiên chứ không đọc từ phản hồi gần nhất, nên cần một tín hiệu khử
-trùng: `session.measure` nêu `cost` trong `changed`, là cách engine nói "một
-phản hồi có giá vừa về".
+`ch` là tỷ lệ trúng cache (cache hit rate), chỉ hiện trong cùng ô khi dưới
+**70%**. Trên mức đó nó cứ 98 tới 100%, không nói lên gì, mà dành một ô cố định
+cho một hằng số là phí bề ngang. Nó cũng là số duy nhất ở đây kể chuyện đã qua:
+lúc nó tụt thì tiền đã mất rồi. Nó cộng dồn cả phiên chứ không đọc từ phản hồi
+gần nhất, nên cần một tín hiệu khử trùng: `session.measure` nêu `cost` trong
+`changed` là cách engine báo "một phản hồi có giá vừa về".
 
-### input và output là token, không phải đô
+### input và output đếm token, không đếm đô
 
-Engine đưa cho mod đúng một con số tiền: tổng của phiên, `cost.usd`, không tách
-đầu vào với đầu ra. Đổi token ra đô là phải có bảng giá trong file này, mà bảng
-giá trong file là con số sai lặng lẽ đúng ngày giá đổi. Nên `i` và `o` là số
-token, còn `$` là tổng phiên.
+Engine chỉ đưa cho mod đúng một con số tiền, `cost.usd`, tổng của phiên, không
+tách đầu vào với đầu ra. Muốn đổi token ra đô thì phải nhét bảng giá vào file
+này, mà bảng giá trong file là con số sai lặng lẽ ngay ngày giá đổi. Nên `i` và
+`o` là token, còn `$` là tổng phiên.
 
-Tổng trọn đời, tiền và token qua mọi phiên chứ không riêng phiên này, nằm ngoài
-tầm với hẳn. Nó cần hoặc là lần quét bản ghi mà mod này sinh ra để tránh, hoặc
-là `ccuc`, thứ không có trên mọi máy.
+Tổng trọn đời, tiền và token qua mọi phiên, nằm ngoài tầm với hẳn. Muốn có thì
+hoặc quét bản ghi, chính việc mà mod này sinh ra để tránh, hoặc dùng `ccuc`, thứ
+không phải máy nào cũng có.
 
 ### speed và turn
 
-Hai ô mặc định tắt, `s` và `n` trong `/sl-settings` bật chúng:
+Hai ô này mặc định tắt, bật bằng `s` và `n` trong `/sl-settings`:
 
 ```
  ct ▰▰▰▰▱ 66%   cache ▰▰▰▰▰ 1h00m   84 tok/s   turn $ 0.25 38s
 ```
 
-`speed` là yêu cầu gần nhất của vòng chính tính bằng token đầu ra mỗi giây, đo từ
-mẩu đầu tiên tới lúc dừng, nên khoảng đợi token đầu không tính vào và khởi động
-chậm không bị đọc thành mô hình chậm. Yêu cầu dưới 20 token hay dưới một giây
-không được chấm. `turn` là lượt vừa xong gần nhất: giá là tổng phiên lúc kết
-thúc trừ tổng lúc bắt đầu, vì engine chỉ đưa mod một con số tiền và không tách,
-còn độ dài là `durationMs` của chính engine. Yêu cầu và lượt của tác tử con
-không chạm vào cả hai. Cả hai ô đều là của johnnyvizz, từ
+`speed` là tốc độ của yêu cầu gần nhất trong vòng chính, tính bằng token đầu ra
+mỗi giây, đo từ mẩu đầu tiên tới lúc dừng. Khoảng đợi token đầu không tính, nên
+khởi động chậm không bị đọc thành model chậm. Yêu cầu dưới 20 token hay dưới một
+giây thì không chấm. `turn` là lượt vừa xong: giá là tổng phiên lúc kết thúc trừ
+tổng lúc bắt đầu, vì engine chỉ đưa một con số tiền không tách; độ dài là
+`durationMs` của chính engine. Yêu cầu và lượt của tác tử con không đụng vào hai
+ô này. Cả hai ô là của johnnyvizz, từ
 [session-band](https://github.com/JohnnyVizz/claude-kit/tree/main/plugins/session-band),
 viết lại ở đây.
 
@@ -471,9 +476,9 @@ viết lại ở đây.
  ct ▰▰▰▰▱ 66%   cache ▰▰▰▰▰ 1h00m   2 agents running
 ```
 
-Ô `agents` mặc định ở dòng hai và trống cho tới khi có tác tử con chạy; rồi nó
-đếm số đang chạy, và `ag 2` trên dòng hẹp. `/sl-agents` là tab thứ ba, mỗi tác
-tử con một hàng:
+Ô `agents` mặc định ở dòng hai, trống cho tới khi có tác tử con (subagent) chạy.
+Có thì nó đếm số đang chạy, dòng hẹp hiện `ag 2`. `/sl-agents` là tab thứ ba,
+mỗi tác tử con một hàng:
 
 ```
  Subagents this session · 1 running
@@ -483,48 +488,47 @@ tử con một hàng:
  ● general-purpose   2 req · 82.4k tok · 38s            write the migration
 ```
 
-Sổ này dựng từ các sự kiện vòng của một tác tử con phát ra: `agent.spawn` mở
-một hàng khi engine nói nó đã bắt đầu, mỗi `turn.step` trong vòng đó cộng một
-yêu cầu cùng token của nó (đầu vào chưa cache, đọc từ cache và ghi vào cache,
-cùng đầu ra), và `turn.complete` đóng hàng là đã trả lời hay thất bại. Vòng bị
-engine giết thì không phát sự kiện hoàn tất nào mod nghe được, nên khung đối
-chiếu các hàng còn mở với `$.agent.list()` lúc vẽ. Giữ ba mươi hàng. Ý tưởng
-sổ này là của johnnyvizz, từ
+Sổ này dựng từ sự kiện của vòng tác tử con: `agent.spawn` mở hàng khi engine báo
+nó bắt đầu, mỗi `turn.step` trong vòng đó cộng một yêu cầu và token của nó (đầu
+vào chưa cache, đọc từ cache, ghi vào cache, và đầu ra), `turn.complete` đóng
+hàng là đã trả lời hay thất bại. Vòng bị engine giết thì không có sự kiện hoàn
+tất nào tới mod, nên khung đối chiếu các hàng còn mở với `$.agent.list()` lúc
+vẽ. Giữ ba mươi hàng. Ý sổ này của johnnyvizz, từ
 [savvy-progress](https://github.com/JohnnyVizz/claude-kit/tree/main/plugins/savvy-progress);
-bảng của họ còn lên kế hoạch và báo cáo một luồng việc, cái này thì không.
+bảng của họ còn lên kế hoạch và báo cáo luồng việc, cái này thì không.
 
 ### version
 
-`⌂ 0.1.2` là phiên bản của **dự án đang mở**, không phải của engine, đọc theo
+`⌂ 0.1.2` là phiên bản của **dự án đang mở**, không phải của engine. Đọc theo
 thứ tự: `package.json`, `.claude-plugin/plugin.json`, `pyproject.toml`,
-`Cargo.toml`, rồi `git describe --tags`. Không thấy gì thì không có ô, vì `⌂ ?`
-nói còn ít hơn là không nói.
+`Cargo.toml`, rồi `git describe --tags`. Không thấy gì thì bỏ ô, vì `⌂ ?` còn
+nói ít hơn là không nói.
 
-`dotfiles/arch` không khai phiên bản và không có tag, nên không vẽ ô. Đó là câu
-trả lời đúng ý, và `/sl-debug` nói rõ là trường hợp nào.
+`dotfiles/arch` không khai phiên bản, không có tag, nên không có ô. Đó là ý
+muốn, và `/sl-debug` nói rõ rơi vào trường hợp nào.
 
-Phiên bản lấy từ tag git được thêm `+N` khi HEAD đã đi quá tag, vì khi đó thứ
-đang chạy không còn là thứ tag gọi tên. Phiên bản lấy từ file thì không đánh
-dấu: trong claude-powerline, `✓` là ký hiệu **git sạch**, và ô git cách đó hai ô
-đã vẽ dấu ấy. (Phần phiên bản của chính nó hiện `hookData.version`, tức phiên
-bản Claude Code, không có dấu tích nào.)
+Phiên bản lấy từ tag git thì thêm `+N` khi HEAD đã đi quá tag, vì lúc đó thứ
+đang chạy không còn là thứ tag gọi tên. Lấy từ file thì không đánh dấu gì: trong
+claude-powerline, `✓` là ký hiệu **git sạch**, mà ô git cách đó hai ô đã vẽ dấu
+ấy rồi. (Phần version của chính claude-powerline hiện `hookData.version`, tức
+phiên bản Claude Code, không có dấu tích.)
 
 ## Cài đặt
 
-Repo này mang `.claude-plugin/marketplace.json`, nên nó **là** marketplace của
-chính nó. Hai dòng trên máy nào cũng được, không có đường dẫn nào:
+Repo này có `.claude-plugin/marketplace.json`, nên nó **là** marketplace của
+chính nó. Máy nào cũng hai dòng này, không dính đường dẫn:
 
 ```bash
 claude plugin marketplace add ducban/sl-mod
 claude plugin install sl-mod@sl-mod
 ```
 
-`"source": "."` trong manifest đó, vì plugin là gốc repo. Nó cài ở scope
-**user**, chính là thứ làm nó dùng chung cả máy thay vì gắn với một dự án.
+`"source": "."` trong manifest, vì plugin nằm ngay gốc repo. Cài ở scope
+**user**, nhờ vậy nó dùng chung cả máy thay vì gắn với một dự án.
 
 ### Cập nhật
 
-Máy đã có rồi thì lấy bản mới bằng hai dòng. Dòng đầu clone lại marketplace,
+Máy đã cài rồi thì lấy bản mới bằng hai dòng. Dòng đầu clone lại marketplace,
 dòng sau thay bản đã cài:
 
 ```bash
@@ -532,24 +536,25 @@ claude plugin marketplace update sl-mod
 claude plugin update sl-mod
 ```
 
-Nó in phiên bản đã chuyển, ví dụ `updated from 0.1.2 to 0.1.3`, rồi `Restart to
-apply changes`. Câu cuối là nghĩa đen: phiên đang mở vẫn chạy bản cũ cho tới
-khi mở lại, nên sau khi cập nhật, `/sl-debug` trong phiên cũ vẫn tả mã cũ.
+Nó in bản đã chuyển, kiểu `updated from 0.1.2 to 0.1.3`, rồi `Restart to apply
+changes`. Câu cuối hiểu theo nghĩa đen: phiên đang mở vẫn chạy bản cũ cho tới
+khi mở lại, nên cập nhật xong mà gõ `/sl-debug` trong phiên cũ thì vẫn thấy mã
+cũ.
 
-Một lần thử trước đó đặt `CLAUDE_CODE_PLUGIN_DIRS` vào `.paths` của shell. Đã
-bỏ: một đường dẫn tuyệt đối trong file shell theo từng máy là ba chuỗi đường dẫn
-trên máy này, máy Mac và VPS, ba thứ để lỗi thời, mà mục đích của mod là thôi
+Có một lần thử đặt `CLAUDE_CODE_PLUGIN_DIRS` vào `.paths` của shell. Bỏ rồi: một
+đường dẫn tuyệt đối trong file shell riêng từng máy là ba chuỗi đường dẫn trên
+máy này, máy Mac và VPS, ba thứ chờ lỗi thời, trong khi mod này sinh ra để thôi
 phụ thuộc vào dây nối cục bộ.
 
-Repo này **công khai**, nên `marketplace add` clone qua HTTPS thường và không máy
-nào cần xác thực GitHub cho việc đó. Chuyện này đã kiểm chứ không đoán: clone
-với credential helper và git config toàn cục đều tắt vẫn thành công. Đáng kể
-nhất với VPS, vốn không màn hình và nếu không thì phải qua device flow hay token.
+Repo này **công khai**, nên `marketplace add` clone qua HTTPS thường, không máy
+nào cần đăng nhập GitHub. Đã kiểm hẳn hoi: tắt credential helper và git config
+toàn cục, clone vẫn được. Quan trọng nhất là với VPS, không màn hình, nếu không
+thì phải qua device flow hay token.
 
 ## Phát triển
 
-Plugin đã cài chạy một **bản sao** Claude Code làm lúc cài. Một chỉnh sửa trong
-bản làm việc này tới được phiên chỉ qua trọn vòng:
+Plugin đã cài chạy từ một **bản sao** mà Claude Code chép lúc cài. Sửa gì trong
+thư mục làm việc này muốn tới phiên thì phải đi trọn vòng:
 
 ```bash
 git push
@@ -558,14 +563,14 @@ claude plugin update sl-mod
 # then /reload-plugins, or restart
 ```
 
-Lúc đang viết mã thật thì bỏ hết chỗ đó và nạp thẳng thư mục. Một cờ trên một
+Lúc đang viết mã thật thì bỏ hết vòng đó, nạp thẳng thư mục. Một cờ trên một
 lệnh, không theo dõi gì:
 
 ```bash
 claude --plugin-dir ~/Workspace/Projects/personal_works/sl-mod
 ```
 
-Cổng kiểm trước khi push:
+Trước khi push, chạy ba thứ:
 
 ```bash
 claude plugin validate .
@@ -573,14 +578,14 @@ claude plugin test .
 tsc -p .
 ```
 
-`validate` in `gating hook without .catch: ...` cho các hook nắm chuỗi. Mấy dòng
-đó không phải nhiễu: một dòng trong số đó nằm trên màn hình từ commit đầu tiên,
-trong khi một `$.process.run` không được che trong một hook nắm chuỗi làm sập
-ba phép dò, và lần nào cũng bị đọc lướt qua.
+`validate` in `gating hook without .catch: ...` cho mấy hook nắm chuỗi. Mấy dòng
+đó không phải nhiễu đâu. Một dòng trong số đó nằm trên màn hình từ commit đầu
+tiên, trong khi một `$.process.run` không được che trong hook nắm chuỗi làm sập
+ba phép dò, và lần nào cũng đọc lướt qua.
 
-Các hình trong `docs/figures/` do script vẽ, không vẽ tay, bằng `figlib.mjs` của
-skill `b3-figure-drawing`; bản tiếng Việt nằm ở `docs/figures/vi/`. Mỗi SVG mang
-cả hai bảng màu và theo `prefers-color-scheme` của người đọc.
+Hình trong `docs/figures/` do script vẽ bằng `figlib.mjs` của skill
+`b3-figure-drawing`, không vẽ tay. Bản tiếng Việt nằm ở `docs/figures/vi/`. Mỗi
+SVG mang cả hai bảng màu và đổi theo `prefers-color-scheme` của người đọc.
 
 ## Lệnh
 
@@ -595,24 +600,23 @@ cả hai bảng màu và theo `prefers-color-scheme` của người đọc.
 
 `/sl-help`, `/sl-settings` và `/sl-agents` là ba tab. `/sl-debug` in chữ.
 
-## Dòng trạng thái mà nó thay thế
+## Dòng trạng thái mà mod này thay
 
-Hai thứ từng giữ chỗ đó trước mod này, không phải một.
+Trước mod này có hai thứ từng ngồi chỗ đó, không phải một.
 
-`reference/statusline-command.sh` là thứ đầu: 92 dòng bash Ban viết tay, đọc
-JSON của engine từ stdin bằng `jq`. Hình dạng của nó là hình dạng của mod này
+`reference/statusline-command.sh` là cái đầu: 92 dòng bash Ban tự viết, đọc
+JSON của engine từ stdin bằng `jq`. Hình dạng của nó chính là hình dạng mod này
 (dòng một `folder | model | Ctx:%`, dòng hai `5h` và `7d` kèm giờ reset và đếm
-ngược), nên nó được giữ ở đây thay vì vứt. Nó là bản duy nhất; không repo nào
-trên hai máy theo dõi nó, và nó nằm không ai đọc trong `~/.claude/` sau khi
-khối `statusLine` bị gỡ. Nó được lưu trữ, không nối vào đâu: không gì trong mod
-này đọc nó.
+ngược), nên giữ lại đây chứ không vứt. Đó là bản duy nhất: không repo nào trên
+hai máy theo dõi nó, và nó nằm không trong `~/.claude/` từ khi khối `statusLine`
+bị gỡ. Giữ để lưu, không nối vào đâu: mod này không đọc nó.
 
-Nó cũng cho thấy cái giá mà mod sinh ra để bỏ. Mỗi lần vẽ lại chạy `bash`, rồi
-`jq` năm lần, cộng `awk` và `date` cho từng trường.
+Nó cũng cho thấy cái giá mà mod sinh ra để bỏ: mỗi lần vẽ lại là chạy `bash`,
+rồi `jq` năm lần, cộng `awk` và `date` cho từng trường.
 
-`claude-powerline` tới sau và bị gỡ khỏi `~/.claude/settings.json` ngày
-06/10/2026, nên dải là dòng trạng thái duy nhất trong cửa sổ lúc này. Muốn đặt
-cái đó lại thì khối cũ là:
+`claude-powerline` tới sau, gỡ khỏi `~/.claude/settings.json` ngày 06/10/2026,
+nên giờ dải là dòng trạng thái duy nhất trong cửa sổ. Muốn đặt lại thì khối cũ
+là:
 
 ```json
 "statusLine": {
@@ -622,28 +626,27 @@ cái đó lại thì khối cũ là:
 },
 ```
 
-## Biểu tượng ở hàng một, chữ ở hàng hai
+## Hàng một dùng biểu tượng, hàng hai dùng chữ
 
-Hàng một dùng biểu tượng Nerd Font. Chúng vẽ nhỏ hơn chữ bên cạnh một chút và
+Hàng một dùng biểu tượng Nerd Font. Chúng vẽ nhỏ hơn chữ bên cạnh một chút, và
 mod không sửa được, vì mod không chọn font. Ký tự (glyph) nào JetBrains Mono
-không có thì font dự phòng mà fontconfig với tới sẽ vẽ, theo số đo của font đó.
+không có thì font dự phòng mà fontconfig tìm tới sẽ vẽ, theo số đo của font đó.
 
-Đo bằng `fc-list :charset=<cp>`, nên kiểm lại được chứ không phải truyền miệng:
+Đo bằng `fc-list :charset=<cp>`, kiểm lại được, không phải nghe nói:
 
 | | trong JetBrains Mono | từ font dự phòng |
 |---|---|---|
 | biểu tượng | `⌂ ✓ ● ⇡ ▲ ▼ ·` và ``  (E0B0) | ``  ``  `` (Nerd Font PUA) |
 | đồng hồ | `■ □ █ ░ ▓` | `▰ ▱` (đang dùng), `▮ ▯` (effort) |
 
-Hai điều rút ra từ bảng đó. Dấu ngăn powerline **có** trong JetBrains Mono, nên
-nó vẽ đúng cỡ; nó chỉ bị thiếu, thành chuỗi rỗng, suốt bốn commit. Và cả hai
-cặp thanh đang dùng đều là ký tự dự phòng: `██░░░` hay `■■□□□` sẽ là cặp thay
-cùng cỡ, mỗi cặp một dòng, không đổi vì cặp hiện tại là thứ được yêu cầu.
+Rút ra hai điều. Dấu ngăn powerline **có** trong JetBrains Mono, nên vẽ đúng cỡ;
+nó chỉ bị thiếu, thành chuỗi rỗng, suốt bốn commit. Và cả hai cặp thanh đang
+dùng đều là ký tự dự phòng: `██░░░` hay `■■□□□` là cặp thay cùng cỡ, mỗi cặp một
+dòng, nhưng không đổi vì cặp hiện tại là thứ được yêu cầu.
 
-Hàng hai dùng chữ: `ct`, `5h`, `7d`, và tên của chính mô hình cho cửa sổ theo
-mô hình. Chữ vẽ đúng cỡ hàng, và hàng ngân sách là nửa phải đọc nhanh.
+Hàng hai dùng chữ: `ct`, `5h`, `7d`, và tên model cho cửa sổ theo model. Chữ vẽ
+đúng cỡ hàng, mà hàng ngân sách là nửa phải đọc nhanh.
 
-Mọi ký tự đặc biệt trong mã nguồn viết dưới dạng escape `\u{...}`. Viết thẳng
-ký tự thì đã từng mất trong một lần ghi file, và triệu chứng rất lặng: mọi biểu
-tượng thành chuỗi rỗng, và dấu ngăn powerline giữa hai ô không vẽ gì suốt bốn
-commit.
+Mọi ký tự đặc biệt trong mã viết dạng escape `\u{...}`. Viết thẳng ký tự thì
+từng mất trong một lần ghi file, và triệu chứng rất lặng: mọi biểu tượng thành
+chuỗi rỗng, dấu ngăn powerline giữa hai ô không vẽ gì suốt bốn commit.
