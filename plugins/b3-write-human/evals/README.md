@@ -50,5 +50,19 @@ trong `~/.agents/skills/` thay vì plugin đang thử.
   Việt, kiểu "Mỗi kỳ đối soát xong trong 1 ngày". Phải ghi rõ chủ ngữ ẩn được chấp
   nhận. (02/11/2026)
 
-Bốn case thuật ngữ chạy nhánh có plugin, 2 lượt mỗi case, đạt 4/4, hết 0,72 USD.
+## Lần chạy trọn bộ gần nhất
+
+Ngày 06/11/2026, bản 1.9.0, 18 case, 2 lượt mỗi case, một nhánh, `-j 4`: 16/18 đạt,
+158 giây, 4,13 USD. Hai case rớt chỉ ra hai lỗ trong luật, không phải trong grader:
+
+- Case 12 rớt 0/2. Agent gập "có thể hỗ trợ" thành "xử lý được", xem như từ rào
+  vẫn còn. Luật giữ từ rào trong `SKILL.md` giờ nói thẳng: giữ nguyên chữ, "được"
+  không thay "có thể".
+- Case 09 rớt 1/2, rồi 2/3 sau lần sửa đầu. Lượt rớt viết tính năng đoán như sự
+  thật, hoặc chèn số vào cảnh minh hoạ ("buổi họp mười lăm phút", "ba nhóm chat").
+  `van-ngan-tieng-viet.md` thêm hai câu ở mục rào bằng chứng cho cả hai.
+
+Bản 1.10.0 chạy lại mỗi case 3 lượt: 12 đạt 3/3, 09 đạt 3/3, tổng 1,22 USD.
+
+Các lần chạy lẻ trước đó: bốn case thuật ngữ 2 lượt mỗi case đạt 4/4, 0,72 USD.
 Case 17 sau hai lần sửa đề và grader đạt 2/2, ba lần chạy hết 0,71 USD.

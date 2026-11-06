@@ -11,7 +11,7 @@ description: |
   output behind a self-audit. Complements `humanizer`, which cleans text
   that already exists; this one governs text as it is being written.
 metadata:
-  version: "1.9.0"
+  version: "1.10.0"
   companion: humanizer
 ---
 
@@ -100,7 +100,7 @@ Rewriting tone is allowed. Inventing content is not.
 - No fact, name, number, date, quote, statistic, or citation that isn't in the source material or from the user. A vague sentence gets cut, never decorated with a specific you made up.
 - Preserve the message. Compress the dull parts and dwell where a person would, but every claim in the source survives.
 - Keep every literal verbatim: code, shell commands, flags, paths, file names, API and config keys, error codes, version numbers, URLs, and placeholders such as `{name}`, `{{count}}`, `%s`. Don't paraphrase a command into prose. A writing-only request never edits code or config.
-- Keep the hedges. "có thể", "tối đa", "up to", units, conditions and exceptions survive a rewrite. Polishing must not turn a maybe into a promise. A weak claim in the source gets flagged, not strengthened.
+- Keep the hedges. "có thể", "tối đa", "up to", units, conditions and exceptions survive a rewrite, and they survive as the same words. "có thể hỗ trợ" may become "có thể xử lý", never "xử lý được": a hedge folded into another word reads as dropped. Polishing must not turn a maybe into a promise. A weak claim in the source gets flagged, not strengthened.
 - Don't touch quoted text, proper names, titles, or an example where a banned phrase is the thing being discussed.
 
 ## Self-audit gate

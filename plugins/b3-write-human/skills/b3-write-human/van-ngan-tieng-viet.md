@@ -80,6 +80,12 @@ không cần biết nó được viết theo PAS.
 khách hàng, tồn kho, mức giảm giá, hạn chót, hay câu kiểu "chỉ cần dùng một
 lần là đủ cả ngày". Thiếu bằng chứng thì viết trung tính, hoặc chừa chỗ trống
 có đánh dấu để chủ sản phẩm điền: `[số liệu chờ chủ sản phẩm cung cấp]`.
+Tính năng của sản phẩm mà đề không mô tả cũng là giả định, không phải bằng
+chứng. Nêu chúng trong dòng tách khỏi bài, cùng chỗ với số liệu còn thiếu;
+thân bài không viết chúng như sự thật.
+Số trong cảnh minh hoạ cũng là số: "buổi họp mười lăm phút", "ba nhóm chat",
+"việc giao lúc chín giờ sáng" đọc như số liệu dù chỉ là cảnh. Viết "buổi họp
+ngắn", "mấy nhóm chat", "việc giao buổi sáng".
 Không hù dọa, không tạo khan hiếm giả, không viết hoa cả câu để giục. Tiêu đề
 chỉ khi kênh cần tiêu đề.
 
