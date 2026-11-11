@@ -99,6 +99,31 @@ kiểu Anh. Nếu đã lỡ có bản Anh, viết lại từ ý, đừng dịch 
 19. Trích dẫn đặt ngay sau ý được dẫn. Wiki dùng chú thích chân `[^N]` hoặc
     liên kết wikilink; bài học thuật dùng dạng (Tác giả, năm).
 
+**Thanh giọng**
+
+20. Chốt ai đọc trước khi viết lại từ một nguồn có sẵn, và không kế thừa giọng
+    của nguồn. Tài liệu cho đội ngũ hay người ngoài đọc dùng từ một PM người
+    Việt viết trong tài liệu công ty: xưng "chúng ta" khi làm chủ ngữ, "đội
+    ngũ" khi làm danh từ, không xưng "em", không khẩu ngữ, kể cả khi nguồn
+    (FINDINGS, tin chat, ghi chép) viết như vậy. Thước thử cho từng tiêu đề và
+    câu đầu mỗi mục: một PM viết tài liệu công ty có dùng chữ này không.
+    Lý do: `humanizer` bắt dấu hiệu máy viết, không bắt được thanh giọng
+    (register) chọn sai. Sáu trang Knowledge Base của đội NASA Space Apps ngày
+    11/11/2026 chép nguyên khẩu ngữ của FINDINGS, Ban phải chỉ ra từng chữ. Bảng
+    từ Ban chốt hôm đó:
+
+    | Không viết | Viết |
+    |---|---|
+    | đội (chỉ đội của mình) | chúng ta (chủ ngữ), đội ngũ (danh từ) |
+    | đề bài đòi gì | đề bài yêu cầu gì |
+    | ba thứ lặp lại ở đội thắng | ba điểm chung của các đội đoạt giải |
+    | cái chắc và cái chỉ nghe nói | thông tin có nguồn cụ thể và thông tin chưa kiểm chứng |
+    | có thứ để diễn | có sản phẩm chạy được để trình bày |
+    | chỗ dễ mất điểm | phần dễ mất điểm |
+    | tầng người xét, đẩy lên, vớt lại | vòng xét giải, đề cử lên, xét lại |
+    | phình, chăm, sa vào, nuôi sự kiện | tăng, đầu tư, tập trung quá vào, tài trợ cho sự kiện |
+    | mạch sản phẩm, trần Việt Nam | sơ đồ sản phẩm, kết quả cao nhất Việt Nam từng đạt |
+
 ## Tiêu đề mục chuẩn cho sản phẩm Research
 
 Khi tài liệu là tiếng Việt, dùng cột phải; không để tiêu đề tiếng Anh lẫn thân
@@ -142,7 +167,7 @@ Cùng ý đó viết theo lối máy, để nhận diện chứ không để b�
 
 ## Vòng tự đọc lại trước khi ghi
 
-Đọc lại toàn bài một lượt, trả lời tám câu, sửa xong mới ghi vào wiki hay gửi đi:
+Đọc lại toàn bài một lượt, trả lời chín câu, sửa xong mới ghi vào wiki hay gửi đi:
 
 1. Có chữ nào thiếu dấu, số nào viết kiểu Anh (`0.5`, `1,000`) không?
 2. Có gạch ngang dài nào đang nối vế trong câu không?
@@ -155,6 +180,8 @@ Cùng ý đó viết theo lối máy, để nhận diện chứ không để b�
 6. Có đoạn nào ba câu dài đều nhau, hay có nhịp ba không?
 7. Có con số nào không truy được về nguồn không?
 8. Bỏ câu kết của từng mục đi, bài có mất gì không? Không mất thì bỏ.
+9. Ai đọc bài này? Đọc tiêu đề và câu đầu mỗi mục như người đó, có chữ nào họ
+   phải dịch lại không? Có thì đổi theo luật 20.
 
-Xong tám câu thì chạy cổng tự soi ở `SKILL.md`, rồi gọi skill `humanizer` soi
+Xong chín câu thì chạy cổng tự soi ở `SKILL.md`, rồi gọi skill `humanizer` soi
 lần cuối. Ba lớp đó không thay nhau: viết đúng, tự soi, rồi mới để bộ soi dọn.

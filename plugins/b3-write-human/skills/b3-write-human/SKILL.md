@@ -11,7 +11,7 @@ description: |
   output behind a self-audit. Complements `humanizer`, which cleans text
   that already exists; this one governs text as it is being written.
 metadata:
-  version: "1.10.0"
+  version: "1.11.0"
   companion: humanizer
 ---
 
@@ -67,6 +67,12 @@ The banned list above is English. Vietnamese has its own tells, mostly translati
 - Viết "trường hợp", không viết "ca": "trường hợp Marvel Rivals", không "ca Marvel Rivals".
 - Chữ ghi thừa vào chính sản phẩm: "(nháp 22/10)" trong tiêu đề, câu chú thích tả lại bố cục người đọc đang nhìn ("bốn khung trên là..."). Trạng thái và ngày đã nằm ở metadata với lịch sử; xoá câu đó mà không mất tin gì thì đừng viết.
 
+**Chốt ai đọc trước khi viết lại từ một nguồn có sẵn.** Hai bộ soi bắt dấu hiệu máy viết, không bắt được việc chọn sai thanh giọng (register). Một bản FINDINGS viết cho riêng Ban, xưng "em" và nói tắt, đem chép sang tài liệu cho cả đội ngũ thì câu nào cũng là tiếng Việt mà người đọc vẫn phải dịch lại. Ngày 11/11/2026 sáu trang Knowledge Base của đội NASA Space Apps lọt đúng lỗi này, Ban phải chỉ ra từng chữ. Ba việc làm trước khi gõ chữ đầu tiên:
+
+1. Chốt ai đọc. Chỉ Ban đọc thì giữ giọng Ban quen. Đội ngũ hay người ngoài đọc thì dùng từ một PM người Việt viết trong tài liệu công ty, kể cả khi dài hơn: xưng "chúng ta" và "đội ngũ", không xưng "em", không khẩu ngữ.
+2. Không kế thừa giọng của nguồn. Nguồn xưng "em", viết tắt, nói tắt thì bản mới vẫn viết lại từ ý, không chép cụm.
+3. Đọc từng tiêu đề và câu đầu mỗi mục, hỏi: một PM viết tài liệu công ty có dùng chữ này không. Không thì đổi. Bảng từ hay sai nằm ở luật 20 của `tai-lieu-tieng-viet.md`.
+
 **Chữ trong hình, slide, nhãn và ô bảng cũng là văn.** Đây là chỗ hay bị bỏ sót nhất vì chữ ở đó trông giống dữ liệu: ngày 22/10/2026 cả ba lỗi vừa kể (gạch đầu dòng dịch từ đầu đề, "nháp" kèm ngày trong tiêu đề, câu tả bố cục) lọt vào một hình SWOT gửi Ban mà không qua bước tự đọc lại. Chữ ở đó không áp trọn bộ `tai-lieu-tieng-viet.md`, mà theo bốn luật này:
 
 1. Mỗi nhãn, mỗi ô là một câu có chủ ngữ và động từ. "Tiền lệ xấu đã xảy ra với Marvel Rivals", không "Trường hợp Marvel Rivals".
@@ -87,7 +93,7 @@ Five reference files sit next to this one. Which to read depends on what you're 
 
 `thuat-ngu.md` decides translate-or-keep for one term with five yes/no gates in a fixed order (is it a string someone types or looks up; does the national standard have a Vietnamese word; does the trade already use one; can it be translated with an existing word; would it need a coined word), plus a back-translation test for every translation, the standard's own included; the three ways gate 2 falls short (the standard is silent, its translation fails the back-translation test, or it names one concept two ways, where the definition entry beats running text); the head-noun-first word order rule (six of six AI entries in the standard); and the position rule: Vietnamese first, English in parentheses. `bang-tu.md` is the lookup table of terms already decided, with the gate each one stopped at, and a list of the standard's translations the skill doesn't follow (`heteronomy`, `imputation`) with the reason. `agent` is "tác tử (agent)" per TCVN 13902:2023; `sandbox`, `compaction`, `front-end` stay in English. `tcvn-13902.md` is the 104-entry term table of that national standard (ISO/IEC 22989:2022 in Vietnamese), pairs and section numbers only, for any AI term the short table lacks.
 
-`tai-lieu-tieng-viet.md` is the long-form standard: write straight in Vietnamese rather than translate, 19 rules you can check by eye (diacritics, Vietnamese number format, English gloss on translated terms at first use in every section and in every heading, cadence, banned words, no invented numbers), a heading table English to Vietnamese, one sample paragraph, and an eight-question reread. It comes from Ban's AI4Econ&Biz 2026 conference paper, whose Vietnamese text went through seven rounds of edits and one round of review.
+`tai-lieu-tieng-viet.md` is the long-form standard: write straight in Vietnamese rather than translate, 20 rules you can check by eye (diacritics, Vietnamese number format, English gloss on translated terms at first use in every section and in every heading, cadence, banned words, no invented numbers, register fixed to the reader), a heading table English to Vietnamese, one sample paragraph, and a nine-question reread. It comes from Ban's AI4Econ&Biz 2026 conference paper, whose Vietnamese text went through seven rounds of edits and one round of review.
 
 ## Hand over the thing, not a lecture about it
 
@@ -105,11 +111,12 @@ Rewriting tone is allowed. Inventing content is not.
 
 ## Self-audit gate
 
-Before you hand over any prose, answer these three. Out loud in your reasoning, not silently.
+Before you hand over any prose, answer these four. Out loud in your reasoning, not silently.
 
 1. Scan for banned words. Did any survive? Replace them.
 2. Read the paragraph openings in a column. Do they repeat a shape? Rewrite until they don't.
 3. Ask the blunt question: **"If someone claimed this was AI-generated, what would they point at?"** Whatever you name, fix it, then ship.
+4. Name the reader. Read every heading and the first sentence of every section as that person. Would they have to translate any word into their own register? Replace it. Prose built from a source keeps the source's voice unless you stop it.
 
 If the answer to (3) is "nothing", you either did the work or stopped looking. Check the sentence lengths one more time.
 
