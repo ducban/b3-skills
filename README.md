@@ -97,6 +97,25 @@ band without a restart. The Moon background steps were a shade too close to the
 terminal's own background: on 2026-10-22 a reader could not make the cells out
 from the row behind them, so each is one notch up the palette now.
 
+The theme's name only answers when the theme paints its own background:
+
+| `/theme` | Who has the background | The band asks |
+|---|---|---|
+| `light`, `dark`, the `-daltonized` pair | the theme | the name |
+| `auto` (match Terminal), `light-ansi`, `dark-ansi`, `custom:…` | the terminal, and nothing tells a plugin | the OS |
+
+`auto` is measured by the engine asking the terminal, but the `/config` row
+still reads `auto`. The `-ansi` pair hand the colours to the terminal and are a
+declaration, not a measurement: a Mac ran `dark-ansi` over a light Terminal
+profile for a month, with navy cells across a white row while the rest of
+Claude Code, on ANSI colours, looked fine. For that row the mod asks the system
+appearance, which a terminal that follows the system makes the truth: on macOS
+`defaults read -g AppleInterfaceStyle` (`Dark`, or no key at all in light mode),
+on a desktop Linux `gsettings get org.gnome.desktop.interface color-scheme`. A
+box with neither falls back to the name's prefix. It runs on the minute timer,
+so a desktop that turns dark at sunset takes the band with it within a minute.
+`/sl-debug` prints which palette stands and how it was decided.
+
 The reset sits in the bar's cell but not in its colour. It goes cyan when the
 reset is close (inside a fifth of the window: the last hour of 5h, the last
 day and a bit of 7d), blue midway, and plain further out. It is never green,
@@ -207,8 +226,8 @@ one, then the main loop's falling to a third and the gauge taking the breakdown.
 
 ## State
 
-Version 0.1.17, installed from this repo's own marketplace at scope **user**, so
-it draws in every session on this box. All six commands work. Thirty-two tests
+Version 0.1.18, installed from this repo's own marketplace at scope **user**, so
+it draws in every session on this box. All six commands work. Thirty-eight tests
 pass under `claude plugin test`, `tsc -p .` is clean and `claude plugin validate`
 passes.
 

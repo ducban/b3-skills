@@ -70,10 +70,14 @@ let MUTED = MOON.muted
 let BG = MOON.bg
 const bg = (i: number) => BG[i % BG.length] as string
 
-// The theme row's values are `dark`, `light`, and their `-daltonized` and
-// `-ansi` variants; anything starting `light` takes Day.
-function applyTheme(theme: unknown) {
-  const p = typeof theme === 'string' && theme.startsWith('light') ? DAY : MOON
+type Scheme = 'dark' | 'light'
+let scheme: Scheme = 'dark'
+// How the palette was decided, in words, for /sl-debug.
+let themeNote = 'not read yet'
+
+function applyScheme(s: Scheme) {
+  const p = s === 'light' ? DAY : MOON
+  scheme = s
   BLUE = p.blue
   PINK = p.pink
   GREEN = p.green
@@ -85,14 +89,89 @@ function applyTheme(theme: unknown) {
   BG = p.bg
 }
 
-// Read once at start and again on the `config.set` that changes it. A failure
-// here keeps Moon, which is the band as it has always been drawn.
-async function refreshTheme($: EngineInterface) {
+// What the theme row settles on its own. `dark`, `light` and their
+// `-daltonized` pair paint their own background, so the name is the answer.
+// The `-ansi` pair hand the colours to the terminal and are a declaration, not
+// a measurement; `auto` (/theme's "match Terminal") is measured by the engine,
+// which keeps the answer to itself -- the row still reads `auto`; a terminal's
+// own theme reads `custom:<name>`. For those the name says nothing, and the OS
+// is asked instead. On 2026-11-11 a Mac on `dark-ansi` over a light Terminal
+// profile had drawn navy cells across a white row for a month this way.
+const declaredScheme = (theme: unknown): Scheme | null => {
+  if (typeof theme !== 'string' || theme.endsWith('-ansi')) return null
+  if (theme.startsWith('light')) return 'light'
+  if (theme.startsWith('dark')) return 'dark'
+
+  return null
+}
+
+// The system appearance, where the OS has one. A terminal that follows the
+// system makes the system the truth about its background. macOS: `defaults
+// read -g AppleInterfaceStyle` prints `Dark` in dark mode and, in light mode,
+// exits 1 with "Could not find key", because the key is absent rather than set
+// to Light. A desktop Linux that keeps freedesktop's setting answers
+// `gsettings`, where `prefer-dark` is dark and anything else light. A box with
+// neither (a server, a bare window manager) answers null. `process.run`
+// rejects when a command cannot start, which is how a missing `defaults` or
+// `gsettings` reads: caught, next probe.
+async function askOs($: EngineInterface): Promise<{ scheme: Scheme | null; note: string }> {
   try {
-    applyTheme((await $.config.list()).find(row => row.key === 'theme')?.value)
+    const mac = await $.process.run(['defaults', 'read', '-g', 'AppleInterfaceStyle'], { timeoutMs: 2000 })
+    const style = mac.stdout.trim()
+    if (mac.exitCode === 0) return { scheme: style === 'Dark' ? 'dark' : 'light', note: `macOS says ${style}` }
+    if (mac.stderr.includes('Could not find key')) {
+      return { scheme: 'light', note: 'macOS has no AppleInterfaceStyle, which is light' }
+    }
   } catch {
-    // Moon stays.
+    // Not macOS, or no `defaults` on the PATH.
   }
+  try {
+    const gnome = await $.process.run(['gsettings', 'get', 'org.gnome.desktop.interface', 'color-scheme'], {
+      timeoutMs: 2000,
+    })
+    const setting = gnome.stdout.trim()
+    if (gnome.exitCode === 0) {
+      return { scheme: setting.includes('prefer-dark') ? 'dark' : 'light', note: `gsettings says ${setting}` }
+    }
+  } catch {
+    // No gsettings either.
+  }
+
+  return { scheme: null, note: 'no system appearance to read' }
+}
+
+// Theme name first, the OS where the name says nothing, the name's prefix as
+// the last resort (`light-ansi` on a server is still more likely light).
+// Redraws only when the palette moves, since this also runs on a timer.
+async function settleTheme($: EngineInterface, theme: unknown) {
+  const was = scheme
+  const declared = declaredScheme(theme)
+  if (declared) {
+    themeNote = `theme ${String(theme)} paints its own background`
+    applyScheme(declared)
+  } else {
+    const os = await askOs($)
+    const byName: Scheme = typeof theme === 'string' && theme.startsWith('light') ? 'light' : 'dark'
+    themeNote = os.scheme
+      ? `theme ${String(theme)} leaves it to the terminal; ${os.note}`
+      : `theme ${String(theme)} leaves it to the terminal; ${os.note}; so ${byName}, from the name`
+    applyScheme(os.scheme ?? byName)
+  }
+  if (scheme !== was) $.ui.invalidate('ui.render')
+}
+
+// Read at start, on the `config.set` that changes the theme, and on the minute
+// timer, so a desktop that turns dark at sunset takes the band with it within a
+// minute. A failure reading the row keeps what stands, Moon at first, which is
+// the band as it has always been drawn.
+async function refreshTheme($: EngineInterface) {
+  let theme: unknown
+  try {
+    theme = (await $.config.list()).find(row => row.key === 'theme')?.value
+  } catch {
+    return
+  }
+  await settleTheme($, theme)
 }
 
 // --- Glyphs ------------------------------------------------------------------
@@ -1491,6 +1570,9 @@ export const register: Register = on => {
     $.clock.every(5000, () => void refreshGit($))
     $.clock.every(60_000, () => void refreshVersion($))
     $.clock.every(60_000, () => tickCountdown($))
+    // The system appearance can change under a running session (sunset, or a
+    // hand on the switch); the theme row cannot, it raises config.set.
+    $.clock.every(60_000, () => void refreshTheme($))
     // The gauge's check on itself, for a compaction no hook was allowed to hear.
     $.clock.every(RESYNC_MS, () => void resyncContext($))
     // Off the draw path, always: a network call must never sit between a
@@ -1532,10 +1614,7 @@ export const register: Register = on => {
   // change has gone through.
   on('config.set', { key: 'theme' }, async ($, e, next) => {
     const done = await next(e)
-    if (done.deny === undefined) {
-      applyTheme(e.value)
-      $.ui.invalidate('ui.render')
-    }
+    if (done.deny === undefined) await settleTheme($, e.value)
 
     return done
   })
@@ -1815,6 +1894,7 @@ export const register: Register = on => {
         ...reading.windows.map(w => `  ${w.kind}${w.scope ? ` (${w.scope})` : ''} ${w.percentUsed}%`),
         `  note=${reading.note || 'ok'}`,
         `  source=${readingSource}`,
+        `palette: ${scheme} -- ${themeNote}`,
       ].join('\n'),
     }
   })

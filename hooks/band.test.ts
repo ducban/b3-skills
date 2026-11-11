@@ -1,5 +1,5 @@
 import type { On, ProcessRunInit, ProcessRunResult, SessionUsage, SessionUsageArgs } from 'claude-code'
-import { expect, mock, test } from 'claude-code/testing'
+import { expect, mock, test, type TestBody } from 'claude-code/testing'
 
 // The band has to draw on every surface it claims, and the rotate keys have to
 // move effort without a turn having happened. Both are easy to break by hand and
@@ -12,6 +12,9 @@ const BAND = {
   component: 'AbovePrompt' as const,
   props: {
     hasSurvey: false,
+    // Required by the band's props from Claude Code 2.1.322; a spread prop an
+    // older build's types do not know is not an excess-property error.
+    isCollapsed: false,
     isWorking: false,
     bodyColumns: 120,
     maxRows: 4,
@@ -1281,4 +1284,77 @@ test('a /sl-* command opens both panes, so the engine draws them as tabs', async
     { id: 'sl-settings', focus: false },
     { id: 'sl-agents', focus: true },
   ])
+})
+
+// Where the theme's name says nothing about the background (`auto`, the `-ansi`
+// pair), the OS is asked. The theme row comes from the test's own `config.list`;
+// what the OS answers is `stand`'s `processes`: macOS prints `Dark`, or exits 1
+// with the key missing in light mode; a box without the command exits 127 with
+// nothing the probe recognises. Read off the first cell, the darkest step.
+const MOON_FIRST = '#3b4261'
+const DAY_FIRST = '#c4c8da'
+const appearance = (mode: 'light' | 'dark' | null) => async (argv: readonly string[]) => {
+  const done = (exitCode: number, stdout: string, stderr: string) => ({
+    exitCode,
+    stdout,
+    stderr,
+    isStdoutTruncated: false,
+    isStderrTruncated: false,
+  })
+  if (argv[0] === 'defaults') {
+    if (mode === 'dark') return done(0, 'Dark\n', '')
+    if (mode === 'light') return done(1, '', "Could not find key 'AppleInterfaceStyle' in domain 'kCFPreferencesAnyApplication'.")
+
+    return done(127, '', 'defaults: command not found')
+  }
+  if (argv[0] === 'gsettings') return done(127, '', 'gsettings: command not found')
+
+  return undefined
+}
+const themed = (on: On, theme: string, mode: 'light' | 'dark' | null) => {
+  stand(on, undefined, undefined, true, undefined, undefined, appearance(mode))
+  endpoint(on, { auth: false })
+  on('config.list', () => ({
+    value: [
+      { key: 'theme', label: 'Theme', kind: 'choice', value: theme, provider: { plugin: '', tier: 'user' }, isLocked: false },
+    ],
+  }))
+}
+const firstCell = async ($: Parameters<TestBody>[0]) => {
+  await $.classic.SessionStart({ source: 'startup' })
+  const ui = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+  const colour = (await ui.find({ type: 'Text', text: /\u{25B0}/u }))?.props.backgroundColor
+  await ui.unmount()
+
+  return colour
+}
+
+test('a light theme paints its own background, so the band is Day whatever the OS says', async ($, on) => {
+  themed(on, 'light', 'dark')
+  expect(await firstCell($)).toBe(DAY_FIRST)
+})
+
+test('a dark theme keeps Moon, whatever the OS says', async ($, on) => {
+  themed(on, 'dark', 'light')
+  expect(await firstCell($)).toBe(MOON_FIRST)
+})
+
+test('match Terminal asks the OS: light mode draws Day', async ($, on) => {
+  themed(on, 'auto', 'light')
+  expect(await firstCell($)).toBe(DAY_FIRST)
+})
+
+test('match Terminal asks the OS: dark mode draws Moon', async ($, on) => {
+  themed(on, 'auto', 'dark')
+  expect(await firstCell($)).toBe(MOON_FIRST)
+})
+
+test('dark-ansi on a light desktop draws Day: the terminal, not the name, has the background', async ($, on) => {
+  themed(on, 'dark-ansi', 'light')
+  expect(await firstCell($)).toBe(DAY_FIRST)
+})
+
+test('with no system appearance to read, an -ansi theme falls back to its name', async ($, on) => {
+  themed(on, 'light-ansi', null)
+  expect(await firstCell($)).toBe(DAY_FIRST)
 })
