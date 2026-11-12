@@ -35,6 +35,19 @@
         "greyscale",
         "vietnamese"
       ]
+    },
+    {
+      "name": "b3-grammar-helper",
+      "description": "Gạch chân lỗi ngữ pháp ngay trong ô prompt khi gõ tiếng Anh: Harper chạy offline trước, rồi OpenRouter, OpenAI, Fireworks hoặc Haiku sửa cách dùng từ. Có pane settings, danh sách từ bỏ qua, trace Langfuse.",
+      "source": "./plugins/b3-grammar-helper",
+      "category": "productivity",
+      "tags": [
+        "grammar",
+        "prompt",
+        "mod",
+        "harper",
+        "langfuse"
+      ]
     }
   ]
 }
