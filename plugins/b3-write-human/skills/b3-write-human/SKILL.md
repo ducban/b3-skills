@@ -11,7 +11,7 @@ description: |
   output behind a self-audit. Complements `humanizer`, which cleans text
   that already exists; this one governs text as it is being written.
 metadata:
-  version: "1.11.0"
+  version: "1.12.0"
   companion: humanizer
 ---
 
@@ -79,6 +79,11 @@ The banned list above is English. Vietnamese has its own tells, mostly translati
 2. Đủ dấu thanh ở mọi chữ, kể cả nhãn trục, chú giải, tên tệp hiển thị.
 3. Tiêu đề hình là một cái tên. Không "nháp", không ngày, không trạng thái; trang chứa hình đã mang những thứ đó.
 4. Nhãn và ô bảng được bỏ phần tiếng Anh trong ngoặc khi đoạn văn ngay cạnh hình, hoặc chú thích hình, đã chú thuật ngữ đó. Nhãn không có bề ngang để dài. Chú thích hình và câu dẫn trong bài vẫn chú theo luật 4 của `tai-lieu-tieng-viet.md`.
+
+**Slide chỉ có tiêu đề, nội dung và nguồn.** Bốn luật trên soi từng câu, nên để lọt một loại chữ đúng ngữ pháp mà vẫn thừa: chữ nói về slide hay về buổi họp. Ngày 12/11/2026 một deck họp với Team BD bị Ban trả lại vì ba dòng như thế: phụ đề bìa "Bản nháp trao đổi với Team BD", dòng dẫn "Trước đó, hai bên cần thống nhất ba việc:", và phụ đề "Sáu điểm Tổng Giám đốc nêu sau buổi báo cáo tháng 8/2026, kèm yêu cầu làm lại bản chiến lược." Đó là lời người trình bày nói miệng. Trước khi soi câu, đi qua từng ô chữ trên slide và hỏi ô này có nên có mặt không:
+
+- Không viết phụ đề dưới tiêu đề. Chỉ giữ khi nó mang một dữ kiện không có ở chỗ nào khác trên slide, như ngày hay đơn vị tính.
+- Không viết dòng dẫn kết bằng dấu hai chấm, và không báo trước số mục: "cần thống nhất ba việc:", "lợi thế nằm ở bốn điểm:".
 
 Five reference files sit next to this one. Which to read depends on what you're about to write:
 
