@@ -36,6 +36,13 @@ Skill đi từ kho tới máy bằng một trong ba đường. Chọn một, đ�
 
 Máy chỉ chạy Claude Code thì cài plugin. Máy còn chạy Codex, pi, Crush thì dùng `skills` CLI và **không cài plugin**: CLI có `claude-code` trong danh sách agent nên tự link vào `~/.claude/skills/`, cài thêm plugin là Claude nạp hai bản cùng tên và không chắc bản nào thắng. Mac vấp đúng chỗ này từ 21/08 tới 29/10/2026, bản plugin kẹt ở 1.1.0 trong khi bản link đã lên 1.5.0. Đã gỡ plugin, giữ CLI.
 
+Ngoại lệ là `b3-grammar-helper`. Nó là mod (hooks module), không phải skill, nên `skills` CLI không cài được và không có bản link nào để trùng. Máy dùng CLI vẫn cài riêng mod này bằng plugin, và chỉ mod này:
+
+```
+/plugin marketplace add ducban/b3-skills
+/plugin install b3-grammar-helper@b3-skills
+```
+
 ### Đường 1: plugin cho Claude Code
 
 ```
