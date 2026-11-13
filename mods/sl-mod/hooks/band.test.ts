@@ -1,0 +1,1416 @@
+import type { On, ProcessRunInit, ProcessRunResult, SessionUsage, SessionUsageArgs } from 'claude-code'
+import { expect, mock, test, type TestBody } from 'claude-code/testing'
+
+// The band has to draw on every surface it claims, and the rotate keys have to
+// move effort without a turn having happened. Both are easy to break by hand and
+// neither shows up as an error: a tree the engine refuses is replaced by the
+// engine's own drawing, with one dim line in the transcript and nothing else.
+
+// Not `as const`: MountTarget wants mutable props, and a readonly object is
+// refused.
+const BAND = {
+  component: 'AbovePrompt' as const,
+  props: {
+    hasSurvey: false,
+    // Required by the band's props from Claude Code 2.1.322; a spread prop an
+    // older build's types do not know is not an excess-property error.
+    isCollapsed: false,
+    isWorking: false,
+    bodyColumns: 120,
+    maxRows: 4,
+    scroll: { offset: 0, bodyRows: 4 },
+    view: {},
+  },
+}
+
+// The controls moved out of the band and into the dim line under the prompt.
+const HINT = {
+  component: 'PromptHint' as const,
+  props: { isDraft: false, isWorking: false, hint: '? for shortcuts' },
+}
+
+const SETTINGS = {
+  component: 'Pane' as const,
+  requestId: 'sl-settings',
+  props: {
+    title: 'sl settings',
+    isFocused: true,
+    bodyColumns: 100,
+    placement: 'inline' as const,
+    scroll: { offset: 0, bodyRows: 30 },
+    view: {},
+  },
+}
+
+const SURFACES = ['terminal', 'desktop'] as const
+
+// Nothing sits beneath the plugin in a test, so the test is the engine: every
+// call the mod makes has to be answered here or its hook is skipped. `mock`
+// covers clock, store and env; the rest is spelled out.
+const stand = (
+  on: On,
+  now?: number,
+  usage?: SessionUsage | ((args: SessionUsageArgs) => SessionUsage),
+  hasVersionFile = true,
+  // Every `$.ui.open` the mod makes, in order, for the tabs test. A second
+  // `on('ui.open')` in the test body fails the whole module load with
+  // `on("ui.open") registered twice`, so the recorder has to live in here.
+  opens?: { id: string; focus: boolean }[],
+  // What `$.store` holds when the session starts: another session's shared
+  // usage reading, for the tests that must not reach the network.
+  store?: Readonly<Record<string, unknown>>,
+  // Answers a process the test cares about (the guard's measuring and its
+  // sleeps); one it leaves `undefined` gets the git answers below.
+  processes?: (argv: readonly string[], init?: ProcessRunInit) => Promise<ProcessRunResult | undefined>,
+  // Every text the mod puts in the prompt box; the cold gate test checks it
+  // stays empty, since the engine keeps a dropped draft itself.
+  fills?: string[],
+) => {
+  // mock answers clock, store and env from memory; `on` is how it registers.
+  // Registered exactly once per test: a second mock.clock(on) fails the module
+  // load with `on("clock.now") registered twice`.
+  const clock = mock.clock(on, now === undefined ? undefined : { now })
+  mock.store(on, store)
+  on('session.cwd', () => ({ value: '/home/bannd/Workspace/Projects/personal_works/sl-mod' }))
+  on('session.model', () => ({ value: 'claude-opus-5' }))
+  on('session.usage', (_, e) => ({
+    value: (typeof usage === 'function' ? usage(e) : usage) ?? {
+      startedAt: 0,
+      context: { tokens: 660000, window: 1000000, percent: 66 },
+      rateLimits: [
+        { kind: 'five_hour', percentUsed: 8, resetsAt: '2026-10-06T09:30:00.000Z' },
+        { kind: 'seven_day', percentUsed: 36, resetsAt: '2026-10-09T23:00:00.000Z' },
+      ],
+      cost: { usd: 1 },
+    },
+  }))
+  on('command.register', ($, e) => ({ value: { command: e.name } }))
+  // The bottom of the config chain: a set goes through as asked.
+  on('config.set', ($, e) => ({ value: e.value }))
+  // refreshVersion walks a chain of files and falls through to a git tag. Only
+  // the plugin manifest answers, so the version cell reads the mod's own
+  // version -- which is what it does in this repo.
+  // Matched by suffix: the engine may resolve the relative path before the
+  // event is raised, so an equality check on the spelling the mod passed is not
+  // safe.
+  on('fs.exists', ($, e) => ({ value: hasVersionFile && e.path.endsWith('plugin.json') }))
+  // `fs.read` answers the text itself, not an object wrapping it.
+  on('fs.read', () => ({ value: '{"name":"sl-mod","version":"0.1.0"}' }))
+  on('ui.open', ($, e) => {
+    opens?.push({ id: e.id, focus: e.focus === true })
+
+    return { value: { isPlaced: true } }
+  })
+  // Dispatched on the command, because the mod runs two different ones and they
+  // answer differently here: a clean branch in the --porcelain=v2 shape
+  // refreshGit parses, and a repo with no tags -- `git describe` exiting 1,
+  // which is what both of these repos actually do.
+  on('process.run', async ($, e) => {
+    const own = processes === undefined ? undefined : await processes(e.argv, e.init)
+    if (own !== undefined) return { value: own }
+    const isStatus = e.argv[1] === 'status'
+
+    return {
+      value: {
+        exitCode: isStatus ? 0 : 128,
+        stdout: isStatus ? '# branch.head main\n# branch.ab +0 -0\n' : '',
+        stderr: isStatus ? '' : 'fatal: No names found, cannot describe anything.',
+        isStdoutTruncated: false,
+        isStderrTruncated: false,
+      },
+    }
+  })
+  // The bottom of the render chain. It has to be what the engine resolves to at
+  // a site it draws itself -- `{ type: 'engine', ref }`. Returning null is
+  // refused with "returned something that is not a tree element", and then the
+  // mod's own hook is skipped too, so the failure reads as the mod's.
+  on('ui.render', () => ({ type: 'engine', ref: 0 }))
+
+  // The bottom of the classic chain too, so the mod's own hook on it can run.
+  on('classic.SessionStart', () => ({}))
+
+  // The engine's own list of agents, for the agents pane to check its rows
+  // against: nothing, so the ledger is what the test drives.
+  on('agent.list', () => ({ value: [] }))
+
+  // The prompt box: empty to read, and a fill is kept for the test to see.
+  on('prompt.read', () => ({ value: { text: '', cursor: 0 } }))
+  on('prompt.fill', ($, e) => {
+    fills?.push(e.text)
+
+    return { isFilled: true }
+  })
+
+  // The bottom of the measurement chain, so a test can push a figure. It has to
+  // echo the event: a result without `changed` is refused and the mod's own hook
+  // is skipped with it.
+  on('session.measure', ($, e) => ({ ...e }))
+
+  // `ui.invalidate` is deliberately NOT stubbed. Answering it from here swallows
+  // the redraw, so a Button's press changes state and the test still reads the
+  // tree from before it. The harness answers it properly; let it.
+
+  // The clock, for the tests that need its timers to fire.
+  return clock
+}
+
+test('the band draws on every surface, not just the terminal', async ($, on) => {
+  stand(on)
+
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount({ plugin: 'sl-mod', surface, ...BAND })
+
+    // The model cell is the one thing always present: there is a model even
+    // before any usage figure has been measured.
+    expect(await ui.find({ type: 'Text', text: /Opus|Sonnet|Haiku|Fable/ })).toBeDefined()
+
+    await ui.unmount()
+  }
+})
+
+test('effort is picked outright, so the band cannot report a level nobody set', async ($, on) => {
+  stand(on)
+
+  // No turn has run and no classic hook has fired, so nothing has reported an
+  // effort and the model cell carries none.
+  const band = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+  expect(await band.find({ type: 'Text', text: /\((L|M|H|X|✦)\)/ })).toBeUndefined()
+
+  // The choices run session, low, medium, high, xhigh, max. Two presses from
+  // `session` land on medium -- NOT on high, which is where a relative nudge
+  // landed when it guessed `medium` for a baseline it had never been told.
+  const pane = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...SETTINGS })
+  await pane.press({ key: 'item-effort' })
+  await pane.press({ key: 'item-effort' })
+
+  expect(await band.find({ type: 'Text', text: /\(M\)/ })).toBeDefined()
+  expect(await band.find({ type: 'Text', text: /\(H\)/ })).toBeUndefined()
+
+  // And round the end of the list is `session` again: no opinion, nothing drawn.
+  for (let i = 0; i < 4; i += 1) await pane.press({ key: 'item-effort' })
+  expect(await band.find({ type: 'Text', text: /\((L|M|H|X|✦)\)/ })).toBeUndefined()
+
+  await pane.unmount()
+  await band.unmount()
+})
+
+test('a classic hook reports the effort turn.step never carried', async ($, on) => {
+  stand(on)
+  // turn.step's `effort` is absent for a request that names none, which is what
+  // this session does, so the cell stayed blank until someone pressed a key.
+  // The classic hooks carry `effort.level` after any silent downgrade.
+  on('classic.Stop', () => ({}))
+
+  await $.classic.Stop({ effort: { level: 'medium' }, stop_hook_active: false })
+
+  const ui = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+  expect(await ui.find({ type: 'Text', text: /\(M\)/ })).toBeDefined()
+
+  await ui.unmount()
+})
+
+test('the band stands aside for a survey', async ($, on) => {
+  stand(on)
+
+  const ui = await $.ui.mount({
+    plugin: 'sl-mod',
+    surface: 'terminal',
+    component: 'AbovePrompt',
+    props: { ...BAND.props, hasSurvey: true },
+  })
+
+  expect(await ui.find({ type: 'Text', text: /Opus|Sonnet|Haiku|Fable/ })).toBeUndefined()
+
+  await ui.unmount()
+})
+
+// --- the usage endpoint, and the three ways it can have nothing to say -------
+// No running session shows these clearly: a bar that is absent looks the same
+// whether the data was missing or the code was wrong.
+
+// A window scoped to a model is labelled with the model, lowercased.
+const SCOPED = 'fable'
+
+const reply = () =>
+  JSON.stringify({
+    limits: [
+      { kind: 'session', group: 'session', percent: 9, scope: null, resets_at: '2026-10-06T13:45:00.000Z' },
+      { kind: 'weekly_all', group: 'weekly', percent: 39, scope: null },
+      {
+        kind: 'weekly_scoped',
+        group: 'weekly',
+        percent: 26,
+        scope: { model: { id: null, display_name: 'Fable' } },
+      },
+    ],
+  })
+
+const endpoint = (
+  on: On,
+  opts: { auth?: boolean; body?: string; status?: number; headers?: Record<string, string> },
+) => {
+  let calls = 0
+  on('session.authorize', () =>
+    opts.auth === false ? { value: null } : { value: { handle: 'h', kind: 'bearer' as const } },
+  )
+  on('http.fetch', () => {
+    calls += 1
+
+    return {
+      value: {
+        status: opts.status ?? 200,
+        ok: (opts.status ?? 200) < 400,
+        headers: opts.headers ?? {},
+        text: opts.body ?? '',
+      },
+    }
+  })
+
+  return { calls: () => calls }
+}
+
+test('with no credential to spend, the live windows stay and nothing is invented', async ($, on) => {
+  stand(on)
+  endpoint(on, { auth: false })
+
+  await $.classic.SessionStart({ source: 'startup' })
+  const ui = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+
+  expect(await ui.find({ type: 'Text', text: /36%/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: new RegExp(SCOPED) })).toBeUndefined()
+
+  await ui.unmount()
+})
+
+test('a fresh reading adds the per-model week', async ($, on) => {
+  stand(on, Date.parse('2026-10-06T12:00:00Z'))
+  endpoint(on, { body: reply() })
+
+  await $.classic.SessionStart({ source: 'startup' })
+  const ui = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+
+  expect(await ui.find({ type: 'Text', text: new RegExp(`${SCOPED}.*26%`) })).toBeDefined()
+  // The endpoint's own figure wins over the engine's for the week, so the row
+  // comes from one reading rather than two that disagree.
+  expect(await ui.find({ type: 'Text', text: /39%/ })).toBeDefined()
+  // And the reset with it: 12:00 against the endpoint's 13:45, not the engine's
+  // 09:30, so the countdown and the percent come from the same reading.
+  expect(await ui.find({ type: 'Text', text: /\u{21BB}1h45m/u })).toBeDefined()
+
+  await ui.unmount()
+})
+
+test('the 5h cell counts down to its reset, and the reset key takes it off', async ($, on) => {
+  // 07:16 against a window that resets at 09:30: two hours and fourteen minutes.
+  stand(on, Date.parse('2026-10-06T07:16:00Z'))
+  endpoint(on, { auth: false })
+
+  await $.classic.SessionStart({ source: 'startup' })
+  const band = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+  // The reset is its own Text, in its own colour, so it is found on its own.
+  expect(await band.find({ type: 'Text', text: /5h .* 8%/ })).toBeDefined()
+  expect(await band.find({ type: 'Text', text: /\u{21BB}2h14m/u })).toBeDefined()
+  // 07:16 is an even minute, so the week shows its countdown: 3d 15h 44m to
+  // the 9th at 23:00, in days and hours.
+  expect(await band.find({ type: 'Text', text: /\u{21BB}3d15h/u })).toBeDefined()
+
+  const pane = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...SETTINGS })
+  await pane.press({ key: 'item-reset' })
+  expect(await band.find({ type: 'Text', text: /\u{21BB}/u })).toBeUndefined()
+  expect(await band.find({ type: 'Text', text: /5h .* 8%/ })).toBeDefined()
+
+  await pane.unmount()
+  await band.unmount()
+})
+
+test('a line the terminal has no room for drops its bars, and keeps its figures', async ($, on) => {
+  stand(on, Date.parse('2026-10-06T07:16:00Z'))
+  endpoint(on, { auth: false })
+
+  await $.classic.SessionStart({ source: 'startup' })
+  // Line two in full is some 50 cells; 40 is not enough.
+  const narrow = await $.ui.mount({
+    plugin: 'sl-mod',
+    surface: 'terminal',
+    ...BAND,
+    props: { ...BAND.props, bodyColumns: 40 },
+  })
+  expect(await narrow.find({ type: 'Text', text: /5h 8%/ })).toBeDefined()
+  expect(await narrow.find({ type: 'Text', text: /5h \u{25B0}/u })).toBeUndefined()
+  expect(await narrow.find({ type: 'Text', text: /\u{21BB}2h14m/u })).toBeDefined()
+  // Line one fits in 40 and keeps its shape: the folder cell is still there.
+  expect(await narrow.find({ type: 'Text', text: /sl-mod/ })).toBeDefined()
+  await narrow.unmount()
+
+  const wide = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+  expect(await wide.find({ type: 'Text', text: /5h \u{25B0}/u })).toBeDefined()
+  await wide.unmount()
+})
+
+test('switching to a light theme redraws the band in the Day palette', async ($, on) => {
+  stand(on)
+  endpoint(on, { auth: false })
+
+  await $.classic.SessionStart({ source: 'startup' })
+  const ui = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+  // The harness answers `config.list` itself, with no theme row, so the band
+  // starts on Moon: the first cell of a row takes the darkest step.
+  const first = () => ui.find({ type: 'Text', text: /\u{25B0}/u })
+  expect((await first())?.props.backgroundColor).toBe('#3b4261')
+
+  // Changing the theme the way /config does raises `config.set`, which is
+  // what the mod listens for.
+  const set = await $.config.set({
+    key: 'theme',
+    value: 'light',
+    previous: 'dark',
+    provider: { plugin: '', tier: 'user' },
+    origin: { kind: 'composer' },
+  })
+  expect(set.deny).toBeUndefined()
+  expect((await first())?.props.backgroundColor).toBe('#c4c8da')
+
+  await ui.unmount()
+})
+
+test('a reset that has passed reads now, never a negative number', async ($, on) => {
+  stand(on, Date.parse('2026-10-06T09:31:00Z'))
+  endpoint(on, { auth: false })
+
+  await $.classic.SessionStart({ source: 'startup' })
+  const ui = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+  expect(await ui.find({ type: 'Text', text: /\u{21BB}now/u })).toBeDefined()
+  // 09:31 is an odd minute, so the week shows the date instead. Spelled in
+  // the machine's own zone, so only the shape is checked.
+  expect(await ui.find({ type: 'Text', text: /\u{21BB}Oct \d{1,2} \d{1,2}:\d\d[ap]m/u })).toBeDefined()
+
+  await ui.unmount()
+})
+
+test('a 401 keeps the live windows rather than blanking the row', async ($, on) => {
+  stand(on)
+  endpoint(on, { status: 401, body: '{"error":"unauthorized"}' })
+
+  await $.classic.SessionStart({ source: 'startup' })
+  const ui = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+
+  expect(await ui.find({ type: 'Text', text: /36%/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: new RegExp(SCOPED) })).toBeUndefined()
+
+  await ui.unmount()
+})
+
+// Every session on the box shares one `$.store`, so a reading one session
+// fetched is the machine's reading. These three pin that: a fresh one is
+// adopted without a call, a backoff one session took holds for the others, and
+// a stale one is fetched again. Seeded through `stand`'s last argument.
+const SHARED = (at: number, nextAllowedAt = 0) => ({
+  usage: {
+    windows: [
+      { kind: 'session', percentUsed: 9, scope: null },
+      { kind: 'weekly_all', percentUsed: 39, scope: null },
+      { kind: 'weekly_scoped', percentUsed: 26, scope: 'Fable' },
+    ],
+    fetchedAt: at,
+    nextAllowedAt,
+  },
+})
+
+test('a reading another session fetched inside the poll period is adopted, not fetched again', async ($, on) => {
+  const T = Date.parse('2026-10-06T12:00:00Z')
+  stand(on, T, undefined, true, undefined, SHARED(T - 30_000))
+  const seen = endpoint(on, { body: reply() })
+
+  await $.classic.SessionStart({ source: 'startup' })
+  expect(seen.calls()).toBe(0)
+
+  // And it is drawn as this session's own would be: the per-model week is there.
+  const ui = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+  expect(await ui.find({ type: 'Text', text: new RegExp(`${SCOPED}.*26%`) })).toBeDefined()
+  // The shared reading is in the old shape, with no reset, so the resets come
+  // from the engine's own windows: 09:30 has passed at 12:00, and the week is
+  // 3d 11h off on an even minute.
+  expect(await ui.find({ type: 'Text', text: /\u{21BB}now/u })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /\u{21BB}3d11h/u })).toBeDefined()
+
+  await ui.unmount()
+})
+
+test('a 429 one session took holds every session off the endpoint until the backoff ends', async ($, on) => {
+  const T = Date.parse('2026-10-06T12:00:00Z')
+  // Stale reading, so only the shared backoff can be what stops the call.
+  stand(on, T, undefined, true, undefined, SHARED(T - 10 * 60_000, T + 5 * 60_000))
+  const seen = endpoint(on, { body: reply() })
+
+  await $.classic.SessionStart({ source: 'startup' })
+  expect(seen.calls()).toBe(0)
+})
+
+test('a shared reading older than the poll period is fetched again', async ($, on) => {
+  const T = Date.parse('2026-10-06T12:00:00Z')
+  stand(on, T, undefined, true, undefined, SHARED(T - 4 * 60_000))
+  const seen = endpoint(on, { body: reply() })
+
+  await $.classic.SessionStart({ source: 'startup' })
+  expect(seen.calls()).toBe(1)
+})
+
+test('a 429 stops the polling instead of hammering a limited endpoint', async ($, on) => {
+  stand(on, Date.parse('2026-10-06T12:00:00Z'))
+  const seen = endpoint(on, {
+    status: 429,
+    headers: { 'retry-after': '600' },
+    body: '{"error":"rate_limited"}',
+  })
+
+  // One refresh on the way in.
+  await $.classic.SessionStart({ source: 'startup' })
+  expect(seen.calls()).toBe(1)
+
+  // A second refresh inside the window must not reach the network at all.
+  await $.classic.SessionStart({ source: 'clear' })
+  expect(seen.calls()).toBe(1)
+
+  // And the band still shows the engine's live windows meanwhile.
+  const ui = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+  expect(await ui.find({ type: 'Text', text: /36%/ })).toBeDefined()
+  await ui.unmount()
+})
+
+// --- the layout, and the settings pane that writes it ------------------------
+
+test('the version cell reads the open project, not the engine', async ($, on) => {
+  stand(on)
+
+  await $.classic.SessionStart({ source: 'startup' })
+  const ui = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+
+  // 0.1.0 is the mod's own manifest, which is what this repo declares. Not
+  // 2.1.289: claude-powerline's version segment shows the engine's version, and
+  // that is the one thing this cell is deliberately not.
+  expect(await ui.find({ type: 'Text', text: /0\.1\.0/ })).toBeDefined()
+
+  await ui.unmount()
+})
+
+test('switching an item off in the settings pane takes it off the band', async ($, on) => {
+  stand(on)
+
+  await $.classic.SessionStart({ source: 'startup' })
+  const band = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+  expect(await band.find({ type: 'Text', text: /0\.1\.0/ })).toBeDefined()
+
+  // version starts on line 1, so four presses walk it 2, 3, 4, off.
+  const pane = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...SETTINGS })
+  for (let i = 0; i < 4; i += 1) await pane.press({ key: 'item-version' })
+
+  expect(await band.find({ type: 'Text', text: /0\.1\.0/ })).toBeUndefined()
+
+  // One more press wraps it back onto line 1. The cycle is the whole interface
+  // -- one key per item, no cursor -- so a wrap that does not come round is the
+  // way out of the pane disappearing.
+  await pane.press({ key: 'item-version' })
+  expect(await band.find({ type: 'Text', text: /0\.1\.0/ })).toBeDefined()
+
+  await pane.unmount()
+  await band.unmount()
+})
+
+test('the cache cell says nothing while the cache is healthy', async ($, on) => {
+  // 95% read from cache. A cell here would be a permanent 95% that costs width
+  // and tells nobody anything; the number only speaks when it falls. The usage
+  // stand-in is passed to `stand` rather than registered here: a second
+  // on('session.usage') fails the module load outright.
+  stand(on, undefined, {
+    startedAt: 0,
+    context: {
+      tokens: 660000,
+      window: 1000000,
+      percent: 66,
+      breakdown: {
+        apiUsage: {
+          input_tokens: 5000,
+          output_tokens: 1200,
+          cache_read_input_tokens: 95000,
+          cache_creation_input_tokens: 0,
+        },
+      },
+    },
+    rateLimits: [],
+    cost: { usd: 1 },
+    // Cast rather than filled in: a real breakdown carries twelve more fields
+    // and the mod reads exactly one of them. Writing the other twelve would be
+    // inventing a fixture nobody checks.
+  } as unknown as SessionUsage)
+
+  await $.session.measure({
+    context: { tokens: 660000, window: 1000000, percent: 66 },
+    rateLimits: [],
+    cost: { usd: 1 },
+    changed: ['cost'],
+  })
+
+  const ui = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+  expect(await ui.find({ type: 'Text', text: /ch \d+%/ })).toBeUndefined()
+
+  await ui.unmount()
+})
+
+test('the cache cell counts the hour down from the last request, and says cold once it is gone', async ($, on) => {
+  // The prompt cache lives an hour from the last request. Before the first
+  // request there is nothing to time, so the cell is empty; after one it
+  // counts down, and a request inside the hour starts it again. A subagent's
+  // request is not the main transcript's cache and must not restart it.
+  // A fresh shared reading in the store, so the usage poll never reaches the
+  // network; `session.start` is where the minute tick is set.
+  const clock = stand(on, undefined, undefined, true, undefined, {
+    usage: { windows: [{ kind: 'five_hour', percentUsed: 8 }], fetchedAt: 0, nextAllowedAt: 0 },
+  })
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  on('turn.step', async function* () {
+    return { turnId: 't', index: 0, answer: '', toolUses: [], stopReason: 'end_turn' as const, usage: null }
+  })
+  const step = async (messageCount: number, agentId?: string) => {
+    const stream = $.turn.step({
+      turnId: 't',
+      index: 0,
+      model: 'claude-opus-5',
+      messageCount,
+      ...(agentId === undefined ? {} : { agentId }),
+    })
+    for await (const _ of stream) {
+      // nothing streams from the stand-in
+    }
+    await stream.result
+  }
+
+  await $.session.start({
+    cwd: '/home/bannd/Workspace/Projects/personal_works/sl-mod',
+    surface: 'terminal',
+    isInteractive: true,
+  })
+  const ui = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+  expect(await ui.find({ type: 'Text', text: /cache/ })).toBeUndefined()
+
+  // The first request: a full hour, five segments.
+  await step(2)
+  expect(await ui.find({ type: 'Text', text: /cache ▰▰▰▰▰ 1h00m/ })).toBeDefined()
+
+  // Forty-five minutes on, the tick has brought it to fifteen: a quarter of
+  // the hour, two segments rounded up.
+  await clock.advance(45 * 60_000)
+  expect(await ui.find({ type: 'Text', text: /cache ▰▰▱▱▱ 15m/ })).toBeDefined()
+
+  // A subagent's request does not restart the hour.
+  await step(3, 'agent-1')
+  expect(await ui.find({ type: 'Text', text: /cache ▰▰▱▱▱ 15m/ })).toBeDefined()
+
+  // The hour runs out.
+  await clock.advance(16 * 60_000)
+  expect(await ui.find({ type: 'Text', text: /cache cold/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /\d+m/ })).toBeUndefined()
+
+  // The next request warms it again.
+  await step(4)
+  expect(await ui.find({ type: 'Text', text: /cache ▰▰▰▰▰ 1h00m/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /cold/ })).toBeUndefined()
+
+  await ui.unmount()
+})
+
+// --- the settings pane's shape -------------------------------------------------
+test('the settings pane groups its rows, boxes the preview, and drops the last column when narrow', async ($, on) => {
+  stand(on)
+  await $.classic.SessionStart({ source: 'startup' })
+
+  const wide = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...SETTINGS })
+  for (const title of ['Identity', 'Budget', 'Tokens and money', 'Behaviour', 'as the band will draw it']) {
+    expect(await wide.find({ type: 'Text', text: new RegExp(title) }), title).toBeDefined()
+  }
+  // The item row carries what it draws now; a switch row carries what it does.
+  expect(await wide.find({ type: 'Text', text: /^\(nothing to show yet\)$/ })).toBeDefined()
+  expect(await wide.find({ type: 'Text', text: /1 runs, 2 refuses/ })).toBeDefined()
+  expect(await wide.find({ type: 'Text', text: /^session$/ })).toBeDefined()
+  await wide.unmount()
+
+  // Under seventy columns the last column goes; the keys, names and states stay.
+  const narrow = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...SETTINGS, props: { ...SETTINGS.props, bodyColumns: 60 } })
+  expect(await narrow.find({ type: 'Text', text: /Identity/ })).toBeDefined()
+  expect(await narrow.find({ type: 'Text', text: /nothing to show yet/ })).toBeUndefined()
+  expect(await narrow.find({ type: 'Text', text: /1 runs, 2 refuses/ })).toBeUndefined()
+  expect(await narrow.find({ type: 'Text', text: /^line 1\s*$/ })).toBeDefined()
+  await narrow.unmount()
+})
+
+// --- speed and the last turn --------------------------------------------------
+test('the speed cell times the last request, and the turn cell prices the last turn', async ($, on) => {
+  // The stand-in request yields a chunk, moves the clock two seconds, and
+  // stops with two hundred output tokens: a hundred a second. The session total
+  // is read at each end of the turn, so the turn costs their difference.
+  let usd = 1
+  const clock = stand(
+    on,
+    undefined,
+    () => ({ startedAt: 0, context: { tokens: 660000, window: 1000000, percent: 66 }, rateLimits: [], cost: { usd } }),
+    true,
+    undefined,
+    { ...FRESH_STORE, layout: { speed: 2, turn: 2 } },
+  )
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  on('turn.start', ($, e) => ({ turnId: e.turnId }))
+  on('turn.complete', () => ({ text: '' }))
+  let outputTokens = 200
+  on('turn.step', async function* () {
+    yield { kind: 'text' as const, index: 0, text: 'hello' }
+    if (outputTokens >= 20) await clock.advance(2_000)
+    const usage = { model: 'claude-opus-5', input_tokens: 10, output_tokens: outputTokens, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }
+    yield { kind: 'stop' as const, stopReason: 'end_turn' as const, usage }
+
+    return { turnId: 't', index: 0, answer: 'hello', toolUses: [], stopReason: 'end_turn' as const, usage }
+  })
+  const step = async (agentId?: string) => {
+    const stream = $.turn.step({ turnId: 't', index: 0, model: 'claude-opus-5', messageCount: 2, ...(agentId === undefined ? {} : { agentId }) })
+    for await (const _ of stream) {
+      // the chunks pass through the mod's hook
+    }
+    await stream.result
+  }
+
+  await $.session.start({
+    cwd: '/home/bannd/Workspace/Projects/personal_works/sl-mod',
+    surface: 'terminal',
+    isInteractive: true,
+  })
+  const ui = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+  expect(await ui.find({ type: 'Text', text: /tok\/s/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /turn/ })).toBeUndefined()
+
+  await $.turn.start({ text: 'go', turnId: 't' })
+  await step()
+  expect(await ui.find({ type: 'Text', text: /100 tok\/s/ })).toBeDefined()
+
+  // A subagent's request is not timed; a request too short to time is not scored.
+  outputTokens = 500
+  await step('agent-1')
+  expect(await ui.find({ type: 'Text', text: /100 tok\/s/ })).toBeDefined()
+  outputTokens = 5
+  await step()
+  expect(await ui.find({ type: 'Text', text: /100 tok\/s/ })).toBeDefined()
+
+  // The turn ends 25 cents and 38 seconds later.
+  usd = 1.25
+  await $.turn.complete({ answer: 'hello', durationMs: 38_000, isAborted: false, turnId: 't', reason: 'answer' })
+  expect(await ui.find({ type: 'Text', text: /turn \$ 0\.25 38s/ })).toBeDefined()
+
+  // A subagent's turn leaves it alone.
+  await $.turn.complete({ answer: '', durationMs: 5_000, isAborted: false, turnId: 't2', agentId: 'agent-1', reason: 'answer' })
+  expect(await ui.find({ type: 'Text', text: /turn \$ 0\.25 38s/ })).toBeDefined()
+
+  await ui.unmount()
+})
+
+// --- subagents ---------------------------------------------------------------
+const AGENTS_PANE = {
+  component: 'Pane' as const,
+  requestId: 'sl-agents',
+  props: {
+    title: 'sl agents',
+    isFocused: true,
+    bodyColumns: 100,
+    placement: 'inline' as const,
+    scroll: { offset: 0, bodyRows: 30 },
+    view: {},
+  },
+}
+
+test('a spawned subagent is counted on the band while it runs, and listed in the agents pane after', async ($, on) => {
+  const clock = stand(on, undefined, undefined, true, undefined, FRESH_STORE)
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  on('agent.spawn', () => ({ model: 'claude-sonnet-5', agentId: 'agent-1' }))
+  on('turn.complete', () => ({ text: '' }))
+  on('turn.step', async function* ($, e) {
+    const usage = { model: 'claude-sonnet-5', input_tokens: 1000, output_tokens: 200, cache_read_input_tokens: 40000, cache_creation_input_tokens: 0 }
+
+    return { turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: 'end_turn' as const, usage }
+  })
+
+  await $.session.start({
+    cwd: '/home/bannd/Workspace/Projects/personal_works/sl-mod',
+    surface: 'terminal',
+    isInteractive: true,
+  })
+  const band = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+  const pane = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...AGENTS_PANE })
+  expect(await band.find({ type: 'Text', text: /agent/ })).toBeUndefined()
+  expect(await pane.find({ type: 'Text', text: /none spawned yet/ })).toBeDefined()
+
+  const started = await $.agent.spawn({
+    tool_use_id: 'tu-1',
+    prompt: 'Find every test that reads the clock.',
+    description: 'find clock tests',
+    subagentType: 'Explore',
+    provider: { plugin: 'engine', tier: 'core' },
+    parentModel: 'claude-opus-5',
+    background: false,
+    fork: false,
+  })
+  expect(started.agentId).toBe('agent-1')
+  expect(await band.find({ type: 'Text', text: /1 agent running/ })).toBeDefined()
+
+  // Two requests in its loop, a minute apart: the row carries both.
+  for (let i = 0; i < 2; i += 1) {
+    const stream = $.turn.step({ turnId: 'ta', index: i, model: 'claude-sonnet-5', messageCount: 3, agentId: 'agent-1' })
+    for await (const _ of stream) {
+      // nothing streams from the stand-in
+    }
+    await stream.result
+    await clock.advance(30_000)
+  }
+  expect(await pane.find({ type: 'Text', text: /Explore/ })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /2 req . 82\.4k tok . 1m00s/ })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /find clock tests/ })).toBeDefined()
+
+  // It answers: off the band, kept in the pane as answered.
+  await $.turn.complete({ answer: 'done', durationMs: 60_000, isAborted: false, turnId: 'ta', agentId: 'agent-1', reason: 'answer' })
+  expect(await band.find({ type: 'Text', text: /agent/ })).toBeUndefined()
+  expect(await pane.find({ type: 'Text', text: /0 running/ })).toBeDefined()
+  expect(await pane.find({ type: 'Text', text: /✓/ })).toBeDefined()
+
+  await band.unmount()
+  await pane.unmount()
+})
+
+// --- the cold gate -----------------------------------------------------------
+// The world beneath the gate: the request stand-in the cache test uses, and a
+// prompt bottom that records what entered.
+const coldWorld = (on: On, store: Readonly<Record<string, unknown>>) => {
+  const fills: string[] = []
+  const sent: string[] = []
+  const clock = stand(on, undefined, undefined, true, undefined, store, undefined, fills)
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  on('turn.step', async function* () {
+    return { turnId: 't', index: 0, answer: '', toolUses: [], stopReason: 'end_turn' as const, usage: null }
+  })
+  on('prompt.submit', ($, e) => {
+    sent.push(e.text)
+
+    return { text: e.text }
+  })
+
+  return { fills, sent, clock }
+}
+
+test('with the cold gate on, the prompt after a cold hour is dropped once, and the next Enter sends it', async ($, on) => {
+  const { fills, sent, clock } = coldWorld(on, { ...FRESH_STORE, coldGate: true })
+  const step = async (messageCount: number) => {
+    const stream = $.turn.step({ turnId: 't', index: 0, model: 'claude-opus-5', messageCount })
+    for await (const _ of stream) {
+      // nothing streams from the stand-in
+    }
+    await stream.result
+  }
+  const submit = (text: string, kind: 'composer' | 'scheduled-trigger' = 'composer') =>
+    $.prompt.submit({ text, wait: false, origin: { kind } })
+
+  await $.session.start({
+    cwd: '/home/bannd/Workspace/Projects/personal_works/sl-mod',
+    surface: 'terminal',
+    isInteractive: true,
+  })
+  const ui = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+
+  // Before any request nothing is known about the cache, so nothing is asked.
+  expect((await submit('hello')).drop).toBeUndefined()
+  await step(2)
+  // Warm: through.
+  expect((await submit('warm')).drop).toBeUndefined()
+  expect(sent).toEqual(['hello', 'warm'])
+
+  // The hour goes. The first prompt typed is asked for once: the reason names
+  // the re-read, the draft is the engine's to keep, and the cell says what
+  // answers it.
+  await clock.advance(61 * 60_000)
+  expect(await ui.find({ type: 'Text', text: /cache cold/ })).toBeDefined()
+  const asked = await submit('do the thing')
+  expect(asked.drop).toMatch(/cold for 1m/)
+  expect(asked.drop).toMatch(/about 660\.0k tokens/)
+  expect(fills).toEqual([])
+  expect(sent).toEqual(['hello', 'warm'])
+  expect(await ui.find({ type: 'Text', text: /cache cold . enter sends it/ })).toBeDefined()
+
+  // The next Enter is the answer, and its request warms the cache again. The
+  // saved copy goes with it.
+  expect((await submit('do the thing')).drop).toBeUndefined()
+  expect(sent).toEqual(['hello', 'warm', 'do the thing'])
+  await step(3)
+  expect(await ui.find({ type: 'Text', text: /cache ▰▰▰▰▰ 1h00m/ })).toBeDefined()
+
+  // Cold again: a slash command and a prompt nobody typed are never asked; the
+  // next typed one is.
+  await clock.advance(61 * 60_000)
+  expect((await submit('/compact')).drop).toBeUndefined()
+  expect((await submit('tick', 'scheduled-trigger')).drop).toBeUndefined()
+  expect((await submit('typed')).drop).toMatch(/Esc empties the box; \/sl restore brings the text back/)
+  expect(fills).toEqual([])
+
+  // Esc has emptied the box. The dropped text was kept, /sl restore fills it
+  // back, and a second restore has nothing: the copy went with the fill. The
+  // copy of `do the thing` went earlier, when the same text was sent.
+  const run = (args: string) =>
+    $.command.run({ command: 'sl', args, origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 120 } })
+  expect((await run('debug')).text).toMatch(/dropped prompt: 5 chars at/)
+  expect((await run('debug')).text).not.toMatch(/dropped prompt: 12 chars/)
+  expect((await run('restore')).text).toMatch(/Back in the box: the 5-character prompt/)
+  expect(fills).toEqual(['typed'])
+  expect((await run('restore')).text).toMatch(/Nothing to restore/)
+  expect((await run('debug')).text).toMatch(/dropped prompt: none/)
+  // The restored text goes through on Enter, as the answer to the ask.
+  expect((await submit('typed')).drop).toBeUndefined()
+  expect(sent).toEqual(['hello', 'warm', 'do the thing', '/compact', 'tick', 'typed'])
+
+  await ui.unmount()
+})
+
+test('with the cold gate off, a cold prompt goes straight through', async ($, on) => {
+  const { fills, sent, clock } = coldWorld(on, FRESH_STORE)
+  const stream = $.turn.step({ turnId: 't', index: 0, model: 'claude-opus-5', messageCount: 2 })
+  await $.session.start({
+    cwd: '/home/bannd/Workspace/Projects/personal_works/sl-mod',
+    surface: 'terminal',
+    isInteractive: true,
+  })
+  for await (const _ of stream) {
+    // nothing streams from the stand-in
+  }
+  await stream.result
+  await clock.advance(61 * 60_000)
+  expect((await $.prompt.submit({ text: 'typed', wait: false, origin: { kind: 'composer' } })).drop).toBeUndefined()
+  expect(sent).toEqual(['typed'])
+  expect(fills).toEqual([])
+})
+
+// --- the guard ---------------------------------------------------------------
+// A held call is a hook that has not returned. The test starts the call, waits
+// for the band to draw the report, presses a button, and only then awaits the
+// call. The hold loop sleeps through `$.process.run(['sleep', ...])`; the
+// stand-in answers that by waiting on the mock clock, so each `advance` here is
+// one turn of the loop.
+
+const FRESH_STORE = { usage: { windows: [{ kind: 'five_hour', percentUsed: 8 }], fetchedAt: 0, nextAllowedAt: 0 } }
+
+const exited = (stdout: string, exitCode = 0): ProcessRunResult =>
+  ({ exitCode, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false }) as ProcessRunResult
+
+// The world beneath the guard: Bash answered by a recorder, processes by a
+// script of the test's. `stand` owns the process.run registration, so this
+// hands it the script and keeps the records.
+const beneath = (on: On, store: Readonly<Record<string, unknown>>, answer: (argv: readonly string[]) => string | null) => {
+  const ran: string[] = []
+  // The git refresh at session.start runs `git status` on its own; it is not
+  // the guard's, so it is not kept.
+  const processes: { argv: readonly string[]; cwd?: string }[] = []
+  on('tool.call', ($, e) => {
+    ran.push(String((e as { command?: unknown }).command))
+
+    return { result: { stdout: '', stderr: '' } }
+  })
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  const clock = stand(on, undefined, undefined, true, undefined, store, async (argv, init) => {
+    if (argv[1] !== 'status') processes.push({ argv, cwd: init?.cwd })
+    if (argv[0] === 'sleep') {
+      await clock.sleep(250)
+
+      return exited('')
+    }
+    const out = answer(argv)
+
+    return out === null ? exited('', 1) : exited(out)
+  })
+  // Turns the hold loop until the band draws what is asked for.
+  const until = async (ui: { find: (q: { type: 'Text'; text: RegExp }) => Promise<unknown> }, text: RegExp) => {
+    for (let i = 0; i < 40; i += 1) {
+      await clock.advance(250)
+      if ((await ui.find({ type: 'Text', text })) !== undefined) return
+    }
+    throw new Error(`the band never drew ${text}`)
+  }
+
+  return { ran, processes, clock, until }
+}
+
+test('with the guard on, rm -rf is held in the band, and refuse answers it with a deny', async ($, on) => {
+  const { ran, processes, clock, until } = beneath(on, { ...FRESH_STORE, guard: true }, argv =>
+    argv[0] === 'bash' ? '3 2048 1\nbuild/a.js\nbuild/b.js\nbuild/c.js\n' : '',
+  )
+
+  await $.session.start({
+    cwd: '/home/bannd/Workspace/Projects/personal_works/sl-mod',
+    surface: 'terminal',
+    isInteractive: true,
+  })
+  const ui = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+  expect(await ui.find({ type: 'Text', text: /Opus 5/ })).toBeDefined()
+
+  const call = $.tool.call({ tool: 'Bash', command: 'rm -rf build' })
+  await until(ui, /guard · rm -rf/)
+
+  // The report, in row one's place: the budget row stays.
+  expect(await ui.find({ type: 'Text', text: /delete 3 files · 2\.0 KB/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /build\/a\.js/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /Opus 5/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /ct .* 66%/ })).toBeDefined()
+  // Measured in the session's folder, the paths as arguments and not as source.
+  const measure = processes.find(p => p.argv[0] === 'bash')
+  expect(measure?.cwd).toBe('/home/bannd/Workspace/Projects/personal_works/sl-mod')
+  expect(measure?.argv.slice(-2)).toEqual(['sl-mod-guard', 'build'])
+
+  await ui.press({ key: 'guard-refuse' })
+  await clock.advance(250)
+  const answer = await call
+  expect(answer.deny).toMatch(/pressed refuse/)
+  expect(answer.deny).toMatch(/delete 3 files/)
+  expect(ran).toEqual([])
+  expect(await ui.find({ type: 'Text', text: /guard/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /Opus 5/ })).toBeDefined()
+
+  await ui.unmount()
+})
+
+test('run lets a held force push through, measured where a cd moved it; a harmless command is never held', async ($, on) => {
+  const { ran, processes, clock, until } = beneath(on, { ...FRESH_STORE, guard: true }, argv => {
+    if (argv[0] === 'bash') return '/home/bannd/Workspace/Projects/personal_works/sl-mod/sub\n' // the cd
+    if (argv[1] === 'rev-parse') return 'abc123\n'
+    if (argv[1] === 'log') return 'abc123 a commit only the remote has\n'
+
+    return ''
+  })
+
+  await $.session.start({
+    cwd: '/home/bannd/Workspace/Projects/personal_works/sl-mod',
+    surface: 'terminal',
+    isInteractive: true,
+  })
+  const ui = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+
+  // Harmless: straight through, nothing measured, nothing drawn.
+  const plain = await $.tool.call({ tool: 'Bash', command: 'ls -la && git status' })
+  expect(plain.deny).toBeUndefined()
+  expect(ran).toEqual(['ls -la && git status'])
+  expect(processes).toEqual([])
+  expect(await ui.find({ type: 'Text', text: /guard/ })).toBeUndefined()
+
+  const call = $.tool.call({ tool: 'Bash', command: 'cd sub && git push --force origin main' })
+  await until(ui, /guard · git push --force/)
+  expect(await ui.find({ type: 'Text', text: /drops 1 commit/ })).toBeDefined()
+  const log = processes.find(p => p.argv[1] === 'log')
+  expect(log?.cwd).toBe('/home/bannd/Workspace/Projects/personal_works/sl-mod/sub')
+  expect(log?.argv.at(-1)).toBe('main..origin/main')
+
+  await ui.press({ key: 'guard-run' })
+  await clock.advance(250)
+  const answer = await call
+  expect(answer.deny).toBeUndefined()
+  expect(ran).toEqual(['ls -la && git status', 'cd sub && git push --force origin main'])
+
+  await ui.unmount()
+})
+
+test('with the guard off, a risky command is not held', async ($, on) => {
+  const { ran, processes } = beneath(on, FRESH_STORE, () => '')
+
+  await $.session.start({
+    cwd: '/home/bannd/Workspace/Projects/personal_works/sl-mod',
+    surface: 'terminal',
+    isInteractive: true,
+  })
+  const answer = await $.tool.call({ tool: 'Bash', command: 'git reset --hard' })
+  expect(answer.deny).toBeUndefined()
+  expect(ran).toEqual(['git reset --hard'])
+  expect(processes).toEqual([])
+})
+
+test('a repo with no version does not take the git cell down with it', async ($, on) => {
+  // The version probe used to run `git describe` unguarded, between the git
+  // refresh and the timers, inside a GATING hook -- `claude plugin validate`
+  // warned about that in as many words and it was ignored. A repo with no tags
+  // was enough to leave session.start without its poll and without next(e).
+  // Nothing on disk declares a version, so the probe falls all the way through
+  // to `git describe`. Passed to `stand`: a second on('fs.exists') here fails
+  // the module load outright.
+  stand(on, undefined, undefined, false)
+
+  await $.classic.SessionStart({ source: 'startup' })
+  const ui = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+
+  expect(await ui.find({ type: 'Text', text: /main/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /0\.1\.0/ })).toBeUndefined()
+
+  await ui.unmount()
+})
+
+test('a compaction no hook was allowed to hear is caught by the clock', async ($, on) => {
+  // On a Team or Enterprise account Claude Code 2.1.310 seats its bundled
+  // `cc-plugin-sec-default@builtin` outermost, and that module passes neither
+  // `session.compact` nor `classic.PostCompact` on: the engine logs `sl-mod: its
+  // session.compact hook was skipped` and neither hook below runs.
+  // vibe-island-on-arch, 2026-10-26: /compact took the transcript from 202k
+  // tokens to 15k and the band held 20% while /context said 6%.
+  //
+  // A timer is the mod's own. Every RESYNC_MS the gauge checks its premise: the
+  // engine drops `context.percent` the moment a compaction lands and does not
+  // put it back until the next response, so a gauge holding a number while the
+  // reading has none has missed a compaction, and takes the breakdown.
+  let percent: number | null = 20
+  let estimate: number | null = null
+  const reading = (args: SessionUsageArgs): SessionUsage => ({
+    startedAt: 0,
+    context: {
+      window: 1_000_000,
+      ...(percent === null ? {} : { tokens: percent * 10_000, percent }),
+      ...(args?.breakdown && estimate !== null ? { breakdown: { percentage: estimate } } : {}),
+    } as SessionUsage['context'],
+    rateLimits: [],
+    cost: { usd: 1 },
+  })
+  // A fresh shared reading in the store, so the usage poll the timers start
+  // never reaches the network.
+  const clock = stand(on, undefined, reading, true, undefined, {
+    usage: { windows: [{ kind: 'five_hour', percentUsed: 8 }], fetchedAt: 0, nextAllowedAt: 0 },
+  })
+
+  // `session.start` is where the timers are set, so it is what is raised here.
+  // The bottom of its chain echoes the cwd, as core does.
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  await $.session.start({
+    cwd: '/home/bannd/Workspace/Projects/personal_works/sl-mod',
+    surface: 'terminal',
+    isInteractive: true,
+  })
+  const ui = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+  expect(await ui.find({ type: 'Text', text: /ct .* 20%/ })).toBeDefined()
+
+  // Steady state: the reading carries a percent, so the tick leaves the gauge
+  // alone -- and never asks for the breakdown.
+  estimate = 3
+  await clock.advance(10_000)
+  expect(await ui.find({ type: 'Text', text: /ct .* 20%/ })).toBeDefined()
+
+  // The compaction lands and nothing tells the band: the percent is gone, the
+  // breakdown says 6. The next tick takes it.
+  percent = null
+  estimate = 6
+  await clock.advance(10_000)
+  expect(await ui.find({ type: 'Text', text: /ct .* 6%/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /20%/ })).toBeUndefined()
+
+  // The breakdown moves on as the gap goes on, and the tick follows it.
+  estimate = 7
+  await clock.advance(10_000)
+  expect(await ui.find({ type: 'Text', text: /ct .* 7%/ })).toBeDefined()
+
+  // The next response lands: the percent is back, and from here the pushed
+  // figure is the gauge's source again. The engine redraws the band on a
+  // measurement itself; here the harness does not, so the minute's countdown
+  // tick is what redraws it -- and the six resync ticks on the way there see a
+  // percent and stand down, breakdown or no breakdown.
+  percent = 9
+  estimate = 2
+  await $.session.measure({
+    context: { tokens: 90_000, window: 1_000_000, percent: 9 },
+    rateLimits: [],
+    cost: { usd: 1 },
+    changed: ['context'],
+  })
+  await clock.advance(60_000)
+  expect(await ui.find({ type: 'Text', text: /ct .* 9%/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /ct .* 2%/ })).toBeUndefined()
+
+  await ui.unmount()
+})
+
+test('the first request after a compaction carries half the messages, and the gauge takes it', async ($, on) => {
+  // The timer above catches a compaction within ten seconds. This catches it on
+  // the first model request after it, which is when the band is being looked
+  // at: `turn.step` is the one event every mod sees, and its `messageCount`
+  // falls to a fraction when the transcript is rewritten under it. The halving
+  // test is Karan Bansal's, from cache-tax. A subagent's loop carries its own
+  // small count and must not pass for the main transcript shrinking.
+  let percent: number | null = 20
+  let estimate: number | null = null
+  const reading = (args: SessionUsageArgs): SessionUsage => ({
+    startedAt: 0,
+    context: {
+      window: 1_000_000,
+      ...(percent === null ? {} : { tokens: percent * 10_000, percent }),
+      ...(args?.breakdown && estimate !== null ? { breakdown: { percentage: estimate } } : {}),
+    } as SessionUsage['context'],
+    rateLimits: [],
+    cost: { usd: 1 },
+  })
+  stand(on, undefined, reading)
+  // The bottom of the turn.step chain: the engine's response, a stream with
+  // nothing in it and a result at the end.
+  on('turn.step', async function* () {
+    return { turnId: 't', index: 0, answer: '', toolUses: [], stopReason: 'end_turn' as const, usage: null }
+  })
+  // One request of the main loop, or of a subagent's. The stream has to be
+  // read to its end before `result` settles.
+  const step = async (messageCount: number, agentId?: string) => {
+    const stream = $.turn.step({
+      turnId: 't',
+      index: 0,
+      model: 'claude-opus-5',
+      messageCount,
+      ...(agentId === undefined ? {} : { agentId }),
+    })
+    for await (const _ of stream) {
+      // nothing streams from the stand-in
+    }
+    await stream.result
+  }
+
+  await $.classic.SessionStart({ source: 'startup' })
+  const ui = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+  expect(await ui.find({ type: 'Text', text: /ct .* 20%/ })).toBeDefined()
+
+  // The transcript grows: nothing to do, and the breakdown is never asked for.
+  await step(40)
+  await step(44)
+  expect(await ui.find({ type: 'Text', text: /ct .* 20%/ })).toBeDefined()
+
+  // The compaction lands: the percent is gone, the breakdown says 6. A
+  // subagent's first request carries three messages, and is not it.
+  percent = null
+  estimate = 6
+  await step(3, 'agent-1')
+  expect(await ui.find({ type: 'Text', text: /ct .* 20%/ })).toBeDefined()
+
+  // The main loop's next request carries a third of what the last one did.
+  await step(14)
+  expect(await ui.find({ type: 'Text', text: /ct .* 6%/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /20%/ })).toBeUndefined()
+
+  // From there the count grows again and the gauge is left to the engine.
+  estimate = 50
+  await step(16)
+  expect(await ui.find({ type: 'Text', text: /ct .* 6%/ })).toBeDefined()
+
+  await ui.unmount()
+})
+
+test('a compaction drops the context gauge instead of pinning the old number', async ($, on) => {
+  // `session.measure` does not fire for a compaction: Ban watched a session
+  // compact and the `ct` gauge sit at 38%. That number was true when it was
+  // taken, which is the worst kind of wrong -- it reads as current.
+  //
+  // Two hooks cover it. `session.compact` takes the figure straight off the
+  // compaction's own result (`tokensAfter`), which is the better source but
+  // cannot be raised here: the harness has no transcript, so `e.messages` is not
+  // a list and every hook in the chain is skipped for passing it on. What is
+  // tested is the backstop, `classic.PostCompact`.
+  //
+  // The reading is shaped as the engine shapes it right after a compaction:
+  // `context` is `{ window }` with no `percent` -- the field is dropped, not
+  // held stale -- and the fill exists only in the breakdown, when asked for.
+  // On 2026-10-19 a backstop that read `percent` alone found nothing and left
+  // the band at 20% while /context said 9%.
+  let percent: number | null = 66
+  let estimate: number | null = null
+  const reading = (args: SessionUsageArgs): SessionUsage => ({
+    startedAt: 0,
+    context: {
+      window: 1_000_000,
+      ...(percent === null ? {} : { tokens: percent * 10_000, percent }),
+      ...(args?.breakdown && estimate !== null ? { breakdown: { percentage: estimate } } : {}),
+    } as SessionUsage['context'],
+    rateLimits: [],
+    cost: { usd: 1 },
+  })
+  stand(on, undefined, reading)
+  on('classic.PostCompact', () => ({}))
+
+  await $.classic.SessionStart({ source: 'startup' })
+  const ui = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+  expect(await ui.find({ type: 'Text', text: /ct .* 66%/ })).toBeDefined()
+
+  // The real shape: no `percent`, a breakdown that says 9.
+  percent = null
+  estimate = 9
+  await $.classic.PostCompact({ trigger: 'manual', compact_summary: 'summary' })
+  expect(await ui.find({ type: 'Text', text: /ct .* 9%/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /66%/ })).toBeUndefined()
+
+  // No breakdown either: nothing to take, and nothing to crash on.
+  estimate = null
+  await $.classic.PostCompact({ trigger: 'manual', compact_summary: 'summary' })
+  expect(await ui.find({ type: 'Text', text: /ct .* 9%/ })).toBeDefined()
+
+  // The guard on the plain reading: a `percent` that is present here has not
+  // caught up and is the pre-compaction figure, so only one that moved DOWN is
+  // taken.
+  percent = 80
+  await $.classic.PostCompact({ trigger: 'auto', compact_summary: 'summary' })
+  expect(await ui.find({ type: 'Text', text: /ct .* 9%/ })).toBeDefined()
+
+  percent = 5
+  await $.classic.PostCompact({ trigger: 'auto', compact_summary: 'summary' })
+  expect(await ui.find({ type: 'Text', text: /ct .* 5%/ })).toBeDefined()
+
+  await ui.unmount()
+})
+
+// The tabs are the engine's: it draws no title for a lone pane and a tab strip
+// as soon as a second is open. So what the mod owes is opening both, and
+// raising the one asked for -- which `focus: true` does, and which is why the
+// order matters.
+test('a /sl view verb opens all three panes, so the engine draws them as tabs', async ($, on) => {
+  const opens: { id: string; focus: boolean }[] = []
+  stand(on, undefined, undefined, true, opens)
+
+  // On `$` inside a test, `command.run` is the event call, not the plugin-side
+  // shorthand: it wants the whole input, the two the engine would stamp
+  // included.
+  const run = (args: string) =>
+    $.command.run({
+      command: 'sl',
+      args,
+      origin: { kind: 'composer' },
+      presentation: { isFullscreen: false, columns: 120 },
+    })
+
+  expect(await run('help')).toEqual({ text: 'sl help open. Esc closes it.' })
+  expect(opens).toEqual([
+    { id: 'sl-settings', focus: false },
+    { id: 'sl-agents', focus: false },
+    { id: 'sl-help', focus: true },
+  ])
+
+  opens.length = 0
+  await run('settings')
+  expect(opens).toEqual([
+    { id: 'sl-help', focus: false },
+    { id: 'sl-agents', focus: false },
+    { id: 'sl-settings', focus: true },
+  ])
+
+  opens.length = 0
+  await run('agents')
+  expect(opens).toEqual([
+    { id: 'sl-help', focus: false },
+    { id: 'sl-settings', focus: false },
+    { id: 'sl-agents', focus: true },
+  ])
+
+  // Bare `/sl` is settings, as bare `/bgh` is its own settings; the verb is
+  // read case-blind with the rest of the line after it.
+  opens.length = 0
+  await run('')
+  expect(opens.at(-1)).toEqual({ id: 'sl-settings', focus: true })
+  opens.length = 0
+  await run('  Help  ')
+  expect(opens.at(-1)).toEqual({ id: 'sl-help', focus: true })
+})
+
+// The verbs that act rather than show: they open nothing, say what they did in
+// a line, and an unknown verb lists the ones there are.
+test('/sl on, off and effort act without a pane, and an unknown verb lists the verbs', async ($, on) => {
+  const opens: { id: string; focus: boolean }[] = []
+  stand(on, undefined, undefined, true, opens)
+  const ui = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+  const run = (args: string) =>
+    $.command.run({
+      command: 'sl',
+      args,
+      origin: { kind: 'composer' },
+      presentation: { isFullscreen: false, columns: 120 },
+    })
+
+  expect(await ui.find({ type: 'Text', text: /Opus/ })).toBeDefined()
+  expect(await run('off')).toEqual({ text: 'Status line hidden. `/sl on` brings it back.' })
+  expect(await ui.find({ type: 'Text', text: /Opus/ })).toBeUndefined()
+  expect(await run('on')).toEqual({ text: 'Status line shown.' })
+  expect(await ui.find({ type: 'Text', text: /Opus/ })).toBeDefined()
+
+  expect(await run('effort high')).toEqual({ text: 'Effort set to high for the requests this session sends from now on.' })
+  expect(await ui.find({ type: 'Text', text: /\(H\)/ })).toBeDefined()
+  expect(await run('effort off')).toEqual({ text: 'Effort override cleared; the session decides again.' })
+  expect((await run('effort loud')).text).toMatch(/^Effort is one of /)
+
+  expect((await run('frobnicate')).text).toBe('/sl takes one of: settings | help | agents | effort <level> | restore | debug | on | off')
+  expect(opens).toEqual([])
+
+  await ui.unmount()
+})
+
+// Where the theme's name says nothing about the background (`auto`, the `-ansi`
+// pair), the OS is asked. The theme row comes from the test's own `config.list`;
+// what the OS answers is `stand`'s `processes`: macOS prints `Dark`, or exits 1
+// with the key missing in light mode; a box without the command exits 127 with
+// nothing the probe recognises. Read off the first cell, the darkest step.
+const MOON_FIRST = '#3b4261'
+const DAY_FIRST = '#c4c8da'
+const appearance = (mode: 'light' | 'dark' | null) => async (argv: readonly string[]) => {
+  const done = (exitCode: number, stdout: string, stderr: string) => ({
+    exitCode,
+    stdout,
+    stderr,
+    isStdoutTruncated: false,
+    isStderrTruncated: false,
+  })
+  if (argv[0] === 'defaults') {
+    if (mode === 'dark') return done(0, 'Dark\n', '')
+    if (mode === 'light') return done(1, '', "Could not find key 'AppleInterfaceStyle' in domain 'kCFPreferencesAnyApplication'.")
+
+    return done(127, '', 'defaults: command not found')
+  }
+  if (argv[0] === 'gsettings') return done(127, '', 'gsettings: command not found')
+
+  return undefined
+}
+const themed = (on: On, theme: string, mode: 'light' | 'dark' | null) => {
+  stand(on, undefined, undefined, true, undefined, undefined, appearance(mode))
+  endpoint(on, { auth: false })
+  on('config.list', () => ({
+    value: [
+      { key: 'theme', label: 'Theme', kind: 'choice', value: theme, provider: { plugin: '', tier: 'user' }, isLocked: false },
+    ],
+  }))
+}
+const firstCell = async ($: Parameters<TestBody>[0]) => {
+  await $.classic.SessionStart({ source: 'startup' })
+  const ui = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+  const colour = (await ui.find({ type: 'Text', text: /\u{25B0}/u }))?.props.backgroundColor
+  await ui.unmount()
+
+  return colour
+}
+
+test('a light theme paints its own background, so the band is Day whatever the OS says', async ($, on) => {
+  themed(on, 'light', 'dark')
+  expect(await firstCell($)).toBe(DAY_FIRST)
+})
+
+test('a dark theme keeps Moon, whatever the OS says', async ($, on) => {
+  themed(on, 'dark', 'light')
+  expect(await firstCell($)).toBe(MOON_FIRST)
+})
+
+test('match Terminal asks the OS: light mode draws Day', async ($, on) => {
+  themed(on, 'auto', 'light')
+  expect(await firstCell($)).toBe(DAY_FIRST)
+})
+
+test('match Terminal asks the OS: dark mode draws Moon', async ($, on) => {
+  themed(on, 'auto', 'dark')
+  expect(await firstCell($)).toBe(MOON_FIRST)
+})
+
+test('dark-ansi on a light desktop draws Day: the terminal, not the name, has the background', async ($, on) => {
+  themed(on, 'dark-ansi', 'light')
+  expect(await firstCell($)).toBe(DAY_FIRST)
+})
+
+test('with no system appearance to read, an -ansi theme falls back to its name', async ($, on) => {
+  themed(on, 'light-ansi', null)
+  expect(await firstCell($)).toBe(DAY_FIRST)
+})
