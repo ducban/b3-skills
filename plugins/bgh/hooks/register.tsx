@@ -57,7 +57,7 @@ import {
   type Usage,
 } from './core'
 
-const RELEASE = '0.8.0'
+const RELEASE = '0.8.1'
 const HARPER_DELAY_MS = 300
 const HOP_TIMEOUT_MS = 6000
 const CACHE_KEY = 'llm-cache-v1'
@@ -585,7 +585,7 @@ export const register: Register = (on) => {
     const redraw = () => void update($, revAtom, (n) => n + 1)
 
     const step = (n: number, done: boolean, name: string, state: string, how: string[]) => (
-      <Box key={`setup-${name}`} flexDirection="column">
+      <Box key={`setup-${name}`} flexDirection="column" marginTop={1}>
         <Box flexDirection="row" columnGap={1}>
           <Text color={done ? 'success' : 'warning'}>{done ? ` ✓ ${n}.` : ` ✗ ${n}.`}</Text>
           <Text bold={!done}>{name.padEnd(12)}</Text>
@@ -658,7 +658,7 @@ export const register: Register = (on) => {
               : ['check LANGFUSE_BASE_URL and the network, then /bgh test']
             : ['type an English sentence and wait, or run /bgh test'],
         )}
-        <Box flexDirection="row" columnGap={2}>
+        <Box flexDirection="row" columnGap={2} marginTop={1}>
           <Button
             key="h"
             label="look for harper"
@@ -740,7 +740,9 @@ export const register: Register = (on) => {
         <Text dimColor wrap="wrap">
           A key changes its setting, kept across sessions. API keys stay in the .env file.
         </Text>
-        <Text bold>Checking</Text>
+        <Box marginTop={1}>
+          <Text bold>Checking</Text>
+        </Box>
         {row('g', 'grammar', onOff(prefs.enabled), prefs.enabled, 'check the prompt as you type', () => {
           setPrefs({ enabled: !prefs.enabled })
           if (!prefs.enabled) {
@@ -768,7 +770,9 @@ export const register: Register = (on) => {
         <Text dimColor wrap="truncate-end">
           {`  chain   ${llmLine}`}
         </Text>
-        <Text bold>Tracing and cost</Text>
+        <Box marginTop={1}>
+          <Text bold>Tracing and cost</Text>
+        </Box>
         {row('t', 'langfuse', langfuseKeys(env) ? onOff(prefs.langfuse) : 'no keys', !!langfuse, langfuse ? langfuse.baseUrl : 'LANGFUSE_* keys go in the .env file', () => {
           setPrefs({ langfuse: !prefs.langfuse })
           save()
@@ -778,7 +782,9 @@ export const register: Register = (on) => {
           void $.store.set(CACHE_KEY, [])
           redraw()
         })}
-        <Text bold>{ignore.size > 9 ? `Ignored words (first 9 of ${ignore.size})` : 'Ignored words'}</Text>
+        <Box marginTop={1}>
+          <Text bold>{ignore.size > 9 ? `Ignored words (first 9 of ${ignore.size})` : 'Ignored words'}</Text>
+        </Box>
         {words.length ? (
           <Box flexDirection="row" columnGap={2} flexWrap="wrap">
             {words.map((w, i) => (
@@ -829,7 +835,9 @@ export const register: Register = (on) => {
           : null}
         {kv('keybinds', keybindingsPath)}
         {kv('files', `${draftPath} · last-paint.json beside it`)}
-        <Text bold>Routes</Text>
+        <Box marginTop={1}>
+          <Text bold>Routes</Text>
+        </Box>
         {kv('chain', hops.map((h) => `${h.route} ${modelName(h.model)}`).join(' → ') || 'off', !hops.length)}
         {lastProbe ? (
           <Box flexDirection="column">
@@ -850,11 +858,15 @@ export const register: Register = (on) => {
         ) : (
           <Text dimColor>not tested yet: press x</Text>
         )}
-        <Text bold>Langfuse</Text>
+        <Box marginTop={1}>
+          <Text bold>Langfuse</Text>
+        </Box>
         {kv('endpoint', langfuse ? langfuse.baseUrl : langfuseKeys(env) ? 'switched off' : 'no keys')}
         {kv('last trace', traceLine(lastTrace, Date.now()), !!lastTrace && !lastTrace.ok)}
         {kv('last error', lastLangfuseError || 'none', !!lastLangfuseError)}
-        <Text bold>Last check</Text>
+        <Box marginTop={1}>
+          <Text bold>Last check</Text>
+        </Box>
         {lastRun ? (
           <Box flexDirection="column">
             {kv('at', `${new Date(lastRun.at).toLocaleTimeString()} · “${lastRun.text.slice(0, 60)}${lastRun.text.length > 60 ? '…' : ''}”`)}
@@ -872,8 +884,9 @@ export const register: Register = (on) => {
         ) : (
           <Text dimColor>none yet: type an English sentence of four words or more</Text>
         )}
+        <Box marginTop={1} />
         {kv('session', `cache ${cache.size} · ignored ${ignore.size} · spent $${spent.toFixed(4)}`)}
-        <Box flexDirection="row" columnGap={2}>
+        <Box flexDirection="row" columnGap={2} marginTop={1}>
           <Button key="x" label="test every route" hotkey="x" plain onPress={() => void $.command.run({ command: 'bgh', args: 'test' })} />
           <Button key="u" label="refresh" hotkey="u" plain onPress={redraw} />
         </Box>
@@ -907,17 +920,23 @@ export const register: Register = (on) => {
         {line('/bgh ignore <word>', 'never flag this word (unignore <word> undoes it)')}
         {line('/bgh ignored', 'opens bgh settings, where the list is')}
         {line('/bgh clear-cache', 'forget the remembered LLM answers')}
-        <Text bold>In the prompt</Text>
+        <Box marginTop={1}>
+          <Text bold>In the prompt</Text>
+        </Box>
         {line('alt+a', 'apply every fix the band above the prompt shows')}
         {line('alt+i', 'ignore the first flagged word from now on')}
-        <Text bold>In the tabs</Text>
+        <Box marginTop={1}>
+          <Text bold>In the tabs</Text>
+        </Box>
         {line('bgh setup', 'h look for harper · r reload keys · x test every route')}
         {line('bgh settings', 'g grammar · l llm · f first route · m model · d delay · t langfuse · c cache · 1–9 un-ignore')}
         {line('bgh debug', 'x test every route · u refresh')}
         {line('Tab, Esc', 'Tab walks the buttons; Esc closes the tabs')}
-        <Text dimColor wrap="wrap">
-          {`B3 Grammar Helper ${RELEASE} · keys in ${envFile}`}
-        </Text>
+        <Box marginTop={1}>
+          <Text dimColor wrap="wrap">
+            {`B3 Grammar Helper ${RELEASE} · keys in ${envFile}`}
+          </Text>
+        </Box>
       </Box>
     )
   })
