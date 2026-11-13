@@ -303,7 +303,7 @@ const ITEMS: { key: ItemKey; hotkey: string; name: string; about: string }[] = [
   { key: 'cost', hotkey: 'u', name: 'cost', about: 'what this session has cost, in USD' },
   { key: 'speed', hotkey: 's', name: 'speed', about: 'output tokens a second, over the last request' },
   { key: 'turn', hotkey: 'n', name: 'turn', about: 'what the last turn cost, and how long it ran' },
-  { key: 'agents', hotkey: 'b', name: 'agents', about: 'how many subagents are running; /sl-agents lists them' },
+  { key: 'agents', hotkey: 'b', name: 'agents', about: 'how many subagents are running; /sl agents lists them' },
 ]
 
 // How the settings pane groups the items: what you are, what you have left,
@@ -424,7 +424,7 @@ let contextPercent: number | null = null
 // Kept so a compaction can recompute the percent from the token count it
 // reports. Every reading of usage carries it, so it costs nothing to hold.
 let contextWindow: number | null = null
-// Which hook last wrote the gauge, and when, for /sl-debug. A gauge that holds
+// Which hook last wrote the gauge, and when, for /sl debug. A gauge that holds
 // an old number looks the same whether the engine stopped reporting or the band
 // stopped listening, and on 2026-10-19 it took another session's /context to
 // tell the two apart.
@@ -443,9 +443,9 @@ let branch: string | null = null
 let isDirty = false
 let isAhead = false
 let isHidden = false
-// The guard: off until switched on in /sl-settings, stored like the layout.
+// The guard: off until switched on in /sl settings, stored like the layout.
 let guardOn = false
-// The cold gate: off until switched on in /sl-settings, stored like the guard.
+// The cold gate: off until switched on in /sl settings, stored like the guard.
 // Once the cache's hour has gone, the next prompt typed is dropped once with
 // what re-warming costs in tokens, and the one after goes through. `coldAskedAt`
 // is when it asked; a main-loop request clears it.
@@ -463,7 +463,7 @@ let projectVersion: string | null = null
 let gitNote = 'not probed yet'
 let versionNote = 'not probed yet'
 
-// The rotate keys and `/sl-effort` set this, and nothing else does. While it is
+// The rotate keys and `/sl effort` set this, and nothing else does. While it is
 // null the `turn.step` hook passes every request through untouched, so the band
 // reports the session's own effort rather than quietly steering it.
 let effortOverride: Effort | null = null
@@ -491,7 +491,7 @@ let lastTurn: { usd: number | null; ms: number } | null = null
 // The session's subagents, one row each, from the events their loops raise:
 // `agent.spawn` opens a row, each `turn.step` in that loop adds a request and
 // its tokens, `turn.complete` closes it. The cell counts the open rows; the
-// /sl-agents pane lists them all, checking the open ones against the engine's
+// /sl agents pane lists them all, checking the open ones against the engine's
 // own list when drawn, since a loop the engine killed raises no completion.
 // Thirty rows are kept; a session that spawns more is a session reading its
 // own history, not the band. The ledger is johnnyvizz's idea, from
@@ -545,28 +545,40 @@ const tk = (n: number) =>
         ? `${(n / 1e3).toFixed(1)}k`
         : String(n)
 
-const LEGEND = 'sl-legend'
+// Pane ids are `<mod>-<view>` and titles `<mod> <view>`, the verb's own name
+// in both, the way /bgh names its panes.
+const LEGEND = 'sl-help'
 const SETTINGS = 'sl-settings'
 const AGENTS = 'sl-agents'
+const VERB_HINT = 'settings | help | agents | effort <level> | debug | on | off'
 
 // The engine draws no title for a lone pane and a tab strip the moment a second
 // one is open -- "one shown, the rest tabs" (PaneOpenArgs.title). So the tabs
 // are not a widget to build: they are what two open panes already look like.
-// Every /sl-* command that has a pane opens both and raises its own, which is
-// why `show` is opened last: `focus: true` raises as well as focuses.
+// Every verb that has a pane opens all three and raises its own, which is why
+// `show` is opened last: `focus: true` raises as well as focuses.
 const PANES: { id: string; title: string }[] = [
   { id: LEGEND, title: 'sl help' },
   { id: SETTINGS, title: 'sl settings' },
   { id: AGENTS, title: 'sl agents' },
 ]
 
+// Opens the tabs and says so in a line, or says why nothing was drawn: on a
+// terminal too narrow to seat a pane the engine keeps it open but undrawn.
 async function openTabs($: EngineInterface, show: string) {
   for (const pane of PANES) {
     if (pane.id === show) continue
     await $.ui.open({ id: pane.id, title: pane.title, closeOnEscape: true })
   }
   const front = PANES.find(pane => pane.id === show)
-  if (front) await $.ui.open({ ...front, focus: true, closeOnEscape: true })
+  if (!front) return {}
+  const opened = await $.ui.open({ ...front, focus: true, closeOnEscape: true })
+
+  return {
+    text: opened.isPlaced
+      ? `${front.title} open. Esc closes it.`
+      : `${front.title} is waiting undrawn: ${opened.reason}`,
+  }
 }
 
 // --- Where the windows come from --------------------------------------------
@@ -589,10 +601,10 @@ const STALE_MS = 15 * 60_000
 type Reading = {
   windows: Window[]
   at: number | null // when this came back, by $.clock.now()
-  note: string // why there's nothing, in words, for /sl-debug
+  note: string // why there's nothing, in words, for /sl debug
 }
 let reading: Reading = { windows: [], at: null, note: 'not fetched yet' }
-// Where the current reading came from, for /sl-debug: this session's own
+// Where the current reading came from, for /sl debug: this session's own
 // fetch, or another session's through the shared store.
 let readingSource = 'none'
 
@@ -988,7 +1000,7 @@ async function resyncContext($: EngineInterface) {
 // comes. Failing that, the plain reading is taken only if it moved DOWN: it is
 // the last response's figure, and the only way it is present here is if it has
 // not caught up yet, in which case it is the pre-compaction one and writing it
-// back would re-pin the stale number. `source` names the caller for /sl-debug.
+// back would re-pin the stale number. `source` names the caller for /sl debug.
 async function afterCompaction($: EngineInterface, source: string) {
   const estimate = await breakdownPercent($)
   if (estimate !== null) {
@@ -1294,7 +1306,7 @@ type Ctx = { folder: string; model: string; windows: Window[]; now: number; comp
 // bar's colour. The five-hour one counts down, `↻2h14m`: you will still be here
 // when it comes round. The week is days off, so its cell turns over each minute
 // between the countdown, `↻3d15h`, and the date, `↻Oct 6 11:00pm` -- the one
-// you would put in a calendar. Off by the `reset` key in /sl-settings, and
+// you would put in a calendar. Off by the `reset` key in /sl settings, and
 // absent -- not `↻?` -- when the reading did not say.
 //
 // Its colour follows how far off the reset is, as a share of the window's own
@@ -1479,7 +1491,7 @@ function buildLines(ctx: Ctx, columns = Infinity): Part[][] {
   return lines
 }
 
-// For /sl-debug: where a window's reset comes from, or why there is none.
+// For /sl debug: where a window's reset comes from, or why there is none.
 const resetDebug = (ws: Window[], now: number, item: ItemKey) => {
   const w = ws.find(one => itemForWindow(one) === item)
   if (!w) return 'no such window in the shown reading'
@@ -1512,18 +1524,78 @@ function shownWindows(now: number): Window[] {
   })
 }
 
+// The two verbs with a body of their own. Top-level, as the loader asks of
+// any function `$` is handed to.
+async function setEffort($: EngineInterface, askedRaw: string) {
+  const asked = askedRaw.trim().toLowerCase()
+  if (asked === 'off' || asked === 'reset') {
+    effortOverride = null
+    $.ui.invalidate('ui.render')
+    $.ui.toast('sl: effort override cleared')
+
+    return { text: 'Effort override cleared; the session decides again.' }
+  }
+  if (!EFFORT_STEPS.includes(asked as Effort)) {
+    return { text: `Effort is one of ${EFFORT_STEPS.join(', ')}, or off to stop overriding.` }
+  }
+  effortOverride = asked as Effort
+  $.ui.invalidate('ui.render')
+  $.ui.toast(`sl: effort ${asked}`)
+
+  return { text: `Effort set to ${asked} for the requests this session sends from now on.` }
+}
+
+async function debugText($: EngineInterface) {
+  const [usage, model, estimate, now] = await Promise.all([
+    $.session.usage(),
+    $.session.model(),
+    breakdownPercent($),
+    $.clock.now(),
+  ])
+  const age = contextAt === null ? '' : `, ${Math.round((now - contextAt) / 1000)}s ago`
+
+  return {
+    text: [
+      `rateLimits: ${usage.rateLimits.length} entry(s)`,
+      ...usage.rateLimits.map((w, i) => `  [${i}] ${JSON.stringify(w)}`),
+      `  5h resets: ${resetDebug(shownWindows(now), now, 'five_hour')}`,
+      `  7d resets: ${resetDebug(shownWindows(now), now, 'seven_day')}`,
+      `context: ${JSON.stringify(usage.context)}`,
+      `  band ct: ${contextPercent === null ? 'none' : `${contextPercent}%`} window=${contextWindow ?? 'none'} from=${contextSource}${age}`,
+      `  breakdown (what /context shows): ${estimate === null ? 'none' : `${estimate}%`}`,
+      `cost: ${JSON.stringify(usage.cost)}`,
+      `model: ${model}`,
+      `effort (from turn.step): ${effort ?? 'not seen yet'}`,
+      `effort override: ${effortOverride ?? 'none'}`,
+      `git: branch=${branch} dirty=${isDirty} ahead=${isAhead} -- ${gitNote}`,
+      `project version: ${projectVersion ?? 'none found'} -- ${versionNote}`,
+      `tokens: ${JSON.stringify(tokens)} cacheHit=${cacheHit() ?? 'n/a'}%`,
+      `cache: ${cacheWarmAt === null ? 'no request seen yet' : `warm at ${new Date(cacheWarmAt).toISOString()}, ${countdown(cacheWarmAt + CACHE_TTL_MS, now)} left`}`,
+      `speed: ${speed === null ? 'not timed yet' : `${speed} tok/s`}; last turn: ${lastTurn === null ? 'none' : `${lastTurn.usd === null ? 'cost unknown' : `$${lastTurn.usd.toFixed(2)}`}, ${elapsed(lastTurn.ms)}`}`,
+      `agents: ${agentsRunning()} running, ${agents.filter(a => a.status === 'done').length} done, ${agents.filter(a => a.status === 'failed').length} failed`,
+      `layout: ${ITEMS.map(i => `${i.name}=${layout[i.key] || 'off'}`).join(' ')}`,
+      `guard: ${guardOn ? 'on' : 'off'}${held === null ? '' : `, holding ${held.risk.label}`}`,
+      `cold gate: ${coldGateOn ? 'on' : 'off'}${coldAskedAt === null ? '' : `, asked at ${new Date(coldAskedAt).toISOString()}`}`,
+      `usage endpoint: ${reading.windows.length} window(s)`,
+      ...reading.windows.map(w => `  ${w.kind}${w.scope ? ` (${w.scope})` : ''} ${w.percentUsed}%`),
+      `  note=${reading.note || 'ok'}`,
+      `  source=${readingSource}`,
+      `palette: ${scheme} -- ${themeNote}`,
+    ].join('\n'),
+  }
+}
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
-    for (const [name, description] of [
-      ['sl', 'Show or hide the status line band'],
-      ['sl-help', 'Open the status line legend'],
-      ['sl-settings', 'Choose what the status line shows, and on which line'],
-      ['sl-effort', 'Set reasoning effort: low, medium, high, xhigh, max, or off'],
-      ['sl-debug', 'Print the raw session usage the status line reads'],
-      ['sl-agents', 'List the subagents this session has run'],
-    ] as const) {
-      await $.command.register({ name, description })
-    }
+    // One command, verbs after it, the shape /bgh uses: the typeahead lists
+    // `/sl` once and the hint names the verbs. `immediate` lets a view open
+    // and the band switch mid-turn.
+    await $.command.register({
+      name: 'sl',
+      description: 'The status line band: settings, help, agents, effort, debug, on, off',
+      argumentHint: VERB_HINT,
+      immediate: true,
+    })
 
     // Hiding the band and the layout are both preferences, so they outlive the
     // session. `$.store` is shared by every session on the machine, which is
@@ -1816,86 +1888,35 @@ export const register: Register = on => {
     return next(e)
   })
 
-  on('command.run', { command: 'sl' }, async $ => {
-    isHidden = !isHidden
-    await $.store.set('isHidden', isHidden)
-    $.ui.invalidate('ui.render')
+  // One handler, the verb picked off the front of the arguments. Bare `/sl`
+  // opens settings, as bare `/bgh` opens its own; the band is switched with
+  // `on` and `off`, which say so in a toast as well as in the line below.
+  on('command.run', { command: 'sl' }, async ($, e) => {
+    const [verb = '', ...rest] = (e.args ?? '').trim().split(/\s+/)
+    switch (verb.toLowerCase()) {
+      case '':
+      case 'settings':
+        return openTabs($, SETTINGS)
+      case 'help':
+        return openTabs($, LEGEND)
+      case 'agents':
+        return openTabs($, AGENTS)
+      case 'on':
+      case 'off': {
+        isHidden = verb.toLowerCase() === 'off'
+        await $.store.set('isHidden', isHidden)
+        $.ui.invalidate('ui.render')
+        const said = isHidden ? 'Status line hidden. `/sl on` brings it back.' : 'Status line shown.'
+        $.ui.toast(`sl: ${isHidden ? 'band hidden' : 'band shown'}`)
 
-    return { text: isHidden ? 'Status line hidden. `/sl` brings it back.' : 'Status line shown.' }
-  })
-
-  on('command.run', { command: 'sl-help' }, async $ => {
-    await openTabs($, LEGEND)
-
-    return {}
-  })
-
-  on('command.run', { command: 'sl-settings' }, async $ => {
-    await openTabs($, SETTINGS)
-
-    return {}
-  })
-
-  on('command.run', { command: 'sl-agents' }, async $ => {
-    await openTabs($, AGENTS)
-
-    return {}
-  })
-
-  on('command.run', { command: 'sl-effort' }, async ($, e) => {
-    const asked = (e.args ?? '').trim().toLowerCase()
-    if (asked === 'off' || asked === 'reset') {
-      effortOverride = null
-      $.ui.invalidate('ui.render')
-
-      return { text: 'Effort override cleared; the session decides again.' }
-    }
-    if (!EFFORT_STEPS.includes(asked as Effort)) {
-      return { text: `Effort is one of ${EFFORT_STEPS.join(', ')}, or off to stop overriding.` }
-    }
-    effortOverride = asked as Effort
-    $.ui.invalidate('ui.render')
-
-    return { text: `Effort set to ${asked} for the requests this session sends from now on.` }
-  })
-
-  on('command.run', { command: 'sl-debug' }, async $ => {
-    const [usage, model, estimate, now] = await Promise.all([
-      $.session.usage(),
-      $.session.model(),
-      breakdownPercent($),
-      $.clock.now(),
-    ])
-    const age = contextAt === null ? '' : `, ${Math.round((now - contextAt) / 1000)}s ago`
-
-    return {
-      text: [
-        `rateLimits: ${usage.rateLimits.length} entry(s)`,
-        ...usage.rateLimits.map((w, i) => `  [${i}] ${JSON.stringify(w)}`),
-        `  5h resets: ${resetDebug(shownWindows(now), now, 'five_hour')}`,
-        `  7d resets: ${resetDebug(shownWindows(now), now, 'seven_day')}`,
-        `context: ${JSON.stringify(usage.context)}`,
-        `  band ct: ${contextPercent === null ? 'none' : `${contextPercent}%`} window=${contextWindow ?? 'none'} from=${contextSource}${age}`,
-        `  breakdown (what /context shows): ${estimate === null ? 'none' : `${estimate}%`}`,
-        `cost: ${JSON.stringify(usage.cost)}`,
-        `model: ${model}`,
-        `effort (from turn.step): ${effort ?? 'not seen yet'}`,
-        `effort override: ${effortOverride ?? 'none'}`,
-        `git: branch=${branch} dirty=${isDirty} ahead=${isAhead} -- ${gitNote}`,
-        `project version: ${projectVersion ?? 'none found'} -- ${versionNote}`,
-        `tokens: ${JSON.stringify(tokens)} cacheHit=${cacheHit() ?? 'n/a'}%`,
-        `cache: ${cacheWarmAt === null ? 'no request seen yet' : `warm at ${new Date(cacheWarmAt).toISOString()}, ${countdown(cacheWarmAt + CACHE_TTL_MS, now)} left`}`,
-        `speed: ${speed === null ? 'not timed yet' : `${speed} tok/s`}; last turn: ${lastTurn === null ? 'none' : `${lastTurn.usd === null ? 'cost unknown' : `$${lastTurn.usd.toFixed(2)}`}, ${elapsed(lastTurn.ms)}`}`,
-        `agents: ${agentsRunning()} running, ${agents.filter(a => a.status === 'done').length} done, ${agents.filter(a => a.status === 'failed').length} failed`,
-        `layout: ${ITEMS.map(i => `${i.name}=${layout[i.key] || 'off'}`).join(' ')}`,
-        `guard: ${guardOn ? 'on' : 'off'}${held === null ? '' : `, holding ${held.risk.label}`}`,
-        `cold gate: ${coldGateOn ? 'on' : 'off'}${coldAskedAt === null ? '' : `, asked at ${new Date(coldAskedAt).toISOString()}`}`,
-        `usage endpoint: ${reading.windows.length} window(s)`,
-        ...reading.windows.map(w => `  ${w.kind}${w.scope ? ` (${w.scope})` : ''} ${w.percentUsed}%`),
-        `  note=${reading.note || 'ok'}`,
-        `  source=${readingSource}`,
-        `palette: ${scheme} -- ${themeNote}`,
-      ].join('\n'),
+        return { text: said }
+      }
+      case 'effort':
+        return setEffort($, rest[0] ?? '')
+      case 'debug':
+        return debugText($)
+      default:
+        return { text: `/sl takes one of: ${VERB_HINT}` }
     }
   })
 
@@ -2289,7 +2310,7 @@ export const register: Register = on => {
       flexDirection: 'column',
       children: [
         Text({ color: BLUE, bold: true, children: ['What can be on the band'] }),
-        Text({ color: MUTED, wrap: 'wrap', children: ['what each item means; which line it is on, and the switches, are in /sl-settings'] }),
+        Text({ color: MUTED, wrap: 'wrap', children: ['what each item means; which line it is on, and the switches, are in /sl settings'] }),
         ...ITEMS.map(item =>
           line(`${item.name} (${item.hotkey})`, item.about),
         ),
@@ -2315,14 +2336,14 @@ export const register: Register = on => {
         line(`L M H X ${EFFORT_LETTER.max}`, 'low, medium, high, xhigh, max'),
         gap,
         Text({ color: BLUE, bold: true, children: ['Keys and commands'] }),
-        line('effort (e)', 'in /sl-settings: session, low, medium, high, xhigh, max -- picked outright, never nudged'),
-        line('guard (a)', 'in /sl-settings: hold a risky shell command in the band until 1 runs it or 2 refuses it'),
-        line('cold gate (k)', 'in /sl-settings: after a cold hour, the next prompt is dropped once with the re-read in tokens; enter again sends it'),
-        line('/sl-agents', 'the subagents this session has run, one row each'),
-        line('/sl', 'hide or show the band'),
-        line('/sl-settings', 'choose what shows, and on which line'),
-        line('/sl-effort <level>', 'set it outright, or `off` to stop overriding'),
-        line('/sl-debug', 'print what the engine reports -- text, so it can be copied out'),
+        line('effort (e)', 'in /sl settings: session, low, medium, high, xhigh, max -- picked outright, never nudged'),
+        line('guard (a)', 'in /sl settings: hold a risky shell command in the band until 1 runs it or 2 refuses it'),
+        line('cold gate (k)', 'in /sl settings: after a cold hour, the next prompt is dropped once with the re-read in tokens; enter again sends it'),
+        line('/sl agents', 'the subagents this session has run, one row each'),
+        line('/sl on, /sl off', 'show or hide the band; bare /sl opens settings'),
+        line('/sl settings', 'choose what shows, and on which line'),
+        line('/sl effort <level>', 'set it outright, or `off` to stop overriding'),
+        line('/sl debug', 'print what the engine reports -- text, so it can be copied out'),
         line('tabs', 'help, settings and agents open together; click a tab, or tab onto it and enter'),
         line('Esc', 'close this pane'),
         gap,

@@ -1247,43 +1247,83 @@ test('a compaction drops the context gauge instead of pinning the old number', a
 // as soon as a second is open. So what the mod owes is opening both, and
 // raising the one asked for -- which `focus: true` does, and which is why the
 // order matters.
-test('a /sl-* command opens both panes, so the engine draws them as tabs', async ($, on) => {
+test('a /sl view verb opens all three panes, so the engine draws them as tabs', async ($, on) => {
   const opens: { id: string; focus: boolean }[] = []
   stand(on, undefined, undefined, true, opens)
 
   // On `$` inside a test, `command.run` is the event call, not the plugin-side
   // shorthand: it wants the whole input, the two the engine would stamp
   // included.
-  const run = (command: string) =>
+  const run = (args: string) =>
     $.command.run({
-      command,
-      args: '',
+      command: 'sl',
+      args,
       origin: { kind: 'composer' },
       presentation: { isFullscreen: false, columns: 120 },
     })
 
-  await run('sl-help')
+  expect(await run('help')).toEqual({ text: 'sl help open. Esc closes it.' })
   expect(opens).toEqual([
     { id: 'sl-settings', focus: false },
     { id: 'sl-agents', focus: false },
-    { id: 'sl-legend', focus: true },
+    { id: 'sl-help', focus: true },
   ])
 
   opens.length = 0
-  await run('sl-settings')
+  await run('settings')
   expect(opens).toEqual([
-    { id: 'sl-legend', focus: false },
+    { id: 'sl-help', focus: false },
     { id: 'sl-agents', focus: false },
     { id: 'sl-settings', focus: true },
   ])
 
   opens.length = 0
-  await run('sl-agents')
+  await run('agents')
   expect(opens).toEqual([
-    { id: 'sl-legend', focus: false },
+    { id: 'sl-help', focus: false },
     { id: 'sl-settings', focus: false },
     { id: 'sl-agents', focus: true },
   ])
+
+  // Bare `/sl` is settings, as bare `/bgh` is its own settings; the verb is
+  // read case-blind with the rest of the line after it.
+  opens.length = 0
+  await run('')
+  expect(opens.at(-1)).toEqual({ id: 'sl-settings', focus: true })
+  opens.length = 0
+  await run('  Help  ')
+  expect(opens.at(-1)).toEqual({ id: 'sl-help', focus: true })
+})
+
+// The verbs that act rather than show: they open nothing, say what they did in
+// a line, and an unknown verb lists the ones there are.
+test('/sl on, off and effort act without a pane, and an unknown verb lists the verbs', async ($, on) => {
+  const opens: { id: string; focus: boolean }[] = []
+  stand(on, undefined, undefined, true, opens)
+  const ui = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+  const run = (args: string) =>
+    $.command.run({
+      command: 'sl',
+      args,
+      origin: { kind: 'composer' },
+      presentation: { isFullscreen: false, columns: 120 },
+    })
+
+  expect(await ui.find({ type: 'Text', text: /Opus/ })).toBeDefined()
+  expect(await run('off')).toEqual({ text: 'Status line hidden. `/sl on` brings it back.' })
+  expect(await ui.find({ type: 'Text', text: /Opus/ })).toBeUndefined()
+  expect(await run('on')).toEqual({ text: 'Status line shown.' })
+  expect(await ui.find({ type: 'Text', text: /Opus/ })).toBeDefined()
+
+  expect(await run('effort high')).toEqual({ text: 'Effort set to high for the requests this session sends from now on.' })
+  expect(await ui.find({ type: 'Text', text: /\(H\)/ })).toBeDefined()
+  expect(await run('effort off')).toEqual({ text: 'Effort override cleared; the session decides again.' })
+  expect((await run('effort loud')).text).toMatch(/^Effort is one of /)
+
+  expect((await run('frobnicate')).text).toBe('/sl takes one of: settings | help | agents | effort <level> | debug | on | off')
+  expect(opens).toEqual([])
+
+  await ui.unmount()
 })
 
 // Where the theme's name says nothing about the background (`auto`, the `-ansi`

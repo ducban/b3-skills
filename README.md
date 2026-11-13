@@ -51,7 +51,7 @@ know, and what went wrong on the way.
  ct ▰▰▰▰▱ 66%   5h ▰▱▱▱▱ 9% ↻2h14m   7d ▰▰▱▱▱ 39% ↻3d15h   fable ▰▰▱▱▱ 26%
 ```
 
-Up to four lines, and what sits on which is set in `/sl-settings`. The default
+Up to four lines, and what sits on which is set in `/sl settings`. The default
 is identity on line one and budget on line two. Nothing is drawn under the
 prompt: the engine keeps its own hint line.
 Each bar is five segments of 20%, rounded **up**, so 19% shows one segment
@@ -64,7 +64,7 @@ The `7d` bar turns over once a minute between its countdown, `↻3d15h`, and the
 date it lands on, `↻Oct 6 11:00pm` in the terminal's own zone: the week is days
 off, and the date is the one you would put in a calendar. Both readings carry
 the reset (`resetsAt` from the engine, `resets_at` from the endpoint), so it and
-the percent always come off the same reading. The `reset` key in `/sl-settings`
+the percent always come off the same reading. The `reset` key in `/sl settings`
 turns both off, and while they are on the band ticks once a minute, since
 nothing else redraws it between events.
 
@@ -114,7 +114,7 @@ appearance, which a terminal that follows the system makes the truth: on macOS
 on a desktop Linux `gsettings get org.gnome.desktop.interface color-scheme`. A
 box with neither falls back to the name's prefix. It runs on the minute timer,
 so a desktop that turns dark at sunset takes the band with it within a minute.
-`/sl-debug` prints which palette stands and how it was decided.
+`/sl debug` prints which palette stands and how it was decided.
 
 The reset sits in the bar's cell but not in its colour. It goes cyan when the
 reset is close (inside a fifth of the window: the last hour of 5h, the last
@@ -140,7 +140,7 @@ is per token: on 2026-10-11 that kept one Mac at 429 for hours while the same
 account from another machine answered 200. The reading now lives in `$.store`,
 which every session on the box shares: whoever finds it older than three minutes
 fetches and writes it back, everyone else adopts it, and a 429's backoff is
-shared the same way. `/sl-debug` prints `source=` so you can see which it was.
+shared the same way. `/sl debug` prints `source=` so you can see which it was.
 
 When that reading is older than fifteen minutes it isn't drawn, and the engine's
 two live windows are used instead. Two bars beat three bars holding an old
@@ -176,7 +176,7 @@ against the compaction window rather than the model's, so it may read a point
 above `percent` for the same transcript, the same as `/context` does. The
 moved-down guard stays as the last resort for a breakdown that is not there.
 
-`/sl-debug` now prints `band ct:` next to the engine's raw `context:`. That is
+`/sl debug` now prints `band ct:` next to the engine's raw `context:`. That is
 the gauge's own number, which hook wrote it and how long ago, so "the engine
 stopped reporting" and "the band stopped listening" no longer look the same. It
 prints the breakdown's figure too.
@@ -198,7 +198,7 @@ one local call. The engine drops `context.percent` the moment a compaction lands
 and does not put it back until the next response, so a gauge holding a number
 while the reading has none has missed a compaction, and it takes the breakdown
 as the hooks would have. The rest of the time the tick does nothing: no
-estimate, no redraw. `/sl-debug` shows a gauge written this way as
+estimate, no redraw. `/sl debug` shows a gauge written this way as
 `from=tick breakdown`. The fix that belongs to Claude Code is for the bundled
 module to call `next(e)`; this one just stops depending on it.
 
@@ -208,7 +208,7 @@ mod is handed, is read for it too: each main-loop request says how many
 messages it carries (`messageCount`), and a request carrying fewer than half of
 what the last one did is the first after a compaction, because the transcript
 was rewritten under it. The gauge then takes the breakdown the same way, on the
-request itself rather than on the next tick; `/sl-debug` shows it as
+request itself rather than on the next tick; `/sl debug` shows it as
 `from=turn.step breakdown`. A subagent's loop carries its own small count and is
 skipped, and a `/clear` halves it too, which lands on an emptied window and is
 right. The halving test is Karan Bansal's, from
@@ -226,12 +226,12 @@ one, then the main loop's falling to a third and the gauge taking the breakdown.
 
 ## State
 
-Version 0.1.18, installed from this repo's own marketplace at scope **user**, so
-it draws in every session on this box. All six commands work. Thirty-eight tests
-pass under `claude plugin test`, `tsc -p .` is clean and `claude plugin validate`
-passes.
+Version 0.2.0, installed from this repo's own marketplace at scope **user**, so
+it draws in every session on this box. One command, `/sl`, with seven verbs.
+Thirty-three tests pass under `claude plugin test`, `tsc -p .` is clean and
+`claude plugin validate` passes.
 
-Every polled figure carries a note saying why it has nothing, and `/sl-debug`
+Every polled figure carries a note saying why it has nothing, and `/sl debug`
 prints it. An empty cell looks identical whether the probe answered "no branch"
 or threw on the way to asking, and that silence has cost time here before.
 
@@ -242,12 +242,19 @@ strip the moment a second one is open. `PaneOpenArgs.title` says so outright:
 "The pane's tab while more than one pane is open (with one, no title is drawn)",
 and the `Pane` render event: "one shown, the rest tabs".
 
-So `/sl-help`, `/sl-settings` and `/sl-agents` each open all three panes and
+So `/sl help`, `/sl settings` and `/sl agents` each open all three panes and
 raise their own.
 `focus: true` raises as well as focuses, which is why the asked-for pane is
-opened last. A click on the other tab shows it, or Tab onto it and Enter.
+opened last. A click on the other tab shows it, or Tab onto it and Enter. The
+verb answers with one line, `sl settings open. Esc closes it.`, or with the
+engine's reason when the terminal is too narrow to seat a pane.
 
-`/sl-debug` stays text. It is a dump meant to be selected and pasted somewhere,
+The panes follow the shape the `/bgh` mod settled on, so the two read alike:
+one command with the verb after it, pane ids `sl-<view>`, tab titles `sl <view>`
+in lowercase so they fit, `closeOnEscape` on every pane, and the verbs that act
+rather than show (`on`, `off`, `effort`) open nothing: a toast and a line.
+
+`/sl debug` stays text. It is a dump meant to be selected and pasted somewhere,
 and a pane body cannot be copied out.
 
 ## The hint line, and why nothing is drawn there now
@@ -267,7 +274,7 @@ And `4`, `5` and `0` never fired there; that was measured, not assumed. The
 types say a bare digit from an empty composer presses a band Button and only a
 band Button, and that is what happens.
 
-So the site is left alone. The controls live in `/sl-settings` instead, where a
+So the site is left alone. The controls live in `/sl settings` instead, where a
 pane holds the keyboard and a Button's hotkey works.
 
 ## Effort is picked, never nudged
@@ -284,7 +291,7 @@ Two fixes, and both were needed:
   silent downgrade"*, on anything firing inside a tool-use context.
   `classic.PostToolUse` covers a turn that uses tools and `classic.Stop` one
   that does not. Each hook reads one string and passes the event straight on.
-- **The control is a list, not a nudge.** `/sl-settings` spells out `session`,
+- **The control is a list, not a nudge.** `/sl settings` spells out `session`,
   `L`, `M`, `H`, `X`, `✦` and `e` steps through them. `session` is the first
   choice and means this mod has no opinion: `turn.step` passes every request
   through untouched and the band reports whatever the session is doing. A list
@@ -326,7 +333,7 @@ error in the guard itself all refuse it, and Claude reads why, *"the user
 pressed refuse. It would have: delete 1,204 files"*, so it does not try the
 same line again. `refuse` holds the focus, so Enter refuses. The budget row
 stays under the report; the identity row is the one you need least just then.
-A held command is drawn even while the band is hidden with `/sl`: it is a
+A held command is drawn even while the band is hidden with `/sl off`: it is a
 question, and silence would answer it.
 
 What each one measures:
@@ -355,7 +362,7 @@ What it does not do: it reads the command text and does not parse shell.
 `$(...)`, `eval`, `bash -c "..."`, `xargs rm`, `find -delete`, and scripts that
 call `rm` are not caught. It is a net. A hard block belongs in the permission
 rules. It is **off** by default and switched on with `guard (a)` in
-`/sl-settings`, stored like the layout.
+`/sl settings`, stored like the layout.
 
 The idea, and the shape of the hold, are Blast Radius's, by Claude Code DevRel
 at Anthropic, in
@@ -377,7 +384,7 @@ straight through.
 
 ## What goes where
 
-`/sl-settings` draws one row per item, grouped as Identity, Budget, and Tokens
+`/sl settings` draws one row per item, grouped as Identity, Budget, and Tokens
 and money, every row the same shape: the key, the name, where it is, and what
 it draws right now. A key moves its item on: line 1, 2, 3, 4, off, and round
 again. One key per item and no cursor to lose. Under the items, in the same
@@ -462,7 +469,7 @@ first does not help: the compaction's own request re-reads the same transcript.
 Asking once, the floor, and letting slash commands and unattended prompts by
 are Karan Bansal's, from
 [cache-tax](https://github.com/karanb192/cache-tax); the gate here is written
-again without its price table, and off until `k` in `/sl-settings` turns it on.
+again without its price table, and off until `k` in `/sl settings` turns it on.
 
 `ch`, the hit rate, joins the same cell only under **70%**. Above that it
 reads 98–100% and says nothing, and a permanent cell for a constant is spent
@@ -485,7 +492,7 @@ avoid, or `ccuc`, which is not on every machine.
 
 ### speed and turn
 
-Two cells off by default, `s` and `n` in `/sl-settings` turn them on:
+Two cells off by default, `s` and `n` in `/sl settings` turn them on:
 
 ```
  ct ▰▰▰▰▱ 66%   cache ▰▰▰▰▰ 1h00m   84 tok/s   turn $ 0.25 38s
@@ -508,7 +515,7 @@ written again here.
 ```
 
 The `agents` cell is on line two by default and empty until a subagent runs;
-then it counts the ones running, and `ag 2` on a narrow line. `/sl-agents` is
+then it counts the ones running, and `ag 2` on a narrow line. `/sl agents` is
 the third tab, one row a subagent:
 
 ```
@@ -537,7 +544,7 @@ order: `package.json`, `.claude-plugin/plugin.json`, `pyproject.toml`,
 `⌂ ?` says less than nothing does.
 
 `dotfiles/arch` declares no version and has no tags, so it draws no cell. That
-is the intended answer, and `/sl-debug` spells out which it is.
+is the intended answer, and `/sl debug` spells out which it is.
 
 A version from a git tag gets `+N` when HEAD has moved past it, because then the
 thing running is not the thing the tag names. A version from a file gets no
@@ -572,7 +579,7 @@ claude plugin update sl-mod
 It prints the version it moved between, e.g. `updated from 0.1.2 to 0.1.3`, and
 then `Restart to apply changes`. That last part is literal: a session that is
 already open keeps running the old copy until it is reopened, so after an
-update, `/sl-debug` in an old session still describes the old code.
+update, `/sl debug` in an old session still describes the old code.
 
 An earlier attempt put a `CLAUDE_CODE_PLUGIN_DIRS` export in the shell's
 `.paths` instead. It was reverted: an absolute path in a per-machine shell file
@@ -624,17 +631,21 @@ The figures in `docs/figures/` are drawn by a script, not by hand, from the
 
 ## Commands
 
+One command; the typeahead shows the verbs dim after it. Bare `/sl` is
+`/sl settings`.
+
 | | |
 |---|---|
-| `/sl` | hide or show the band |
-| `/sl-settings` | what shows, on which line, the resets, and the effort choice |
-| `/sl-help` | the legend: every item, how to read a gauge, the keys |
-| `/sl-effort <level>` | set it outright, or `off` to stop overriding |
-| `/sl-debug` | print what the engine reports, notes included |
-| `/sl-agents` | the subagents this session has run: running, answered, failed |
+| `/sl settings` | what shows, on which line, the resets, and the effort choice |
+| `/sl help` | the legend: every item, how to read a gauge, the keys |
+| `/sl agents` | the subagents this session has run: running, answered, failed |
+| `/sl effort <level>` | set it outright, or `off` to stop overriding |
+| `/sl debug` | print what the engine reports, notes included |
+| `/sl on`, `/sl off` | show or hide the band |
 
-`/sl-help`, `/sl-settings` and `/sl-agents` are the three tabs. `/sl-debug`
-prints text.
+`/sl help`, `/sl settings` and `/sl agents` are the three tabs. `/sl debug`
+prints text. Until 0.1.17 these were six commands, `/sl-help` and so on; the
+verbs replaced them to match `/bgh`.
 
 ## The statusLine it replaced
 

@@ -7,7 +7,7 @@ phải lệnh `statusLine`. Nó vẽ vào dải (band) ngay phía trên ô gõ (
 
 Tên các ô và công tắc như `cache`, `cold gate`, `guard`, `effort`, `reset`,
 `speed`, `turn`, `agents` để nguyên tiếng Anh suốt tài liệu này. Đó là chữ hiện
-trong `/sl-settings`, dịch ra thì bạn không dò được.
+trong `/sl settings`, dịch ra thì bạn không dò được.
 
 ## Vì sao làm mod
 
@@ -57,7 +57,7 @@ Phần còn lại của tài liệu là chi tiết từng ô: đọc từ đâu,
  ct ▰▰▰▰▱ 66%   5h ▰▱▱▱▱ 9% ↻2h14m   7d ▰▰▱▱▱ 39% ↻3d15h   fable ▰▰▱▱▱ 26%
 ```
 
-Nhiều nhất bốn dòng. Ô nào nằm dòng nào thì vào `/sl-settings` mà xếp. Mặc định
+Nhiều nhất bốn dòng. Ô nào nằm dòng nào thì vào `/sl settings` mà xếp. Mặc định
 dòng một là mình đang ở đâu, dùng model gì; dòng hai là ngân sách. Dưới ô gõ
 không vẽ gì hết, chỗ đó engine giữ cho dòng gợi ý của nó. Mỗi thanh có năm nấc,
 mỗi nấc 20%, và làm tròn **lên**: 19% vẫn hiện một nấc chứ không để trống. Hạn
@@ -70,7 +70,7 @@ tới cùng với lần đọc sau, không phải đúng giờ chẵn. Thanh `7d
 giờ của terminal. Lý do: tuần thì người ta tính bằng ngày, và ngày là thứ bạn
 ghi vào lịch được. Cả hai nguồn đọc đều có mốc reset (`resetsAt` từ engine,
 `resets_at` từ endpoint), nên mốc và phần trăm luôn cùng một lần đọc. Phím
-`reset` trong `/sl-settings` tắt cả hai mốc. Khi đang bật thì dải tự vẽ lại mỗi
+`reset` trong `/sl settings` tắt cả hai mốc. Khi đang bật thì dải tự vẽ lại mỗi
 phút, vì giữa hai sự kiện không có gì khác kích nó vẽ.
 
 Có một trường hợp thiếu mốc: lần đọc dùng chung do phiên chạy bản mod cũ hơn ghi
@@ -125,7 +125,7 @@ hạn theo token. Ngày 11/10/2026 một máy Mac bị 429 suốt mấy tiếng,
 cùng tài khoản ở máy khác vẫn 200. Giờ lần đọc nằm ở `$.store`, chỗ mọi phiên
 trên máy dùng chung. Phiên nào thấy nó cũ hơn ba phút thì gọi rồi ghi lại, các
 phiên khác dùng ké. Thời gian lùi (backoff) sau một lần 429 cũng dùng chung kiểu
-đó. `/sl-debug` in `source=` để bạn biết lần đọc từ đâu ra.
+đó. `/sl debug` in `source=` để bạn biết lần đọc từ đâu ra.
 
 Lần đọc cũ quá mười lăm phút thì không vẽ, quay về hai cửa sổ sống của engine.
 Hai thanh đúng còn hơn ba thanh mà một thanh ôm số cũ.
@@ -158,7 +158,7 @@ sổ compaction chứ không theo cửa sổ của model, nên có thể cao hơ
 điểm trên cùng bản ghi, giống hệt `/context`. Phép kiểm "số đi xuống" giữ lại
 làm đường cuối khi không có breakdown.
 
-`/sl-debug` giờ in `band ct:` cạnh `context:` thô của engine: số của chính đồng
+`/sl debug` giờ in `band ct:` cạnh `context:` thô của engine: số của chính đồng
 hồ, hook nào ghi, ghi cách đây bao lâu. Nhờ vậy "engine ngừng báo" và "dải ngừng
 nghe" không còn giống nhau. Nó in cả số của breakdown.
 
@@ -178,7 +178,7 @@ thứ không ai chắn trước được. Mười giây một lần nó đọc m
 tại chỗ. Engine bỏ `context.percent` ngay khi compaction xảy ra và chỉ trả lại ở
 phản hồi kế tiếp. Vậy nếu đồng hồ đang giữ số mà lần đọc không có số, tức là vừa
 lỡ một compaction, và nó lấy breakdown y như hai hook kia. Lúc bình thường nhịp
-này không làm gì: không ước, không vẽ lại. `/sl-debug` hiện đồng hồ ghi theo lối
+này không làm gì: không ước, không vẽ lại. `/sl debug` hiện đồng hồ ghi theo lối
 này là `from=tick breakdown`. Chỗ sửa đúng thuộc về Claude Code, module cài sẵn
 phải gọi `next(e)`. Mod này chỉ thôi trông chờ vào đó.
 
@@ -187,7 +187,7 @@ là lúc bạn nhìn đồng hồ. Nên mod đọc thêm `turn.step`, sự kiệ
 nào cũng nhận được. Mỗi yêu cầu của vòng chính nói nó mang bao nhiêu tin nhắn
 (`messageCount`). Yêu cầu nào mang chưa tới một nửa so với yêu cầu trước thì là
 yêu cầu đầu tiên sau compaction, vì bản ghi bên dưới đã bị viết lại. Đồng hồ lấy
-breakdown ngay trên yêu cầu đó, không đợi nhịp kế. `/sl-debug` hiện là
+breakdown ngay trên yêu cầu đó, không đợi nhịp kế. `/sl debug` hiện là
 `from=turn.step breakdown`. Vòng của tác tử con (subagent) mang số nhỏ riêng nên
 bỏ qua. `/clear` cũng làm số giảm một nửa và cũng rơi vào cửa sổ vừa dọn trống,
 đúng ý. Phép thử "giảm một nửa" là của Karan Bansal, từ
@@ -204,11 +204,11 @@ phần ba và đồng hồ lấy breakdown.
 
 ## Trạng thái
 
-Bản 0.1.17, cài từ marketplace của chính repo này ở scope **user**, nên phiên
-nào trên máy cũng có. Sáu lệnh đều chạy. 32 test qua `claude plugin test`,
-`tsc -p .` sạch, `claude plugin validate` qua.
+Bản 0.2.0, cài từ marketplace của chính repo này ở scope **user**, nên phiên
+nào trên máy cũng có. Một lệnh `/sl` với bảy verb. 33 test qua
+`claude plugin test`, `tsc -p .` sạch, `claude plugin validate` qua.
 
-Số nào lấy định kỳ đều kèm một ghi chú nói vì sao nó trống, và `/sl-debug` in
+Số nào lấy định kỳ đều kèm một ghi chú nói vì sao nó trống, và `/sl debug` in
 ghi chú đó ra. Lý do: ô trống trông giống hệt nhau dù phép dò trả lời "không có
 nhánh" hay ném lỗi giữa đường, và im lặng kiểu đó từng tốn khá nhiều thời gian ở
 đây.
@@ -220,11 +220,18 @@ mình, nhưng vừa mở khung thứ hai là nó vẽ dải tab. `PaneOpenArgs.t
 "The pane's tab while more than one pane is open (with one, no title is drawn)",
 và sự kiện vẽ `Pane` ghi: "one shown, the rest tabs".
 
-Nên `/sl-help`, `/sl-settings` và `/sl-agents` lệnh nào cũng mở cả ba khung rồi
+Nên `/sl help`, `/sl settings` và `/sl agents` lệnh nào cũng mở cả ba khung rồi
 đưa khung của mình lên trước. `focus: true` vừa đưa lên vừa lấy tiêu điểm, nên
 khung được gọi mở sau cùng. Muốn xem tab kia thì bấm vào, hoặc Tab rồi Enter.
+Lệnh trả về một dòng, `sl settings open. Esc closes it.`, hoặc lý do của engine
+khi terminal hẹp quá không đặt khung được.
 
-`/sl-debug` vẫn là chữ thuần. Nó là bản đổ ra để bạn chọn, chép rồi dán sang chỗ
+Khung làm theo đúng kiểu mod `/bgh` đã chốt, để hai mod dùng giống nhau: một
+lệnh và verb đứng sau, id khung `sl-<view>`, tên tab `sl <view>` viết thường
+cho vừa chỗ, `closeOnEscape` ở mọi khung, còn verb hành động (`on`, `off`,
+`effort`) không mở gì cả, chỉ một toast và một dòng chữ.
+
+`/sl debug` vẫn là chữ thuần. Nó là bản đổ ra để bạn chọn, chép rồi dán sang chỗ
 khác, mà thân khung thì không chép được.
 
 ## Dòng gợi ý: vì sao không vẽ gì ở đó nữa
@@ -244,7 +251,7 @@ Phím `4`, `5`, `0` cũng không bao giờ bắn ở đó, đo được chứ kh
 liệu ghi rõ: gõ một chữ số từ ô trống thì bấm Button của dải, và chỉ của dải.
 Đúng là vậy.
 
-Nên chỗ đó để yên. Nút điều khiển dời vào `/sl-settings`, nơi khung giữ bàn phím
+Nên chỗ đó để yên. Nút điều khiển dời vào `/sl settings`, nơi khung giữ bàn phím
 và phím tắt của Button chạy được.
 
 ## Effort là chọn, không phải bấm lên xuống
@@ -261,7 +268,7 @@ Sửa hai chỗ, thiếu một là không xong:
   ngầm"*, trong bất cứ sự kiện nào phát ra lúc dùng công cụ. `classic.PostToolUse`
   lo lượt có dùng công cụ, `classic.Stop` lo lượt không dùng. Mỗi hook đọc một
   chuỗi rồi chuyển sự kiện đi tiếp.
-- **Nút điều khiển là danh sách, không phải nút đẩy.** `/sl-settings` liệt kê
+- **Nút điều khiển là danh sách, không phải nút đẩy.** `/sl settings` liệt kê
   `session`, `L`, `M`, `H`, `X`, `✦`, và phím `e` bước qua từng mức. `session`
   đứng đầu, nghĩa là mod không có ý kiến: `turn.step` cho mọi yêu cầu qua nguyên
   vẹn và dải báo đúng cái phiên đang làm. Chọn từ danh sách thì không sai được
@@ -302,7 +309,7 @@ phút, hoặc chính guard bị lỗi, đều là từ chối. Claude đọc đ�
 pressed refuse. It would have: delete 1,204 files"*, nên không thử lại đúng dòng
 đó. `refuse` giữ tiêu điểm, nên Enter cũng là từ chối. Dòng ngân sách vẫn nằm
 dưới báo cáo; dòng danh tính là dòng bạn ít cần nhất lúc đó. Lệnh đang bị giữ
-vẫn hiện kể cả khi bạn đã ẩn dải bằng `/sl`: đó là một câu hỏi, không trả lời
+vẫn hiện kể cả khi bạn đã ẩn dải bằng `/sl off`: đó là một câu hỏi, không trả lời
 thì im lặng thành câu trả lời.
 
 Mỗi lệnh đo gì:
@@ -330,7 +337,7 @@ và handler đó từ chối.
 Thứ guard không làm: nó đọc chuỗi lệnh, không phân tích cú pháp shell. `$(...)`,
 `eval`, `bash -c "..."`, `xargs rm`, `find -delete`, script có gọi `rm` bên
 trong, đều lọt. Guard là tấm lưới. Muốn chặn cứng thì dùng luật quyền hạn
-(permission rules). Mặc định **tắt**, bật bằng `guard (a)` trong `/sl-settings`,
+(permission rules). Mặc định **tắt**, bật bằng `guard (a)` trong `/sl settings`,
 lưu như bố cục.
 
 Ý tưởng và hình dạng phần giữ lấy từ Blast Radius, do Claude Code DevRel tại
@@ -352,7 +359,7 @@ bấm từ chối rồi đọc lời từ chối. Test hai cho `ls` qua nguyên 
 
 ## Cái gì nằm đâu
 
-`/sl-settings` vẽ mỗi ô một hàng, gom thành ba nhóm Identity, Budget, và Tokens
+`/sl settings` vẽ mỗi ô một hàng, gom thành ba nhóm Identity, Budget, và Tokens
 and money. Hàng nào cũng cùng dạng: phím, tên, đang ở đâu, lúc này vẽ gì. Bấm
 phím là ô dời tiếp: dòng 1, 2, 3, 4, tắt, rồi quay vòng. Mỗi ô một phím, không
 có con trỏ để lạc. Dưới các ô là các công tắc, cùng dạng: `reset (t)` cho mốc
@@ -432,7 +439,7 @@ lời nhắc về tiền. Compaction trước cũng không giúp, vì chính yê
 Hỏi một lần, mức sàn, và cho lệnh gạch chéo cùng prompt không người gõ đi qua là
 của Karan Bansal, từ [cache-tax](https://github.com/karanb192/cache-tax). Cổng ở
 đây viết lại, không có bảng giá, và tắt cho tới khi bạn bấm `k` trong
-`/sl-settings`.
+`/sl settings`.
 
 `ch` là tỷ lệ trúng cache (cache hit rate), chỉ hiện trong cùng ô khi dưới
 **70%**. Trên mức đó nó cứ 98 tới 100%, không nói lên gì, mà dành một ô cố định
@@ -454,7 +461,7 @@ không phải máy nào cũng có.
 
 ### speed và turn
 
-Hai ô này mặc định tắt, bật bằng `s` và `n` trong `/sl-settings`:
+Hai ô này mặc định tắt, bật bằng `s` và `n` trong `/sl settings`:
 
 ```
  ct ▰▰▰▰▱ 66%   cache ▰▰▰▰▰ 1h00m   84 tok/s   turn $ 0.25 38s
@@ -477,7 +484,7 @@ viết lại ở đây.
 ```
 
 Ô `agents` mặc định ở dòng hai, trống cho tới khi có tác tử con (subagent) chạy.
-Có thì nó đếm số đang chạy, dòng hẹp hiện `ag 2`. `/sl-agents` là tab thứ ba,
+Có thì nó đếm số đang chạy, dòng hẹp hiện `ag 2`. `/sl agents` là tab thứ ba,
 mỗi tác tử con một hàng:
 
 ```
@@ -505,7 +512,7 @@ thứ tự: `package.json`, `.claude-plugin/plugin.json`, `pyproject.toml`,
 nói ít hơn là không nói.
 
 `dotfiles/arch` không khai phiên bản, không có tag, nên không có ô. Đó là ý
-muốn, và `/sl-debug` nói rõ rơi vào trường hợp nào.
+muốn, và `/sl debug` nói rõ rơi vào trường hợp nào.
 
 Phiên bản lấy từ tag git thì thêm `+N` khi HEAD đã đi quá tag, vì lúc đó thứ
 đang chạy không còn là thứ tag gọi tên. Lấy từ file thì không đánh dấu gì: trong
@@ -538,7 +545,7 @@ claude plugin update sl-mod
 
 Nó in bản đã chuyển, kiểu `updated from 0.1.2 to 0.1.3`, rồi `Restart to apply
 changes`. Câu cuối hiểu theo nghĩa đen: phiên đang mở vẫn chạy bản cũ cho tới
-khi mở lại, nên cập nhật xong mà gõ `/sl-debug` trong phiên cũ thì vẫn thấy mã
+khi mở lại, nên cập nhật xong mà gõ `/sl debug` trong phiên cũ thì vẫn thấy mã
 cũ.
 
 Có một lần thử đặt `CLAUDE_CODE_PLUGIN_DIRS` vào `.paths` của shell. Bỏ rồi: một
@@ -589,16 +596,21 @@ SVG mang cả hai bảng màu và đổi theo `prefers-color-scheme` của ngư�
 
 ## Lệnh
 
+Một lệnh duy nhất, gõ `/sl` là thấy các verb hiện mờ phía sau. `/sl` không
+có gì theo sau thì là `/sl settings`.
+
 | | |
 |---|---|
-| `/sl` | ẩn hay hiện dải |
-| `/sl-settings` | hiện gì, ở dòng nào, mốc reset, và lựa chọn effort |
-| `/sl-help` | chú giải: từng ô, cách đọc đồng hồ, các phím |
-| `/sl-effort <level>` | đặt thẳng một mức, hoặc `off` để thôi ghi đè |
-| `/sl-debug` | in những gì engine báo, kèm ghi chú |
-| `/sl-agents` | các tác tử con phiên này đã chạy: đang chạy, đã trả lời, thất bại |
+| `/sl settings` | hiện gì, ở dòng nào, mốc reset, và lựa chọn effort |
+| `/sl help` | chú giải: từng ô, cách đọc đồng hồ, các phím |
+| `/sl agents` | các tác tử con (subagent) phiên này đã chạy: đang chạy, đã trả lời, thất bại |
+| `/sl effort <level>` | đặt thẳng một mức, hoặc `off` để thôi ghi đè |
+| `/sl debug` | in những gì engine báo, kèm ghi chú |
+| `/sl on`, `/sl off` | hiện hay ẩn dải |
 
-`/sl-help`, `/sl-settings` và `/sl-agents` là ba tab. `/sl-debug` in chữ.
+`/sl help`, `/sl settings` và `/sl agents` là ba tab. `/sl debug` in chữ. Tới
+bản 0.1.17 vẫn là sáu lệnh rời, `/sl-help` các kiểu; đổi sang verb để giống
+`/bgh`.
 
 ## Dòng trạng thái mà mod này thay
 
