@@ -227,8 +227,8 @@ one, then the main loop's falling to a third and the gauge taking the breakdown.
 
 ## State
 
-Version 0.2.0, installed from this repo's own marketplace at scope **user**, so
-it draws in every session on this box. One command, `/sl`, with seven verbs.
+Version 0.2.1, installed from this repo's own marketplace at scope **user**, so
+it draws in every session on this box. One command, `/sl`, with eight verbs.
 Thirty-nine tests pass under `claude plugin test`, `tsc -p .` is clean and
 `claude plugin validate` passes.
 
@@ -448,6 +448,7 @@ The cell says `cache cold`. With the gate on, that costs a keystroke:
  sl-mod cold gate: the prompt cache has been cold for 23m, so this request
  re-reads about 142.0k tokens at the uncached price before it answers. Enter
  again sends it as it is; /clear starts a fresh window if this is a new task.
+ Esc empties the box; /sl restore brings the text back.
 
  ct ▰▰▰▱▱ 58%   cache cold · enter sends it   5h ▰▱▱▱▱ 9% ↻2h14m
  > fix the flaky test in band.test.ts                      ⏎  → sent
@@ -458,6 +459,13 @@ in the box, and the next Enter sends it. Nothing is asked twice in one
 cold spell, and a request clears the ask. The figure is the last response's
 input, which is what the next request re-reads; it is in tokens and not
 dollars, for the reason the next section gives.
+
+The engine puts the draft back on a drop, but Esc then empties the box, and a
+dropped prompt reaches neither `~/.claude/history.jsonl` nor the transcript: one
+was lost that way on 2026-11-13. So the gate keeps the text it dropped, in
+`$.store`, until the same text is sent or `/sl restore` puts it back in the box.
+A different prompt sent in between leaves the copy where it is, and `/sl debug`
+says whether one is held.
 
 What is never asked: a slash command, which is not a model request; a prompt
 typed while a turn runs, which lands on a cache that turn is keeping warm; a
@@ -641,6 +649,7 @@ One command; the typeahead shows the verbs dim after it. Bare `/sl` is
 | `/sl help` | the legend: every item, how to read a gauge, the keys |
 | `/sl agents` | the subagents this session has run: running, answered, failed |
 | `/sl effort <level>` | set it outright, or `off` to stop overriding |
+| `/sl restore` | put the prompt the cold gate dropped back in the box, if Esc emptied it |
 | `/sl debug` | print what the engine reports, notes included |
 | `/sl on`, `/sl off` | show or hide the band |
 

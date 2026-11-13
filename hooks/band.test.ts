@@ -838,7 +838,8 @@ test('with the cold gate on, the prompt after a cold hour is dropped once, and t
   expect(sent).toEqual(['hello', 'warm'])
   expect(await ui.find({ type: 'Text', text: /cache cold . enter sends it/ })).toBeDefined()
 
-  // The next Enter is the answer, and its request warms the cache again.
+  // The next Enter is the answer, and its request warms the cache again. The
+  // saved copy goes with it.
   expect((await submit('do the thing')).drop).toBeUndefined()
   expect(sent).toEqual(['hello', 'warm', 'do the thing'])
   await step(3)
@@ -849,8 +850,23 @@ test('with the cold gate on, the prompt after a cold hour is dropped once, and t
   await clock.advance(61 * 60_000)
   expect((await submit('/compact')).drop).toBeUndefined()
   expect((await submit('tick', 'scheduled-trigger')).drop).toBeUndefined()
-  expect((await submit('typed')).drop).toMatch(/cold gate/)
+  expect((await submit('typed')).drop).toMatch(/Esc empties the box; \/sl restore brings the text back/)
   expect(fills).toEqual([])
+
+  // Esc has emptied the box. The dropped text was kept, /sl restore fills it
+  // back, and a second restore has nothing: the copy went with the fill. The
+  // copy of `do the thing` went earlier, when the same text was sent.
+  const run = (args: string) =>
+    $.command.run({ command: 'sl', args, origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 120 } })
+  expect((await run('debug')).text).toMatch(/dropped prompt: 5 chars at/)
+  expect((await run('debug')).text).not.toMatch(/dropped prompt: 12 chars/)
+  expect((await run('restore')).text).toMatch(/Back in the box: the 5-character prompt/)
+  expect(fills).toEqual(['typed'])
+  expect((await run('restore')).text).toMatch(/Nothing to restore/)
+  expect((await run('debug')).text).toMatch(/dropped prompt: none/)
+  // The restored text goes through on Enter, as the answer to the ask.
+  expect((await submit('typed')).drop).toBeUndefined()
+  expect(sent).toEqual(['hello', 'warm', 'do the thing', '/compact', 'tick', 'typed'])
 
   await ui.unmount()
 })
@@ -1320,7 +1336,7 @@ test('/sl on, off and effort act without a pane, and an unknown verb lists the v
   expect(await run('effort off')).toEqual({ text: 'Effort override cleared; the session decides again.' })
   expect((await run('effort loud')).text).toMatch(/^Effort is one of /)
 
-  expect((await run('frobnicate')).text).toBe('/sl takes one of: settings | help | agents | effort <level> | debug | on | off')
+  expect((await run('frobnicate')).text).toBe('/sl takes one of: settings | help | agents | effort <level> | restore | debug | on | off')
   expect(opens).toEqual([])
 
   await ui.unmount()

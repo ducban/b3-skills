@@ -225,8 +225,8 @@ phần ba và đồng hồ lấy breakdown.
 
 ## Trạng thái
 
-Bản 0.2.0, cài từ marketplace của chính repo này ở scope **user**, nên phiên
-nào trên máy cũng có. Một lệnh `/sl` với bảy verb. 39 test qua
+Bản 0.2.1, cài từ marketplace của chính repo này ở scope **user**, nên phiên
+nào trên máy cũng có. Một lệnh `/sl` với tám verb. 39 test qua
 `claude plugin test`, `tsc -p .` sạch, `claude plugin validate` qua.
 
 Số nào lấy định kỳ đều kèm một ghi chú nói vì sao nó trống, và `/sl debug` in
@@ -439,6 +439,7 @@ qua chính là yêu cầu làm ấm cache trở lại.*
  sl-mod cold gate: the prompt cache has been cold for 23m, so this request
  re-reads about 142.0k tokens at the uncached price before it answers. Enter
  again sends it as it is; /clear starts a fresh window if this is a new task.
+ Esc empties the box; /sl restore brings the text back.
 
  ct ▰▰▰▱▱ 58%   cache cold · enter sends it   5h ▰▱▱▱▱ 9% ↻2h14m
  > fix the flaky test in band.test.ts                      ⏎  → sent
@@ -448,6 +449,13 @@ Prompt đầu tiên bạn gõ sau khi hết giờ bị chặn một lần, bản
 trong ô, Enter lần nữa là đi. Mỗi đợt nguội chỉ hỏi một lần, và một yêu cầu đi
 qua là xoá câu hỏi. Con số là đầu vào của phản hồi gần nhất, cũng là thứ yêu cầu
 kế phải đọc lại. Tính bằng token chứ không bằng đô, lý do ở mục sau.
+
+Engine trả bản nháp về ô khi chặn, nhưng bấm Esc là ô trống, mà prompt bị chặn
+không nằm trong `~/.claude/history.jsonl` lẫn bản ghi hội thoại: ngày 13/11/2026
+đã mất một prompt kiểu đó. Nên cổng giữ lại đoạn chữ nó vừa chặn, trong
+`$.store`, cho tới khi đúng đoạn đó được gửi đi hoặc bạn gõ `/sl restore` để
+đưa nó về ô. Gửi một prompt khác xen giữa thì bản lưu vẫn còn. `/sl debug` cho
+biết đang giữ hay không.
 
 Không bao giờ hỏi khi: lệnh gạch chéo (slash command), vì không phải yêu cầu tới
 model; prompt gõ lúc một lượt đang chạy, vì nó rơi vào cache mà lượt đó đang giữ
@@ -626,6 +634,7 @@ có gì theo sau thì là `/sl settings`.
 | `/sl help` | chú giải: từng ô, cách đọc đồng hồ, các phím |
 | `/sl agents` | các tác tử con (subagent) phiên này đã chạy: đang chạy, đã trả lời, thất bại |
 | `/sl effort <level>` | đặt thẳng một mức, hoặc `off` để thôi ghi đè |
+| `/sl restore` | đưa prompt mà cold gate đã chặn về lại ô gõ, nếu bạn lỡ bấm Esc |
 | `/sl debug` | in những gì engine báo, kèm ghi chú |
 | `/sl on`, `/sl off` | hiện hay ẩn dải |
 

@@ -451,6 +451,12 @@ let guardOn = false
 // is when it asked; a main-loop request clears it.
 let coldGateOn = false
 let coldAskedAt: number | null = null
+// The text of the prompt the gate dropped, until it is sent or put back. The
+// engine restores the draft on a drop, but Esc then empties the box and nothing
+// else holds the text: a dropped prompt reaches neither history.jsonl nor the
+// transcript, and one was lost that way on 2026-11-13. Stored, so a restart
+// does not lose it either; `/sl restore` fills it back.
+let coldDropped: { at: number; text: string } | null = null
 // Under this many tokens the re-read is cents, and a gate on cents is a nag.
 const COLD_GATE_FLOOR = 50_000
 // The countdown after the 5h bar. A preference like the layout, so it is stored
@@ -550,7 +556,7 @@ const tk = (n: number) =>
 const LEGEND = 'sl-help'
 const SETTINGS = 'sl-settings'
 const AGENTS = 'sl-agents'
-const VERB_HINT = 'settings | help | agents | effort <level> | debug | on | off'
+const VERB_HINT = 'settings | help | agents | effort <level> | restore | debug | on | off'
 
 // The engine draws no title for a lone pane and a tab strip the moment a second
 // one is open -- "one shown, the rest tabs" (PaneOpenArgs.title). So the tabs
@@ -1287,7 +1293,32 @@ async function toggleColdGate($: EngineInterface) {
 const coldReason = (coldFor: string, size: number | undefined) =>
   `sl-mod cold gate: the prompt cache has been cold for ${coldFor}, so this request re-reads ${
     size === undefined ? 'the whole transcript' : `about ${tk(size)} tokens`
-  } at the uncached price before it answers. Enter again sends it as it is; /clear starts a fresh window if this is a new task.`
+  } at the uncached price before it answers. Enter again sends it as it is; /clear starts a fresh window if this is a new task. Esc empties the box; /sl restore brings the text back.`
+
+const rememberDropped = async ($: EngineInterface, at: number, text: string) => {
+  coldDropped = { at, text }
+  await $.store.set('coldDropped', coldDropped)
+}
+const forgetDropped = async ($: EngineInterface) => {
+  coldDropped = null
+  await $.store.set('coldDropped', null)
+}
+
+// Puts the dropped prompt back in the box. The text stays saved until the box
+// has taken it: under a dialog, or with no box, the fill is refused.
+async function restoreDropped($: EngineInterface) {
+  if (coldDropped === null) {
+    return { text: 'Nothing to restore: the cold gate has not dropped a prompt, or the one it dropped was sent.' }
+  }
+  const filled = await $.prompt.fill({ text: coldDropped.text })
+  if (!filled.isFilled) {
+    return { text: `The prompt box did not take it${filled.refusal ? ` (${filled.refusal})` : ''}; the text is still saved, so try again.` }
+  }
+  const said = `Back in the box: the ${coldDropped.text.length}-character prompt the cold gate dropped at ${new Date(coldDropped.at).toISOString()}.`
+  await forgetDropped($)
+
+  return { text: said }
+}
 
 // --- Turning state into cells ------------------------------------------------
 // Pure data: a colour and a string, no elements. Both the band and the settings
@@ -1576,6 +1607,7 @@ async function debugText($: EngineInterface) {
       `layout: ${ITEMS.map(i => `${i.name}=${layout[i.key] || 'off'}`).join(' ')}`,
       `guard: ${guardOn ? 'on' : 'off'}${held === null ? '' : `, holding ${held.risk.label}`}`,
       `cold gate: ${coldGateOn ? 'on' : 'off'}${coldAskedAt === null ? '' : `, asked at ${new Date(coldAskedAt).toISOString()}`}`,
+      `  dropped prompt: ${coldDropped === null ? 'none' : `${coldDropped.text.length} chars at ${new Date(coldDropped.at).toISOString()}, /sl restore puts it back`}`,
       `usage endpoint: ${reading.windows.length} window(s)`,
       ...reading.windows.map(w => `  ${w.kind}${w.scope ? ` (${w.scope})` : ''} ${w.percentUsed}%`),
       `  note=${reading.note || 'ok'}`,
@@ -1605,6 +1637,10 @@ export const register: Register = on => {
     showReset = (await $.store.get('showReset')) !== false
     guardOn = (await $.store.get('guard')) === true
     coldGateOn = (await $.store.get('coldGate')) === true
+    const dropped = await $.store.get('coldDropped')
+    if (dropped && typeof dropped === 'object' && typeof (dropped as { text?: unknown }).text === 'string') {
+      coldDropped = dropped as { at: number; text: string }
+    }
     const saved = await $.store.get('layout')
     if (saved && typeof saved === 'object') {
       // Merged over the defaults, never used as-is: a layout stored before an
@@ -1913,6 +1949,8 @@ export const register: Register = on => {
       }
       case 'effort':
         return setEffort($, rest[0] ?? '')
+      case 'restore':
+        return restoreDropped($)
       case 'debug':
         return debugText($)
       default:
@@ -2003,14 +2041,18 @@ export const register: Register = on => {
     const coldAt = cacheWarmAt + CACHE_TTL_MS
     if (now < coldAt) return next(e)
     if (coldAskedAt !== null) {
-      // Asked already, and nothing sent since: this Enter is the answer.
+      // Asked already, and nothing sent since: this Enter is the answer. The
+      // saved copy goes once the same text is on its way; a different prompt
+      // leaves it, since the dropped one may still be wanted.
       coldAskedAt = null
+      if (coldDropped !== null && coldDropped.text.trim() === e.text.trim()) await forgetDropped($)
 
       return next(e)
     }
     const size = (await $.session.usage()).context.tokens
     if (size !== undefined && size < COLD_GATE_FLOOR) return next(e)
     coldAskedAt = now
+    await rememberDropped($, now, e.text)
     $.ui.invalidate('ui.render')
     // The engine empties the box at Enter and puts the draft back on a drop,
     // so the text is left to it: a fill here reads an empty box mid-submit and
@@ -2339,6 +2381,7 @@ export const register: Register = on => {
         line('effort (e)', 'in /sl settings: session, low, medium, high, xhigh, max -- picked outright, never nudged'),
         line('guard (a)', 'in /sl settings: hold a risky shell command in the band until 1 runs it or 2 refuses it'),
         line('cold gate (k)', 'in /sl settings: after a cold hour, the next prompt is dropped once with the re-read in tokens; enter again sends it'),
+        line('/sl restore', 'put the prompt the cold gate dropped back in the box, if Esc emptied it'),
         line('/sl agents', 'the subagents this session has run, one row each'),
         line('/sl on, /sl off', 'show or hide the band; bare /sl opens settings'),
         line('/sl settings', 'choose what shows, and on which line'),
