@@ -205,7 +205,7 @@ phần ba và đồng hồ lấy breakdown.
 ## Trạng thái
 
 Bản 0.2.0, cài từ marketplace của chính repo này ở scope **user**, nên phiên
-nào trên máy cũng có. Một lệnh `/sl` với bảy verb. 33 test qua
+nào trên máy cũng có. Một lệnh `/sl` với bảy verb. 39 test qua
 `claude plugin test`, `tsc -p .` sạch, `claude plugin validate` qua.
 
 Số nào lấy định kỳ đều kèm một ghi chú nói vì sao nó trống, và `/sl debug` in

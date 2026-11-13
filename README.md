@@ -228,7 +228,7 @@ one, then the main loop's falling to a third and the gauge taking the breakdown.
 
 Version 0.2.0, installed from this repo's own marketplace at scope **user**, so
 it draws in every session on this box. One command, `/sl`, with seven verbs.
-Thirty-three tests pass under `claude plugin test`, `tsc -p .` is clean and
+Thirty-nine tests pass under `claude plugin test`, `tsc -p .` is clean and
 `claude plugin validate` passes.
 
 Every polled figure carries a note saying why it has nothing, and `/sl debug`
