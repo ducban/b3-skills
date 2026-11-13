@@ -1,2 +1,2 @@
-plugins/*/evals/results/
-plugins/*/.claude-plugin/types/
+dev/*/evals/results/
+mods/*/.claude-plugin/types/

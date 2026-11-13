@@ -22,7 +22,7 @@ lỗi, placeholder; đổi nghĩa hay bỏ từ rào của câu gốc.
 Từ gốc repo:
 
 ```bash
-claude plugin eval plugins/b3-write-human --threshold 0.8 --no-publish
+claude plugin eval dev/b3-write-human --threshold 0.8 --no-publish
 ```
 
 Mặc định mỗi case chạy ba lượt, hai nhánh (có và không có plugin), nên một lượt
@@ -30,7 +30,7 @@ Mặc định mỗi case chạy ba lượt, hai nhánh (có và không có plugi
 hết 5,96 USD và 7 phút. Muốn rẻ hơn thì chạy một nhánh, một case:
 
 ```bash
-claude plugin eval plugins/b3-write-human --ablation none --case '06-*' --no-publish
+claude plugin eval dev/b3-write-human --ablation none --case '06-*' --no-publish
 ```
 
 Kết quả rơi vào `evals/results/<timestamp>/`, đã git-ignore.

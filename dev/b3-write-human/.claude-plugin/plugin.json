@@ -1,0 +1,4 @@
+{
+  "name": "b3-write-human",
+  "description": "Eval harness only: wraps skills/b3-write-human (symlinked) so claude plugin eval can load it. Not in the marketplace; install the skill with npx skills add ducban/b3-skills."
+}

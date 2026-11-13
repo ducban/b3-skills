@@ -30,11 +30,22 @@ has the shape.
 Git doesn't carry hooks across clones, so a fresh clone starts with none. Check with
 `memex-vault/tools/diary/install-hook.sh --check` rather than assuming.
 
-## Versions move in pairs
+## Layout
 
-Each plugin carries its version twice: `metadata.version` in `skills/<name>/SKILL.md` and
-`version` in `.claude-plugin/plugin.json`. Bump both in the same commit. The `skills` CLI
-and the marketplace each read a different one.
+- `skills/<name>/` holds one Agent Skill each, installed with `npx skills add ducban/b3-skills`
+  (skills.sh). Keep each folder to what an agent reads at run time: `SKILL.md` plus the
+  files it points to. The CLI copies the whole folder to every agent.
+- `mods/<name>/` holds one Claude Code mod (hooks module) each, installed with `/plugin`
+  from `.claude-plugin/marketplace.json`. Skills are not in the marketplace on purpose:
+  installing a skill both ways loads two copies with the same name.
+- `dev/<skill>/` holds maintainer tooling that agents never read: evals and Vale.
+  `dev/b3-write-human/skills/b3-write-human` is a symlink so `claude plugin eval
+  dev/b3-write-human` can load the skill.
+
+## Versions
+
+A skill's version is `metadata.version` in its `SKILL.md`. A mod's version is `version` in
+its `.claude-plugin/plugin.json`, plus whatever constant the mod prints, kept equal.
 
 ## Figures in the docs
 

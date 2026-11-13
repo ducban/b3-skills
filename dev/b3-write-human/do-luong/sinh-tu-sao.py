@@ -3,13 +3,13 @@
 luật 10 trong skills/b3-write-human/tai-lieu-tieng-viet.md và gạch đầu dòng
 "Cụm rỗng" trong SKILL.md. Không sửa TuSao.yml bằng tay.
 
-  python3 plugins/b3-write-human/do-luong/sinh-tu-sao.py          # ghi lại TuSao.yml
-  python3 plugins/b3-write-human/do-luong/sinh-tu-sao.py --check  # thoát 1 nếu TuSao.yml đã lệch nguồn
+  python3 dev/b3-write-human/do-luong/sinh-tu-sao.py          # ghi lại TuSao.yml
+  python3 dev/b3-write-human/do-luong/sinh-tu-sao.py --check  # thoát 1 nếu TuSao.yml đã lệch nguồn
 """
 import re, sys, pathlib
 
 here = pathlib.Path(__file__).resolve().parent
-skill = here.parent / "skills" / "b3-write-human"
+skill = here.parent.parent.parent / "skills" / "b3-write-human"
 out = here / "styles" / "B3" / "TuSao.yml"
 
 def flat(p):

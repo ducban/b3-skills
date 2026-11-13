@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Đếm lỗi Vale trên 1.000 chữ, tách theo mức, in 8 lỗi gặp nhiều nhất.
-Dùng:  python3 plugins/b3-write-human/do-luong/do.py file1.md [file2.md ...]"""
+Dùng:  python3 dev/b3-write-human/do-luong/do.py file1.md [file2.md ...]"""
 import json, subprocess, sys, pathlib
 from collections import Counter
 here = pathlib.Path(__file__).resolve().parent

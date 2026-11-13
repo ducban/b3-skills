@@ -1,53 +1,25 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "b3-skills",
-  "description": "Skills Ban tự viết, dùng chung cho Claude Code và các agent đọc .agents/skills.",
+  "description": "Mod Ban tự viết cho Claude Code. Skill trong cùng kho cài bằng npx skills add ducban/b3-skills, không qua marketplace này.",
   "owner": {
     "name": "ducban",
     "url": "https://github.com/ducban"
   },
   "plugins": [
     {
-      "name": "b3-write-human",
-      "description": "Chặn văn AI ngay lúc sinh: cấm từ vựng business, ép nhịp câu lệch, chuẩn tiếng Việt cho cả văn ngắn (chuỗi UI, quảng cáo, email) lẫn tài liệu dài, giữ nguyên lệnh và placeholder, gate self-audit trước khi xuất.",
-      "source": "./plugins/b3-write-human",
-      "category": "productivity",
-      "tags": [
-        "writing",
-        "prose",
-        "anti-ai-slop",
-        "vietnamese",
-        "ux-writing",
-        "copywriting",
-        "humanizer"
-      ]
-    },
-    {
-      "name": "b3-figure-drawing",
-      "description": "Tám khuôn vẽ hình cho tài liệu: so sánh, quy trình, dãy số, kiến trúc nhiều tầng, đồ thị hai biến, chênh lệch lời khai với số kiểm chứng, mốc thời gian, ma trận khung chữ (SWOT). SVG thang xám, trục thật, tự đổi theo nền sáng tối.",
-      "source": "./plugins/b3-figure-drawing",
-      "category": "productivity",
-      "tags": [
-        "figures",
-        "diagram",
-        "chart",
-        "svg",
-        "greyscale",
-        "vietnamese"
-      ]
-    },
-    {
       "name": "bgh",
       "description": "B3 Grammar Helper: gạch chân lỗi ngữ pháp ngay trong ô prompt khi gõ tiếng Anh: Harper chạy offline trước, rồi OpenRouter, OpenAI, Fireworks hoặc Haiku sửa cách dùng từ. Có pane settings, danh sách từ bỏ qua, trace Langfuse.",
-      "source": "./plugins/bgh",
+      "source": "./mods/bgh",
       "category": "productivity",
-      "tags": [
-        "grammar",
-        "prompt",
-        "mod",
-        "harper",
-        "langfuse"
-      ]
+      "tags": ["grammar", "prompt", "mod", "harper", "langfuse"]
+    },
+    {
+      "name": "sl-mod",
+      "description": "Status line trong dải phía trên ô prompt: thư mục, model kèm effort, git, và các thước context, 5h, 7d, quota theo model. Tối đa bốn dòng, chọn trong /sl settings.",
+      "source": "./mods/sl-mod",
+      "category": "productivity",
+      "tags": ["statusline", "mod", "usage", "quota", "terminal"]
     }
   ]
 }

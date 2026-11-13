@@ -1,14 +1,27 @@
 # b3-skills
 
-Hai skill Ban tự viết cho Claude Code và các agent đọc được chuẩn Agent Skills. Một repo, một nguồn sự thật.
+Skill và mod Ban tự viết. Một repo, một nguồn sự thật, chia hai thư mục:
 
-| Skill | Làm gì |
+```
+b3-skills/
+├── skills/   Agent Skills: cài bằng skills.sh, chạy trên mọi agent nó hỗ trợ
+├── mods/     mod Claude Code: cài bằng /plugin, chỉ Claude Code chạy được
+└── dev/      eval và Vale cho người bảo trì, agent không đọc
+```
+
+| Skill (`skills/`) | Làm gì |
 |---|---|
 | `b3-write-human` | Chặn văn AI ngay lúc viết bản nháp đầu. Cấm khoảng 60 từ business, ép nhịp câu lệch, giữ nguyên lệnh và placeholder, bắt tự soi trước khi xuất. Tiếng Việt có năm tệp tra riêng. Bổ trợ cho [`humanizer`](https://github.com/blader/humanizer), vốn chỉ dọn text đã có. |
 | `b3-figure-drawing` | Tám khuôn vẽ hình cho tài liệu bằng `figlib.mjs`: so sánh, quy trình, dãy số, kiến trúc nhiều tầng, đồ thị hai biến, chênh lệch lời khai với số kiểm chứng, mốc thời gian, ma trận kiểu SWOT. SVG thang xám, trục thật, tự đổi theo nền sáng tối. Chữ trong hình theo luật của `b3-write-human`. |
-| `bgh` (B3 Grammar Helper) | Mod, không phải skill: gạch chân lỗi ngữ pháp ngay trong ô prompt khi gõ tiếng Anh, gợi ý hiện mờ ngay sau chữ sai. Harper chạy offline trước, rồi chuỗi OpenRouter → OpenAI → Fireworks → Haiku sửa cách dùng từ. `/bgh` mở pane settings. Chạy trên Linux, macOS, Windows; khác biệt từng máy ở [README riêng](plugins/bgh/README.md). |
+| `b3-code-review` | Một vòng review chỉ ghi thêm vào `CODE-REVIEW.md`: đọc log review và log sửa cũ, đối chiếu từng lỗi, ghi lỗi mới theo mức nặng kèm `file:line`. Không sửa code. Chuyển từ Procedure CLI sang ngày 13/11/2026, tên cũ `b3awesome-code-review`. |
+| `b3-code-fix` | Sửa các lỗi còn mở trong `CODE-REVIEW.md` rồi ghi thêm vào `CODE-FIXED.md`. Không review. Tên cũ `b3awesome-code-fix`. |
 
-Hai skill này đứng ở hai chặng đầu của một bài viết. `humanizer` và Vale đứng sau.
+| Mod (`mods/`) | Làm gì |
+|---|---|
+| `bgh` (B3 Grammar Helper) | Gạch chân lỗi ngữ pháp ngay trong ô prompt khi gõ tiếng Anh, gợi ý hiện mờ ngay sau chữ sai. Harper chạy offline trước, rồi chuỗi OpenRouter → OpenAI → Fireworks → Haiku sửa cách dùng từ. `/bgh` mở pane. Chạy trên Linux, macOS, Windows; khác biệt từng máy ở [README riêng](mods/bgh/README.md). |
+| `sl-mod` | Status line vẽ trong dải phía trên ô prompt: thư mục, model kèm effort, git, các thước context, 5h, 7d và quota theo model. `/sl` mở pane settings. Gộp từ repo `ducban/sl-mod` ngày 13/11/2026, giữ đủ lịch sử commit. [README riêng](mods/sl-mod/README.md). |
+
+`b3-write-human` và `b3-figure-drawing` đứng ở hai chặng đầu của một bài viết. `humanizer` và Vale đứng sau.
 
 ![Một bài tiếng Việt đi qua bốn chặng: b3-write-human dẫn tay lúc viết nháp, cổng tự soi hỏi ba câu, humanizer soi bản đã xong, Vale đếm lỗi trên 1.000 chữ](docs/figures/fig3-writing-pipeline.svg)
 
@@ -28,56 +41,60 @@ Hai skill này đứng ở hai chặng đầu của một bài viết. `humanize
 
 Chữ trong hình, slide và ô bảng có bốn luật ngắn nằm ngay trong `SKILL.md`: câu có chủ ngữ, đủ dấu, tiêu đề không ghi nháp hay ngày, được bỏ chú tiếng Anh khi đoạn cạnh hình đã chú. `b3-figure-drawing` trỏ sang đó cho mọi nhãn nó vẽ, không giữ bản chép riêng.
 
-## Cài đặt: mỗi máy một đường
+## Cài đặt
 
-Skill đi từ kho tới máy bằng một trong ba đường. Chọn một, đừng cài hai.
+Skill và mod đi hai đường khác nhau, đừng trộn:
 
-![Ba đường đưa skill từ kho tới máy: plugin Claude Code, skills CLI, bản chép trong NanoClaw](docs/figures/fig1-three-channels.svg)
+![Ba đường đưa skill và mod từ kho tới máy: skills CLI cho skill, plugin cho mod, bản chép trong NanoClaw](docs/figures/fig1-three-channels.svg)
 
-Máy chỉ chạy Claude Code thì cài plugin. Máy còn chạy Codex, pi, Crush thì dùng `skills` CLI và **không cài plugin**: CLI có `claude-code` trong danh sách agent nên tự link vào `~/.claude/skills/`, cài thêm plugin là Claude nạp hai bản cùng tên và không chắc bản nào thắng. Mac vấp đúng chỗ này từ 21/08 tới 29/10/2026, bản plugin kẹt ở 1.1.0 trong khi bản link đã lên 1.5.0. Đã gỡ plugin, giữ CLI.
+Skill chỉ cài bằng `skills` CLI, kể cả trên máy chỉ chạy Claude Code: CLI có `claude-code` trong danh sách agent nên tự link vào `~/.claude/skills/`. Marketplace của repo này không còn liệt kê skill. Cài một skill qua cả hai đường thì Claude nạp hai bản cùng tên và không chắc bản nào thắng. Mac vấp đúng chỗ này từ 21/08 tới 29/10/2026, bản plugin kẹt ở 1.1.0 trong khi bản link đã lên 1.5.0.
 
-Ngoại lệ là `bgh` (B3 Grammar Helper). Nó là mod (hooks module), không phải skill, nên `skills` CLI không cài được và không có bản link nào để trùng. Máy dùng CLI vẫn cài riêng mod này bằng plugin, và chỉ mod này:
+Mod là hooks module của Claude Code, `skills` CLI không cài được, nên đi đường plugin.
+
+### Đường 1: plugin cho mod
 
 ```
 /plugin marketplace add ducban/b3-skills
 /plugin install bgh@b3-skills
+/plugin install sl-mod@b3-skills
 ```
-
-### Đường 1: plugin cho Claude Code
-
-```
-/plugin marketplace add ducban/b3-skills
-/plugin install b3-write-human@b3-skills
-/plugin install b3-figure-drawing@b3-skills
-/plugin install bgh@b3-skills
-```
-
-Sau đó `/plugin` để bật tắt. Skill nạp theo description, không phải slash command.
 
 Cập nhật trong session:
 
 ```
 /plugin marketplace update b3-skills
+/reload-plugins
 ```
 
-Hoặc từ terminal, nhớ mở session mới sau đó thì bản mới mới được nạp:
+Hoặc từ terminal, rồi mở session mới:
 
 ```bash
 claude plugin marketplace update b3-skills
-claude plugin update b3-write-human@b3-skills
-claude plugin update b3-figure-drawing@b3-skills
 claude plugin update bgh@b3-skills
+claude plugin update sl-mod@b3-skills
 ```
 
-### Đường 2: skills CLI cho máy chạy nhiều agent
+Máy đã cài `sl-mod` từ repo cũ `ducban/sl-mod` thì đổi một lần. Settings không mất, vì mod lưu theo tên `sl-mod` chứ không theo marketplace:
 
-Skill viết theo chuẩn Agent Skills nên Codex, OpenCode, Crush, pi đọc được. Cờ `-g` cài cho cả máy:
+```bash
+claude plugin uninstall sl-mod@sl-mod
+claude plugin marketplace remove sl-mod
+claude plugin install sl-mod@b3-skills
+```
+
+Máy đã cài `b3-write-human@b3-skills` hay `b3-figure-drawing@b3-skills` bằng plugin thì gỡ hai plugin đó, rồi cài lại bằng đường 2.
+
+### Đường 2: skills CLI cho skill
+
+Skill viết theo chuẩn Agent Skills nên mọi agent [skills.sh](https://skills.sh) hỗ trợ đều đọc được: Claude Code, Codex, OpenCode, Cursor, Crush, pi và các agent khác. Cờ `-g` cài cho cả máy:
 
 ```bash
 npx skills add ducban/b3-skills -g
 ```
 
-CLI tìm thấy cả hai skill trong repo, **chép** chúng về `~/.agents/skills/`, rồi tùy agent mà đọc thẳng hay link vào:
+Chỉ lấy vài skill thì thêm `--skill`, ví dụ `--skill b3-code-review --skill b3-code-fix`. Procedure CLI cài hai skill code theo cách này vào từng project, không có `-g`.
+
+CLI tìm thấy cả bốn skill trong `skills/`, **chép** chúng về `~/.agents/skills/`, rồi tùy agent mà đọc thẳng hay link vào:
 
 ```
 ~/.agents/skills/b3-write-human/        ← bản chép, không phải symlink vào repo
@@ -109,26 +126,26 @@ Bên đó có hook pre-commit chặn commit khi hai bản lệch nhau, nên quê
 
 ## Eval
 
-`plugins/b3-write-human/evals/` có 18 case cho `claude plugin eval`: giữ lệnh và mã lỗi, giữ placeholder, không bịa số trong quảng cáo, không bỏ từ rào khi sửa câu, bốn case thuật ngữ (agent, sandbox, front-end, compaction), một case chữ trong hình SWOT, và một case bản dịch của chính TCVN 13902:2023 trượt phép thử tra ngược (heteronomy). Case nào có literal thì chấm bằng regex làm sàn. Chất lượng văn chấm bằng LLM.
+`dev/b3-write-human/evals/` có 18 case cho `claude plugin eval`: giữ lệnh và mã lỗi, giữ placeholder, không bịa số trong quảng cáo, không bỏ từ rào khi sửa câu, bốn case thuật ngữ (agent, sandbox, front-end, compaction), một case chữ trong hình SWOT, và một case bản dịch của chính TCVN 13902:2023 trượt phép thử tra ngược (heteronomy). Case nào có literal thì chấm bằng regex làm sàn. Chất lượng văn chấm bằng LLM.
 
 ```bash
-claude plugin eval plugins/b3-write-human --threshold 0.8 --no-publish
+claude plugin eval dev/b3-write-human --threshold 0.8 --no-publish
 ```
 
-Một lượt đủ là 18 case × 3 lần × 2 nhánh. Bộ 12 case đo 29/10/2026 hết 6 USD và 7 phút với `-j 3`. Thử một case trước bằng `--case '06-*' --ablation none`. Kết quả vào `evals/results/`, đã ignore. Chi tiết và các chỗ vấp khi viết grader nằm trong `plugins/b3-write-human/evals/README.md`.
+Một lượt đủ là 18 case × 3 lần × 2 nhánh. Bộ 12 case đo 29/10/2026 hết 6 USD và 7 phút với `-j 3`. Thử một case trước bằng `--case '06-*' --ablation none`. Kết quả vào `dev/b3-write-human/evals/results/`, đã ignore. Lệnh eval chạy được nhờ `dev/b3-write-human/` là một plugin chỉ dùng để chấm: nó link tới `skills/b3-write-human/`. Chi tiết và các chỗ vấp khi viết grader nằm trong `dev/b3-write-human/evals/README.md`.
 
 ## Đo lường
 
-`plugins/b3-write-human/do-luong/` là cấu hình Vale soi một tệp `.md` tiếng Việt có sẵn theo đúng luật của skill: từ sáo, cấu trúc dịch, bản dịch thuật ngữ đã loại, từ tiếng Anh đứng trơn. Nó trả về số lỗi trên 1.000 chữ. Khác eval ở chỗ nó chạy trên bài đã viết, không tốn tiền, và chỉ bắt được bề mặt. Bài hội thảo làm mốc chuẩn đo 02/11/2026 được 0,3 lỗi/1.000 chữ, trong đó một lỗi thật.
+`dev/b3-write-human/do-luong/` là cấu hình Vale soi một tệp `.md` tiếng Việt có sẵn theo đúng luật của skill: từ sáo, cấu trúc dịch, bản dịch thuật ngữ đã loại, từ tiếng Anh đứng trơn. Nó trả về số lỗi trên 1.000 chữ. Khác eval ở chỗ nó chạy trên bài đã viết, không tốn tiền, và chỉ bắt được bề mặt. Bài hội thảo làm mốc chuẩn đo 02/11/2026 được 0,3 lỗi/1.000 chữ, trong đó một lỗi thật.
 
 ```bash
 brew install vale
-python3 plugins/b3-write-human/do-luong/do.py bai.md
+python3 dev/b3-write-human/do-luong/do.py bai.md
 ```
 
 ## Hình trong tài liệu này
 
-Ba hình ở trên và một hình trong `do-luong/README.md` do `b3-figure-drawing` vẽ từ script `docs/figures/draw.mjs`, import `figlib.mjs` ngay trong repo. Sửa nội dung thì sửa script rồi vẽ lại, đừng sửa SVG:
+Ba hình ở trên và một hình trong `dev/b3-write-human/do-luong/README.md` do `b3-figure-drawing` vẽ từ script `docs/figures/draw.mjs`, import `figlib.mjs` ngay trong repo. Sửa nội dung thì sửa script rồi vẽ lại, đừng sửa SVG:
 
 ```bash
 node docs/figures/draw.mjs

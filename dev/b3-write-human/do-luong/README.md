@@ -8,9 +8,9 @@ một bài đã có.
 
 ```bash
 brew install vale                                     # một lần
-python3 plugins/b3-write-human/do-luong/do.py bai.md  # số lỗi trên 1.000 chữ, 8 lỗi gặp nhiều nhất
-vale --config plugins/b3-write-human/do-luong/.vale.ini bai.md   # từng dòng
-python3 plugins/b3-write-human/do-luong/sinh-tu-sao.py --check  # TuSao.yml còn khớp nguồn không
+python3 dev/b3-write-human/do-luong/do.py bai.md  # số lỗi trên 1.000 chữ, 8 lỗi gặp nhiều nhất
+vale --config dev/b3-write-human/do-luong/.vale.ini bai.md   # từng dòng
+python3 dev/b3-write-human/do-luong/sinh-tu-sao.py --check  # TuSao.yml còn khớp nguồn không
 ```
 
 ## Bốn luật

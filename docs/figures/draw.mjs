@@ -5,23 +5,23 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 const { compare, flow, layers, bars, render } = await import(
-  join(here, '..', '..', 'plugins', 'b3-figure-drawing', 'skills', 'b3-figure-drawing', 'figlib.mjs'));
+  join(here, '..', '..', 'skills', 'b3-figure-drawing', 'figlib.mjs'));
 const out = here + '/';
 
-// 1. Three ways a skill reaches a machine
+// 1. Three ways the repo reaches a machine
 render(out + 'fig1-three-channels.svg', compare({
-  title: 'Ba đường đưa skill từ kho tới máy',
+  title: 'Ba đường đưa skill và mod từ kho tới máy',
   umbrella: 'Kho ducban/b3-skills là nguồn sự thật, sửa luật ở đây trước',
   columns: [
-    { head: 'PLUGIN CLAUDE CODE', tone: 'pale', items: [
-      { title: 'Claude Code đọc', sub: 'máy chỉ chạy Claude Code' },
-      { title: 'Nằm ở ~/.claude/plugins/', sub: 'marketplace kéo về' },
-      { title: 'Cập nhật ngay trong session', sub: '/plugin marketplace update, mở session mới' },
-    ]},
-    { head: 'SKILLS CLI', tone: 'ink', items: [
-      { title: 'Codex, OpenCode, Crush, pi đọc, Claude Code đọc qua link', sub: 'máy chạy nhiều agent' },
-      { title: 'Nằm ở ~/.agents/skills/', sub: 'bản chép, không phải symlink' },
+    { head: 'SKILLS CLI · skills/', tone: 'ink', items: [
+      { title: 'Claude Code, Codex, OpenCode, Crush, pi đọc', sub: 'mọi agent skills.sh hỗ trợ' },
+      { title: 'Nằm ở ~/.agents/skills/', sub: 'bản chép, Claude Code đọc qua link' },
       { title: 'Cập nhật sau mỗi lần push', sub: 'npx skills update' },
+    ]},
+    { head: 'PLUGIN CLAUDE CODE · mods/', tone: 'pale', items: [
+      { title: 'Chỉ Claude Code chạy mod', sub: 'bgh, sl-mod' },
+      { title: 'Nằm ở ~/.claude/plugins/', sub: 'marketplace kéo về' },
+      { title: 'Cập nhật ngay trong session', sub: '/plugin marketplace update, rồi /reload-plugins' },
     ]},
     { head: 'BẢN CHÉP TRONG NANOCLAW', tone: 'open', items: [
       { title: 'Agent trong container đọc', sub: 'không thấy ~/.claude của host' },
@@ -29,7 +29,7 @@ render(out + 'fig1-three-channels.svg', compare({
       { title: 'Cập nhật bằng script bên NanoClaw', sub: 'sync-b3-write-human.py, hook chặn khi lệch' },
     ]},
   ],
-  note: 'Mỗi máy chỉ dùng một đường. Mac cài cả plugin lẫn CLI thì Claude nạp hai bản cùng tên và bản plugin kẹt ở 1.1.0 suốt hai tháng.',
+  note: 'Skill chỉ đi đường skills CLI, mod chỉ đi đường plugin. Mac từng cài skill qua cả hai đường, Claude nạp hai bản cùng tên và bản plugin kẹt ở 1.1.0 suốt hai tháng.',
 }));
 
 // 2. Where each piece runs relative to the agent's context
@@ -46,7 +46,7 @@ render(out + 'fig2-what-the-agent-loads.svg', layers({
       ] },
     { head: 'CHẠY NGOÀI · không vào ngữ cảnh', sub: 'người bảo trì chạy, agent không đọc', tone: 'open',
       items: [
-        { title: 'evals/ · 17 case', sub: 'claude plugin eval, tốn tiền' },
+        { title: 'evals/ · 18 case', sub: 'claude plugin eval, tốn tiền' },
         { title: 'do-luong/ · Vale', sub: 'soi bài đã viết, miễn phí' },
       ] },
   ],
