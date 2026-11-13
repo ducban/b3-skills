@@ -225,7 +225,7 @@ phần ba và đồng hồ lấy breakdown.
 
 ## Trạng thái
 
-Bản 0.2.1, cài từ marketplace của chính repo này ở scope **user**, nên phiên
+Bản 0.2.1, cài từ marketplace b3-skills ở scope **user**, nên phiên
 nào trên máy cũng có. Một lệnh `/sl` với tám verb. 39 test qua
 `claude plugin test`, `tsc -p .` sạch, `claude plugin validate` qua.
 
@@ -551,16 +551,25 @@ phiên bản Claude Code, không có dấu tích.)
 
 ## Cài đặt
 
-Repo này có `.claude-plugin/marketplace.json`, nên nó **là** marketplace của
-chính nó. Máy nào cũng hai dòng này, không dính đường dẫn:
+Từ 13/11/2026 sl-mod nằm ở `mods/sl-mod/` của [ducban/b3-skills](https://github.com/ducban/b3-skills),
+repo cũ `ducban/sl-mod` đã archive. Marketplace b3-skills liệt kê nó. Máy nào
+cũng hai dòng này, không dính đường dẫn:
 
 ```bash
-claude plugin marketplace add ducban/sl-mod
-claude plugin install sl-mod@sl-mod
+claude plugin marketplace add ducban/b3-skills
+claude plugin install sl-mod@b3-skills
 ```
 
-`"source": "."` trong manifest, vì plugin nằm ngay gốc repo. Cài ở scope
-**user**, nhờ vậy nó dùng chung cả máy thay vì gắn với một dự án.
+Cài ở scope **user**, nhờ vậy nó dùng chung cả máy thay vì gắn với một dự án.
+
+Máy đã cài từ repo cũ thì đổi một lần. Settings không mất, vì mod lưu theo tên
+plugin `sl-mod` chứ không theo marketplace:
+
+```bash
+claude plugin uninstall sl-mod@sl-mod
+claude plugin marketplace remove sl-mod
+claude plugin install sl-mod@b3-skills
+```
 
 ### Cập nhật
 
@@ -568,8 +577,8 @@ Máy đã cài rồi thì lấy bản mới bằng hai dòng. Dòng đầu clone
 dòng sau thay bản đã cài:
 
 ```bash
-claude plugin marketplace update sl-mod
-claude plugin update sl-mod
+claude plugin marketplace update b3-skills
+claude plugin update sl-mod@b3-skills
 ```
 
 Nó in bản đã chuyển, kiểu `updated from 0.1.2 to 0.1.3`, rồi `Restart to apply
@@ -594,8 +603,8 @@ thư mục làm việc này muốn tới phiên thì phải đi trọn vòng:
 
 ```bash
 git push
-claude plugin marketplace update sl-mod
-claude plugin update sl-mod
+claude plugin marketplace update b3-skills
+claude plugin update sl-mod@b3-skills
 # then /reload-plugins, or restart
 ```
 
@@ -603,7 +612,7 @@ Lúc đang viết mã thật thì bỏ hết vòng đó, nạp thẳng thư mụ
 lệnh, không theo dõi gì:
 
 ```bash
-claude --plugin-dir ~/Workspace/Projects/personal_works/sl-mod
+claude --plugin-dir ~/Workspace/Projects/personal_works/b3-skills/mods/sl-mod
 ```
 
 Trước khi push, chạy ba thứ:

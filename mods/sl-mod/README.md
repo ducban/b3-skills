@@ -227,7 +227,7 @@ one, then the main loop's falling to a third and the gauge taking the breakdown.
 
 ## State
 
-Version 0.2.1, installed from this repo's own marketplace at scope **user**, so
+Version 0.2.1, installed from the b3-skills marketplace at scope **user**, so
 it draws in every session on this box. One command, `/sl`, with eight verbs.
 Thirty-nine tests pass under `claude plugin test`, `tsc -p .` is clean and
 `claude plugin validate` passes.
@@ -563,17 +563,26 @@ i.e. Claude Code's version, with no tick at all.)
 
 ## Install
 
-This repo carries `.claude-plugin/marketplace.json`, so it **is** its own
-marketplace. Two lines on any machine, and no path anywhere:
+sl-mod lives in `mods/sl-mod/` of [ducban/b3-skills](https://github.com/ducban/b3-skills)
+since 13/11/2026; the old `ducban/sl-mod` repo is archived. The b3-skills
+marketplace lists it. Two lines on any machine, and no path anywhere:
 
 ```bash
-claude plugin marketplace add ducban/sl-mod
-claude plugin install sl-mod@sl-mod
+claude plugin marketplace add ducban/b3-skills
+claude plugin install sl-mod@b3-skills
 ```
 
-`"source": "."` in that manifest, because the plugin is the repo root. It lands
-at scope **user**, which is what makes it global on the box rather than tied to
-one project.
+It lands at scope **user**, which is what makes it global on the box rather
+than tied to one project.
+
+A machine that installed it from the old repo switches once. Settings survive,
+because the mod stores them under the plugin name `sl-mod`, not the marketplace:
+
+```bash
+claude plugin uninstall sl-mod@sl-mod
+claude plugin marketplace remove sl-mod
+claude plugin install sl-mod@b3-skills
+```
 
 ### Update
 
@@ -581,8 +590,8 @@ A machine that already has it picks up a new version in two lines. The first
 re-clones the marketplace, the second swaps the installed copy:
 
 ```bash
-claude plugin marketplace update sl-mod
-claude plugin update sl-mod
+claude plugin marketplace update b3-skills
+claude plugin update sl-mod@b3-skills
 ```
 
 It prints the version it moved between, e.g. `updated from 0.1.2 to 0.1.3`, and
@@ -608,8 +617,8 @@ this working copy reaches a session only through the full loop:
 
 ```bash
 git push
-claude plugin marketplace update sl-mod
-claude plugin update sl-mod
+claude plugin marketplace update b3-skills
+claude plugin update sl-mod@b3-skills
 # then /reload-plugins, or restart
 ```
 
@@ -617,7 +626,7 @@ While actually writing code, skip all of that and load the folder directly. One
 flag on one command, nothing tracked:
 
 ```bash
-claude --plugin-dir ~/Workspace/Projects/personal_works/sl-mod
+claude --plugin-dir ~/Workspace/Projects/personal_works/b3-skills/mods/sl-mod
 ```
 
 The gate before a push:
