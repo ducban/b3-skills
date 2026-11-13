@@ -57,7 +57,7 @@ import {
   type Usage,
 } from './core'
 
-const RELEASE = '0.7.0'
+const RELEASE = '0.8.0'
 const HARPER_DELAY_MS = 300
 const HOP_TIMEOUT_MS = 6000
 const CACHE_KEY = 'llm-cache-v1'
@@ -66,10 +66,12 @@ const PREFS_KEY = 'prefs-v1'
 const SETUP_PANE = 'bgh-setup'
 const SETTINGS_PANE = 'bgh-settings'
 const DEBUG_PANE = 'bgh-debug'
+const HELP_PANE = 'bgh-help'
 const PANES = [
   { id: SETUP_PANE, title: 'bgh setup' },
   { id: SETTINGS_PANE, title: 'bgh settings' },
   { id: DEBUG_PANE, title: 'bgh debug' },
+  { id: HELP_PANE, title: 'bgh help' },
 ]
 
 const HELP = [
@@ -104,7 +106,7 @@ const KNOWN_ENV = [
 // Keys a # in front of is surely a slip; the B3_GRAMMAR_* switches are commented on purpose.
 const MUST_BE_LIVE = KNOWN_ENV.filter((n) => !n.startsWith('B3_GRAMMAR_'))
 
-type ProbeResult = { name: string; ok: boolean; ms: number; detail: string }
+type ProbeResult = { name: string; ok: boolean; ms: number; detail: string; pending?: boolean }
 type LastRun = {
   at: number
   text: string
@@ -397,8 +399,10 @@ export const register: Register = (on) => {
         if (await show(DEBUG_PANE)) return { text: 'Debug open. Esc closes it.' }
         return { text: debugText() }
       case 'status':
+        if (await show(DEBUG_PANE)) return { text: 'Status is the bgh debug tab. Esc closes it.' }
         return { text: settings() }
       case 'help':
+        if (await show(HELP_PANE)) return { text: 'Help open. Esc closes it.' }
         return { text: HELP }
       case 'on':
       case 'off':
@@ -408,6 +412,7 @@ export const register: Register = (on) => {
           void $.prompt.paint({ decorations: [] })
           await update($, fixesAtom, () => [])
         }
+        $.ui.toast(`B3 Grammar Helper is ${prefs.enabled ? 'on' : 'off'}`)
         return { text: `B3 Grammar Helper is ${prefs.enabled ? 'on' : 'off'}.` }
       case 'reload': {
         try {
@@ -417,6 +422,7 @@ export const register: Register = (on) => {
         }
         applyEnv(lastEnvFile)
         await redraw()
+        $.ui.toast(lastEnvFile === undefined ? `Grammar: no file at ${envFile}` : 'Grammar: keys reloaded')
         return { text: `${lastEnvFile === undefined ? `No file at ${envFile}` : 'Reloaded.'}\n${settings()}` }
       }
       case 'ignore':
@@ -424,27 +430,46 @@ export const register: Register = (on) => {
         ignore.add(word)
         await $.store.set(IGNORE_KEY, [...ignore])
         await redraw()
+        $.ui.toast(`Grammar: ignoring “${word}”`)
         return { text: `Ignoring “${word}”. ${ignore.size} word(s) on the list.` }
       case 'unignore':
         if (!word) return { text: 'Usage: /bgh unignore <word>' }
         ignore.delete(word)
         await $.store.set(IGNORE_KEY, [...ignore])
         await redraw()
+        $.ui.toast(`Grammar: “${word}” is checked again`)
         return { text: `“${word}” is checked again.` }
       case 'ignored':
+        if (await show(SETTINGS_PANE)) return { text: 'Ignored words are at the bottom of bgh settings; 1–9 takes one off.' }
         return { text: ignore.size ? [...ignore].sort().join(', ') : 'Nothing ignored yet.' }
       case 'clear-cache':
         cache.clear()
         await $.store.set(CACHE_KEY, [])
         await redraw()
+        $.ui.toast('Grammar: LLM answers forgotten')
         return { text: 'LLM answers forgotten. The next check asks again.' }
       case 'test': {
         // Every route on a sentence with known mistakes, then Langfuse's auth, so a broken key
         // shows here instead of as silence while typing.
         const sample = 'I has a apple and it are red.'
         const lines: string[] = [`Testing with: ${sample}`]
-        const results: ProbeResult[] = []
-        for (const hop of hops) {
+        const keys = langfuseKeys(env)
+        // Every row shows `testing…` first and turns ✓ or ✗ in place, in the debug tab.
+        const results: ProbeResult[] = [
+          ...hops.map((h) => ({ name: `${h.route} ${modelName(h.model)}`, ok: false, ms: 0, detail: 'testing…', pending: true })),
+          ...(hops.length ? [] : [{ name: 'llm', ok: false, ms: 0, detail: 'off (settings l, or B3_GRAMMAR_LLM=off)' }]),
+          keys
+            ? { name: 'langfuse', ok: false, ms: 0, detail: 'testing…', pending: true }
+            : { name: 'langfuse', ok: false, ms: 0, detail: `no keys in ${envFile} (optional)` },
+        ]
+        lastProbe = { at: Date.now(), results }
+        const shown = await show(DEBUG_PANE)
+        await redraw()
+        const settle = async (i: number, r: ProbeResult) => {
+          results[i] = r
+          await redraw()
+        }
+        for (const [i, hop] of hops.entries()) {
           const t0 = Date.now()
           let out: { content: string } | { error: string }
           try {
@@ -481,10 +506,9 @@ export const register: Register = (on) => {
             : 'error' in out
               ? out.error
               : 'reply was not the JSON asked for'
-          results.push({ name: `${hop.route} ${modelName(hop.model)}`, ok, ms: Date.now() - t0, detail })
+          await settle(i, { name: `${hop.route} ${modelName(hop.model)}`, ok, ms: Date.now() - t0, detail })
         }
-        if (!hops.length) results.push({ name: 'llm', ok: false, ms: 0, detail: 'off (settings l, or B3_GRAMMAR_LLM=off)' })
-        const keys = langfuseKeys(env)
+        const lf = results.length - 1
         if (keys) {
           const t0 = Date.now()
           try {
@@ -495,7 +519,7 @@ export const register: Register = (on) => {
             } catch {
               // not JSON
             }
-            results.push({
+            await settle(lf, {
               name: 'langfuse',
               ok: res.ok,
               ms: Date.now() - t0,
@@ -506,13 +530,13 @@ export const register: Register = (on) => {
                   : `HTTP ${res.status}`,
             })
           } catch (err) {
-            results.push({ name: 'langfuse', ok: false, ms: Date.now() - t0, detail: `unreachable: ${String(err).slice(0, 100)}` })
+            await settle(lf, { name: 'langfuse', ok: false, ms: Date.now() - t0, detail: `unreachable: ${String(err).slice(0, 100)}` })
           }
-        } else {
-          results.push({ name: 'langfuse', ok: false, ms: 0, detail: `no keys in ${envFile} (optional)` })
         }
-        lastProbe = { at: Date.now(), results }
-        await redraw()
+        if (shown) {
+          const good = results.filter((r) => r.ok).length
+          return { text: `Test: ${good} of ${results.length} ✓. Details in the bgh debug tab.` }
+        }
         for (const r of results) lines.push(`${r.ok ? '✓' : '✗'} ${r.name.padEnd(28)} ${String(r.ms).padStart(5)} ms  ${r.detail}`)
         return { text: lines.join('\n') }
       }
@@ -812,7 +836,9 @@ export const register: Register = (on) => {
             <Text dimColor>{`test at ${new Date(lastProbe.at).toLocaleTimeString()}`}</Text>
             {lastProbe.results.map((r) => (
               <Box key={`probe-${r.name}`} flexDirection="row" columnGap={1}>
-                <Text color={r.ok ? 'success' : 'warning'}>{r.ok ? '✓' : '✗'}</Text>
+                <Text color={r.pending ? undefined : r.ok ? 'success' : 'warning'} dimColor={r.pending}>
+                  {r.pending ? '…' : r.ok ? '✓' : '✗'}
+                </Text>
                 <Text>{r.name.padEnd(26)}</Text>
                 <Text dimColor>{`${String(r.ms).padStart(5)} ms`}</Text>
                 <Text dimColor wrap="truncate-end">
@@ -851,6 +877,47 @@ export const register: Register = (on) => {
           <Button key="x" label="test every route" hotkey="x" plain onPress={() => void $.command.run({ command: 'bgh', args: 'test' })} />
           <Button key="u" label="refresh" hotkey="u" plain onPress={redraw} />
         </Box>
+      </Box>
+    )
+  })
+
+  on('ui.render', { component: 'Pane', requestId: HELP_PANE }, async ($, e) => {
+    const { Box, Text } = $.ui.resolve(e)
+    const narrow = e.props.bodyColumns < 70
+    const line = (left: string, right: string) => (
+      <Box key={`help-${left}`} flexDirection={narrow ? 'column' : 'row'} columnGap={1}>
+        <Text color="suggestion">{left.padEnd(24)}</Text>
+        <Text dimColor wrap="wrap">
+          {right}
+        </Text>
+      </Box>
+    )
+    return (
+      <Box flexDirection="column">
+        <Text bold>Commands</Text>
+        {line('/bgh', 'setup guide while something is missing, else settings')}
+        {line('/bgh setup-guide', 'what this machine still needs, macOS and Linux side by side')}
+        {line('/bgh settings', 'grammar, LLM route and model, delay, Langfuse, cache, ignored words')}
+        {line('/bgh debug', 'versions, keys set (names only), routes, last trace, last check')}
+        {line('/bgh test', 'every route and Langfuse on a sample sentence, live in bgh debug')}
+        {line('/bgh status', 'opens bgh debug')}
+        {line('/bgh help', 'this tab')}
+        {line('/bgh on | off', 'switch checking on or off')}
+        {line('/bgh reload', 'read the keys file again')}
+        {line('/bgh ignore <word>', 'never flag this word (unignore <word> undoes it)')}
+        {line('/bgh ignored', 'opens bgh settings, where the list is')}
+        {line('/bgh clear-cache', 'forget the remembered LLM answers')}
+        <Text bold>In the prompt</Text>
+        {line('alt+a', 'apply every fix the band above the prompt shows')}
+        {line('alt+i', 'ignore the first flagged word from now on')}
+        <Text bold>In the tabs</Text>
+        {line('bgh setup', 'h look for harper · r reload keys · x test every route')}
+        {line('bgh settings', 'g grammar · l llm · f first route · m model · d delay · t langfuse · c cache · 1–9 un-ignore')}
+        {line('bgh debug', 'x test every route · u refresh')}
+        {line('Tab, Esc', 'Tab walks the buttons; Esc closes the tabs')}
+        <Text dimColor wrap="wrap">
+          {`B3 Grammar Helper ${RELEASE} · keys in ${envFile}`}
+        </Text>
       </Box>
     )
   })

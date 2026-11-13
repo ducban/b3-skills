@@ -65,15 +65,16 @@ alt+a applies every fix on the band. alt+i ignores the first flagged word from t
 | `/bgh setup-guide` | what this machine still needs |
 | `/bgh settings` | grammar, LLM route and model, delay, Langfuse, cache, ignored words |
 | `/bgh debug` | versions, which keys are set (names only), routes, last trace, last check with timings |
-| `/bgh test` | runs every route and Langfuse once on a sample sentence and prints ✓/✗ with times |
-| `/bgh status` | one-screen summary as text |
+| `/bgh test` | runs every route and Langfuse once on a sample sentence; each row in `bgh debug` shows `testing…` and turns ✓ or ✗ with its time |
+| `/bgh status` | opens `bgh debug` |
 | `/bgh on`, `off` | switch checking on or off |
 | `/bgh reload` | read the keys file again |
-| `/bgh ignore <word>`, `unignore <word>`, `ignored` | the ignore list |
+| `/bgh ignore <word>`, `unignore <word>` | add to or take off the ignore list |
+| `/bgh ignored` | opens `bgh settings`, where the list is |
 | `/bgh clear-cache` | forget the remembered LLM answers |
-| `/bgh help` | this list |
+| `/bgh help` | the `bgh help` tab: every command and every key |
 
-The three panes open together as tabs (`bgh setup`, `bgh settings`, `bgh debug`), the one you asked for in front. Esc closes them.
+Commands you read open a pane; the four open together as tabs (`bgh setup`, `bgh settings`, `bgh debug`, `bgh help`), the one you asked for in front, and Esc closes them. Commands that do one thing (`on`, `off`, `reload`, `ignore`, `unignore`, `clear-cache`) stay text and pop a toast. Where a pane can't be drawn, every command answers in text instead.
 
 ### Setup guide
 
