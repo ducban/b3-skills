@@ -93,8 +93,8 @@ const HELP = [
   '  /bgh                 setup guide while something is missing, else settings',
   '  /bgh setup-guide     what this machine still needs (macOS and Linux)',
   '  /bgh settings        grammar, LLM route and model, delay, Langfuse, cache, ignored words',
-  '  /bgh debug           versions, keys set, routes, last trace, last check with timings',
-  '  /bgh test            run every route and Langfuse once on a sample sentence',
+  '  /bgh debug           versions, keys set, routes, models, accepted %, last trace, last check',
+  '  /bgh test            run every route and Langfuse on a sample sentence; refetch model lists',
   '  /bgh status          one-screen summary as text',
   '  /bgh on | off        switch checking on or off',
   '  /bgh reload          read the keys file again',
@@ -1045,8 +1045,8 @@ export const register: Register = (on) => {
         {line('/bgh', 'setup guide while something is missing, else settings')}
         {line('/bgh setup-guide', 'what this machine still needs, macOS and Linux side by side')}
         {line('/bgh settings', 'grammar, LLM route and model, delay, Langfuse, cache, ignored words')}
-        {line('/bgh debug', 'versions, keys set (names only), routes, last trace, last check')}
-        {line('/bgh test', 'every route and Langfuse on a sample sentence, live in bgh debug')}
+        {line('/bgh debug', 'versions, keys set (names only), routes, models, accepted %, last trace, last check')}
+        {line('/bgh test', 'every route and Langfuse on a sample sentence, model lists refetched, live in bgh debug')}
         {line('/bgh status', 'opens bgh debug')}
         {line('/bgh help', 'this tab')}
         {line('/bgh on | off', 'switch checking on or off')}

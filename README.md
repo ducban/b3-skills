@@ -18,7 +18,7 @@ b3-skills/
 
 | Mod (`mods/`) | Làm gì |
 |---|---|
-| `bgh` (B3 Grammar Helper) | Gạch chân lỗi ngữ pháp ngay trong ô prompt khi gõ tiếng Anh, gợi ý hiện mờ ngay sau chữ sai. Harper chạy offline trước, rồi chuỗi OpenRouter → OpenAI → Fireworks → Haiku sửa cách dùng từ. `/bgh` mở pane. Chạy trên Linux, macOS, Windows; khác biệt từng máy ở [README riêng](mods/bgh/README.md). |
+| `bgh` (B3 Grammar Helper) | Gạch chân lỗi ngữ pháp ngay trong ô prompt khi gõ tiếng Anh, gợi ý hiện mờ ngay sau chữ sai. Harper chạy offline trước, rồi chuỗi OpenRouter → OpenAI → Fireworks → Haiku sửa cách dùng từ. Model nào nhà cung cấp gỡ thì mod tự báo, và đếm tỉ lệ bạn nhận gợi ý theo từng model. `/bgh` mở pane. Chạy trên Linux, macOS, Windows; khác biệt từng máy ở [README riêng](mods/bgh/README.md). |
 | `status-line` | Status line vẽ trong dải phía trên ô prompt: thư mục, model kèm effort, git, các thước context, 5h, 7d và quota theo model. `/sl` mở pane settings. Gộp từ repo `ducban/sl-mod` ngày 13/11/2026, giữ đủ lịch sử commit, rồi đổi tên từ `sl-mod`. [README riêng](mods/status-line/README.md). |
 
 `b3-write-human` và `b3-figure-drawing` đứng ở hai chặng đầu của một bài viết. `humanizer` và Vale đứng sau.

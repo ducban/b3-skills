@@ -65,8 +65,8 @@ alt+a applies every fix on the band. alt+i ignores the first flagged word from t
 | `/bgh` | the setup guide while something is missing, the settings once all is ✓ |
 | `/bgh setup-guide` | what this machine still needs |
 | `/bgh settings` | grammar, LLM route and model, delay, Langfuse, cache, ignored words |
-| `/bgh debug` | versions, which keys are set (names only), routes, last trace, last check with timings |
-| `/bgh test` | runs every route and Langfuse once on a sample sentence; each row in `bgh debug` shows `testing…` and turns ✓ or ✗ with its time |
+| `/bgh debug` | versions, which keys are set (names only), routes, model lists, accepted % per model, last trace, last check with timings |
+| `/bgh test` | runs every route and Langfuse once on a sample sentence; each row in `bgh debug` shows `testing…` and turns ✓ or ✗ with its time; the model lists are fetched again |
 | `/bgh status` | opens `bgh debug` |
 | `/bgh on`, `off` | switch checking on or off |
 | `/bgh reload` | read the keys file again |
@@ -97,7 +97,7 @@ A key or `LANGFUSE_*` line left behind a `#` in the keys file is flagged on top,
 | `g` | grammar check on or off |
 | `l` | LLM pass on or off (off = Harper only) |
 | `f` | which route goes first: `auto`, or one that has a key |
-| `m` | model for that route, from a short list |
+| `m` | model for that route, from a short list; a model the provider dropped shows `(gone)` and is skipped |
 | `d` | pause before the LLM is asked: 800, 1500 or 3000 ms |
 | `t` | Langfuse tracing on or off |
 | `c` | forget the cached LLM answers |
