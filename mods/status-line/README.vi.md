@@ -1,9 +1,10 @@
-# sl-mod
+# status-line
 
 [English](README.md)
 
 Dòng trạng thái (status line) cho Claude Code, nhưng làm dưới dạng mod chứ không
-phải lệnh `statusLine`. Nó vẽ vào dải (band) ngay phía trên ô gõ (prompt box).
+phải lệnh `statusLine`. Nó vẽ vào dải (band) ngay phía trên ô gõ (prompt box). Trước bản 0.3.0 nó tên
+là sl-mod; lệnh vẫn là `/sl`.
 
 Tên các ô và công tắc như `cache`, `cold gate`, `guard`, `effort`, `reset`,
 `speed`, `turn`, `agents` để nguyên tiếng Anh suốt tài liệu này. Đó là chữ hiện
@@ -186,7 +187,7 @@ nghe" không còn giống nhau. Nó in cả số của breakdown.
 Rồi tới 26/10/2026 cả hai hook không chạy. Trên máy có cài đặt quản trị, hoặc
 tài khoản Team hay Enterprise, Claude Code 2.1.310 đặt module cài sẵn
 `cc-plugin-sec-default@builtin` ở ngoài cùng, và module đó không chuyển tiếp
-`session.compact` lẫn `classic.PostCompact`. Engine ghi *"sl-mod: its
+`session.compact` lẫn `classic.PostCompact`. Engine ghi *"status-line: its
 session.compact hook was skipped. \"cc-plugin-sec-default\" runs first and sent
 the event on past it"*, dải không nghe thấy gì. Một lần `/compact` đưa phiên từ
 202k token xuống 15k, đồng hồ vẫn 20% trong khi `/context` nói 6%. (Module đó
@@ -225,8 +226,8 @@ phần ba và đồng hồ lấy breakdown.
 
 ## Trạng thái
 
-Bản 0.2.1, cài từ marketplace b3-skills ở scope **user**, nên phiên
-nào trên máy cũng có. Một lệnh `/sl` với tám verb. 39 test qua
+Bản 0.3.0, cài từ marketplace b3-skills ở scope **user**, nên phiên
+nào trên máy cũng có. Một lệnh `/sl` với tám verb. 41 test qua
 `claude plugin test`, `tsc -p .` sạch, `claude plugin validate` qua.
 
 Số nào lấy định kỳ đều kèm một ghi chú nói vì sao nó trống, và `/sl debug` in
@@ -436,7 +437,7 @@ qua chính là yêu cầu làm ấm cache trở lại.*
 ```
  > fix the flaky test in band.test.ts                      ⏎
 
- sl-mod cold gate: the prompt cache has been cold for 23m, so this request
+ status-line cold gate: the prompt cache has been cold for 23m, so this request
  re-reads about 142.0k tokens at the uncached price before it answers. Enter
  again sends it as it is; /clear starts a fresh window if this is a new task.
  Esc empties the box; /sl restore brings the text back.
@@ -551,25 +552,32 @@ phiên bản Claude Code, không có dấu tích.)
 
 ## Cài đặt
 
-Từ 13/11/2026 sl-mod nằm ở `mods/sl-mod/` của [ducban/b3-skills](https://github.com/ducban/b3-skills),
+Từ 13/11/2026 status-line nằm ở `mods/status-line/` của [ducban/b3-skills](https://github.com/ducban/b3-skills),
 repo cũ `ducban/sl-mod` đã archive. Marketplace b3-skills liệt kê nó. Máy nào
 cũng hai dòng này, không dính đường dẫn:
 
 ```bash
 claude plugin marketplace add ducban/b3-skills
-claude plugin install sl-mod@b3-skills
+claude plugin install status-line@b3-skills
 ```
 
 Cài ở scope **user**, nhờ vậy nó dùng chung cả máy thay vì gắn với một dự án.
 
-Máy đã cài từ repo cũ thì đổi một lần. Settings không mất, vì mod lưu theo tên
-plugin `sl-mod` chứ không theo marketplace:
+Máy đang cài dưới tên cũ thì đổi một lần, từ `sl-mod@sl-mod` hay
+`sl-mod@b3-skills`, máy có cái nào gỡ cái đó:
 
 ```bash
-claude plugin uninstall sl-mod@sl-mod
-claude plugin marketplace remove sl-mod
-claude plugin install sl-mod@b3-skills
+claude plugin uninstall sl-mod@sl-mod        # hoặc sl-mod@b3-skills
+claude plugin marketplace remove sl-mod      # chỉ khi máy còn marketplace này
+claude plugin install status-line@b3-skills
 ```
+
+Engine giữ settings của mod ở
+`~/.claude/plugins/store/<plugin>_<marketplace>-<hash>.json`, nên đổi tên hay đổi
+marketplace là bắt đầu với file trống. Lần chạy đầu dưới tên `status-line`, mod
+chép layout, guard, cold gate và hai công tắc ẩn band, hiện giờ reset từ file
+`sl-mod_*` mới nhất trong đó sang, chỉ một lần. `/sl debug` ghi tên file ở dòng
+`settings carried from:`.
 
 ### Cập nhật
 
@@ -578,7 +586,7 @@ dòng sau thay bản đã cài:
 
 ```bash
 claude plugin marketplace update b3-skills
-claude plugin update sl-mod@b3-skills
+claude plugin update status-line@b3-skills
 ```
 
 Nó in bản đã chuyển, kiểu `updated from 0.1.2 to 0.1.3`, rồi `Restart to apply
@@ -604,7 +612,7 @@ thư mục làm việc này muốn tới phiên thì phải đi trọn vòng:
 ```bash
 git push
 claude plugin marketplace update b3-skills
-claude plugin update sl-mod@b3-skills
+claude plugin update status-line@b3-skills
 # then /reload-plugins, or restart
 ```
 
@@ -612,7 +620,7 @@ Lúc đang viết mã thật thì bỏ hết vòng đó, nạp thẳng thư mụ
 lệnh, không theo dõi gì:
 
 ```bash
-claude --plugin-dir ~/Workspace/Projects/personal_works/b3-skills/mods/sl-mod
+claude --plugin-dir ~/Workspace/Projects/personal_works/b3-skills/mods/status-line
 ```
 
 Trước khi push, chạy ba thứ:

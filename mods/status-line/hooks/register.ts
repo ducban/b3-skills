@@ -1135,7 +1135,7 @@ function classifyCommand(command: string): Risk | null {
 // an argument to bash, never part of its source, so nothing in it runs.
 async function resolveDir($: EngineInterface, from: string, dir: string): Promise<string | null> {
   const script = 'd="$1"; case "$d" in "~") d="$HOME";; "~/"*) d="$HOME/${d#\\~/}";; esac; cd -- "$d" 2>/dev/null && pwd -P'
-  const run = await $.process.run(['bash', '-c', script, 'sl-mod-guard', dir], { cwd: from, timeoutMs: 5000 })
+  const run = await $.process.run(['bash', '-c', script, 'status-line-guard', dir], { cwd: from, timeoutMs: 5000 })
   const out = run.stdout.trim()
 
   return run.exitCode === 0 && out !== '' ? out : null
@@ -1180,7 +1180,7 @@ async function measureRisk($: EngineInterface, risk: Risk, cwd: string): Promise
   try {
     if (risk.kind === 'rm') {
       if (risk.targets.length === 0) return { summary: 'rm with no paths', lines: [], more: 0, note: 'nothing to expand' }
-      const run = await $.process.run(['bash', '-c', RM_SCRIPT, 'sl-mod-guard', ...risk.targets], { cwd, timeoutMs: 15000 })
+      const run = await $.process.run(['bash', '-c', RM_SCRIPT, 'status-line-guard', ...risk.targets], { cwd, timeoutMs: 15000 })
       const [head = '0 0 0', ...names] = run.stdout.split('\n').filter(l => l !== '')
       const [files = 0, size = 0, found = 0] = head.split(' ').map(Number)
       if (found === 0) return { summary: `delete nothing: no file matches ${risk.targets.join(' ')}`, lines: [], more: 0, note: 'the paths are not there' }
@@ -1274,7 +1274,7 @@ async function measureRisk($: EngineInterface, risk: Risk, cwd: string): Promise
 }
 
 const guardRefusal = (label: string, summary: string, why: string) =>
-  `sl-mod guard held this command and did not run it: ${why}. It would have: ${summary}. Do not retry it unless the user asks you to.`
+  `status-line guard held this command and did not run it: ${why}. It would have: ${summary}. Do not retry it unless the user asks you to.`
 
 async function toggleGuard($: EngineInterface) {
   guardOn = !guardOn
@@ -1291,7 +1291,7 @@ async function toggleColdGate($: EngineInterface) {
 // The reason a dropped prompt shows. The size is the last response's input --
 // what the next request re-reads -- and absent before any response has landed.
 const coldReason = (coldFor: string, size: number | undefined) =>
-  `sl-mod cold gate: the prompt cache has been cold for ${coldFor}, so this request re-reads ${
+  `status-line cold gate: the prompt cache has been cold for ${coldFor}, so this request re-reads ${
     size === undefined ? 'the whole transcript' : `about ${tk(size)} tokens`
   } at the uncached price before it answers. Enter again sends it as it is; /clear starts a fresh window if this is a new task. Esc empties the box; /sl restore brings the text back.`
 
@@ -1604,6 +1604,7 @@ async function debugText($: EngineInterface) {
       `cache: ${cacheWarmAt === null ? 'no request seen yet' : `warm at ${new Date(cacheWarmAt).toISOString()}, ${countdown(cacheWarmAt + CACHE_TTL_MS, now)} left`}`,
       `speed: ${speed === null ? 'not timed yet' : `${speed} tok/s`}; last turn: ${lastTurn === null ? 'none' : `${lastTurn.usd === null ? 'cost unknown' : `$${lastTurn.usd.toFixed(2)}`}, ${elapsed(lastTurn.ms)}`}`,
       `agents: ${agentsRunning()} running, ${agents.filter(a => a.status === 'done').length} done, ${agents.filter(a => a.status === 'failed').length} failed`,
+      `settings carried from: ${migratedFrom}`,
       `layout: ${ITEMS.map(i => `${i.name}=${layout[i.key] || 'off'}`).join(' ')}`,
       `guard: ${guardOn ? 'on' : 'off'}${held === null ? '' : `, holding ${held.risk.label}`}`,
       `cold gate: ${coldGateOn ? 'on' : 'off'}${coldAskedAt === null ? '' : `, asked at ${new Date(coldAskedAt).toISOString()}`}`,
@@ -1617,8 +1618,52 @@ async function debugText($: EngineInterface) {
   }
 }
 
+// The mod was `sl-mod` until 0.3.0. The engine keeps a plugin's store in
+// `<config>/plugins/store/<plugin>_<marketplace>-<hash>.json`, so a new name or a
+// new marketplace starts on an empty one. The first start under this name copies
+// the preferences from the newest `sl-mod_*` file, once. The usage cache and a
+// dropped prompt stay behind: both are stale by then. A failure leaves the
+// defaults, as a fresh install would.
+const LEGACY_STORE = /^sl-mod_.+\.json$/
+const CARRIED_KEYS = ['isHidden', 'showReset', 'guard', 'coldGate', 'layout'] as const
+
+// What the migration found, for /sl debug.
+let migratedFrom = 'not checked yet'
+
+async function migrateStore($: EngineInterface) {
+  const done = await $.store.get('migratedFrom')
+  if (typeof done === 'string') {
+    migratedFrom = done
+    return
+  }
+  let from = 'none'
+  try {
+    const home = (await $.env.get('HOME')) ?? (await $.env.get('USERPROFILE'))
+    const config = (await $.env.get('CLAUDE_CONFIG_DIR')) ?? (home === undefined ? undefined : `${home}/.claude`)
+    if (config !== undefined) {
+      const dir = `${config}/plugins/store`
+      const old = (await $.fs.list(dir))
+        .filter(f => f.kind === 'file' && LEGACY_STORE.test(f.name))
+        .sort((a, b) => b.mtimeMs - a.mtimeMs)[0]
+      if (old !== undefined) {
+        const saved = JSON.parse(String(await $.fs.read(`${dir}/${old.name}`))) as Record<string, unknown>
+        for (const key of CARRIED_KEYS) {
+          if (saved[key] !== undefined && (await $.store.get(key)) === undefined) await $.store.set(key, saved[key])
+        }
+        from = old.name
+      }
+    }
+  } catch {
+    // No old store, or one that can't be read: the defaults stand.
+  }
+  await $.store.set('migratedFrom', from)
+  migratedFrom = from
+}
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
+    await migrateStore($)
+
     // One command, verbs after it, the shape /bgh uses: the typeahead lists
     // `/sl` once and the hint names the verbs. `immediate` lets a view open
     // and the band switch mid-turn.
@@ -2006,7 +2051,7 @@ export const register: Register = on => {
     }
 
     if (mine.decision === 'run') {
-      $.ui.toast('sl-mod guard: running it')
+      $.ui.toast('status-line guard: running it')
 
       return next(e)
     }
@@ -2019,7 +2064,7 @@ export const register: Register = on => {
 
     return { deny: guardRefusal(risk.label, mine.report?.summary ?? risk.label, why[mine.decision ?? 'error']) }
   }).catch(() => ({
-    deny: 'sl-mod guard hit an error while holding this command and did not run it. Do not retry it unless the user asks you to.',
+    deny: 'status-line guard hit an error while holding this command and did not run it. Do not retry it unless the user asks you to.',
   }))
 
   // --- The cold gate: the prompt after a cold hour costs one more Enter ------

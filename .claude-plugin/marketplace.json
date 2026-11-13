@@ -12,14 +12,26 @@
       "description": "B3 Grammar Helper: gạch chân lỗi ngữ pháp ngay trong ô prompt khi gõ tiếng Anh: Harper chạy offline trước, rồi OpenRouter, OpenAI, Fireworks hoặc Haiku sửa cách dùng từ. Có pane settings, danh sách từ bỏ qua, trace Langfuse.",
       "source": "./mods/bgh",
       "category": "productivity",
-      "tags": ["grammar", "prompt", "mod", "harper", "langfuse"]
+      "tags": [
+        "grammar",
+        "prompt",
+        "mod",
+        "harper",
+        "langfuse"
+      ]
     },
     {
-      "name": "sl-mod",
-      "description": "Status line trong dải phía trên ô prompt: thư mục, model kèm effort, git, và các thước context, 5h, 7d, quota theo model. Tối đa bốn dòng, chọn trong /sl settings.",
-      "source": "./mods/sl-mod",
+      "name": "status-line",
+      "description": "Status line trong dải phía trên ô prompt: thư mục, model kèm effort, git, và các thước context, 5h, 7d, quota theo model. Tối đa bốn dòng, chọn trong /sl settings. Trước 0.3.0 tên là sl-mod.",
+      "source": "./mods/status-line",
       "category": "productivity",
-      "tags": ["statusline", "mod", "usage", "quota", "terminal"]
+      "tags": [
+        "statusline",
+        "mod",
+        "usage",
+        "quota",
+        "terminal"
+      ]
     }
   ]
 }

@@ -19,7 +19,7 @@ b3-skills/
 | Mod (`mods/`) | Làm gì |
 |---|---|
 | `bgh` (B3 Grammar Helper) | Gạch chân lỗi ngữ pháp ngay trong ô prompt khi gõ tiếng Anh, gợi ý hiện mờ ngay sau chữ sai. Harper chạy offline trước, rồi chuỗi OpenRouter → OpenAI → Fireworks → Haiku sửa cách dùng từ. `/bgh` mở pane. Chạy trên Linux, macOS, Windows; khác biệt từng máy ở [README riêng](mods/bgh/README.md). |
-| `sl-mod` | Status line vẽ trong dải phía trên ô prompt: thư mục, model kèm effort, git, các thước context, 5h, 7d và quota theo model. `/sl` mở pane settings. Gộp từ repo `ducban/sl-mod` ngày 13/11/2026, giữ đủ lịch sử commit. [README riêng](mods/sl-mod/README.md). |
+| `status-line` | Status line vẽ trong dải phía trên ô prompt: thư mục, model kèm effort, git, các thước context, 5h, 7d và quota theo model. `/sl` mở pane settings. Gộp từ repo `ducban/sl-mod` ngày 13/11/2026, giữ đủ lịch sử commit, rồi đổi tên từ `sl-mod`. [README riêng](mods/status-line/README.md). |
 
 `b3-write-human` và `b3-figure-drawing` đứng ở hai chặng đầu của một bài viết. `humanizer` và Vale đứng sau.
 
@@ -56,7 +56,7 @@ Mod là hooks module của Claude Code, `skills` CLI không cài được, nên 
 ```
 /plugin marketplace add ducban/b3-skills
 /plugin install bgh@b3-skills
-/plugin install sl-mod@b3-skills
+/plugin install status-line@b3-skills
 ```
 
 Cập nhật trong session:
@@ -71,15 +71,15 @@ Hoặc từ terminal, rồi mở session mới:
 ```bash
 claude plugin marketplace update b3-skills
 claude plugin update bgh@b3-skills
-claude plugin update sl-mod@b3-skills
+claude plugin update status-line@b3-skills
 ```
 
-Máy đã cài `sl-mod` từ repo cũ `ducban/sl-mod` thì đổi một lần. Settings không mất, vì mod lưu theo tên `sl-mod` chứ không theo marketplace:
+Máy đang cài `sl-mod` (tên cũ, từ repo `ducban/sl-mod` hay từ b3-skills) thì đổi một lần. Mod tự chép settings cũ sang lần chạy đầu, chi tiết ở [README của status-line](mods/status-line/README.md#install):
 
 ```bash
-claude plugin uninstall sl-mod@sl-mod
-claude plugin marketplace remove sl-mod
-claude plugin install sl-mod@b3-skills
+claude plugin uninstall sl-mod@sl-mod        # hoặc sl-mod@b3-skills
+claude plugin marketplace remove sl-mod      # chỉ khi máy còn marketplace này
+claude plugin install status-line@b3-skills
 ```
 
 Máy đã cài `b3-write-human@b3-skills` hay `b3-figure-drawing@b3-skills` bằng plugin thì gỡ hai plugin đó, rồi cài lại bằng đường 2.

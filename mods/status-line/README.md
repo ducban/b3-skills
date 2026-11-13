@@ -1,9 +1,10 @@
-# sl-mod
+# status-line
 
 [Bản tiếng Việt](README.vi.md)
 
 A status line for Claude Code drawn in the band above the prompt, as a mod
-instead of a `statusLine` command.
+instead of a `statusLine` command. It was called sl-mod before 0.3.0; the
+command is still `/sl`.
 
 ## Why
 
@@ -185,7 +186,7 @@ prints the breakdown's figure too.
 Then on 2026-10-26 neither hook ran at all. On a machine with managed settings,
 or a Team or Enterprise account, Claude Code 2.1.310 seats its bundled
 `cc-plugin-sec-default@builtin` outermost, and that module does not pass
-`session.compact` or `classic.PostCompact` on: the engine logs *"sl-mod: its
+`session.compact` or `classic.PostCompact` on: the engine logs *"status-line: its
 session.compact hook was skipped. \"cc-plugin-sec-default\" runs first and sent
 the event on past it"* and the band never hears. A `/compact` took one session
 from 202k tokens to 15k and the gauge held 20% while `/context` said 6%. (The
@@ -227,9 +228,9 @@ one, then the main loop's falling to a third and the gauge taking the breakdown.
 
 ## State
 
-Version 0.2.1, installed from the b3-skills marketplace at scope **user**, so
+Version 0.3.0, installed from the b3-skills marketplace at scope **user**, so
 it draws in every session on this box. One command, `/sl`, with eight verbs.
-Thirty-nine tests pass under `claude plugin test`, `tsc -p .` is clean and
+Forty-one tests pass under `claude plugin test`, `tsc -p .` is clean and
 `claude plugin validate` passes.
 
 Every polled figure carries a note saying why it has nothing, and `/sl debug`
@@ -445,7 +446,7 @@ The cell says `cache cold`. With the gate on, that costs a keystroke:
 ```
  > fix the flaky test in band.test.ts                      ⏎
 
- sl-mod cold gate: the prompt cache has been cold for 23m, so this request
+ status-line cold gate: the prompt cache has been cold for 23m, so this request
  re-reads about 142.0k tokens at the uncached price before it answers. Enter
  again sends it as it is; /clear starts a fresh window if this is a new task.
  Esc empties the box; /sl restore brings the text back.
@@ -563,26 +564,32 @@ i.e. Claude Code's version, with no tick at all.)
 
 ## Install
 
-sl-mod lives in `mods/sl-mod/` of [ducban/b3-skills](https://github.com/ducban/b3-skills)
+status-line lives in `mods/status-line/` of [ducban/b3-skills](https://github.com/ducban/b3-skills)
 since 13/11/2026; the old `ducban/sl-mod` repo is archived. The b3-skills
 marketplace lists it. Two lines on any machine, and no path anywhere:
 
 ```bash
 claude plugin marketplace add ducban/b3-skills
-claude plugin install sl-mod@b3-skills
+claude plugin install status-line@b3-skills
 ```
 
 It lands at scope **user**, which is what makes it global on the box rather
 than tied to one project.
 
-A machine that installed it from the old repo switches once. Settings survive,
-because the mod stores them under the plugin name `sl-mod`, not the marketplace:
+A machine that has it under the old name switches once, from whichever of
+`sl-mod@sl-mod` or `sl-mod@b3-skills` it has:
 
 ```bash
-claude plugin uninstall sl-mod@sl-mod
-claude plugin marketplace remove sl-mod
-claude plugin install sl-mod@b3-skills
+claude plugin uninstall sl-mod@sl-mod        # or sl-mod@b3-skills
+claude plugin marketplace remove sl-mod      # only if that marketplace is there
+claude plugin install status-line@b3-skills
 ```
+
+The engine keeps a mod's settings in
+`~/.claude/plugins/store/<plugin>_<marketplace>-<hash>.json`, so a new name or a
+new marketplace starts empty. The first start as `status-line` copies the layout,
+guard, cold gate and the hide and reset switches from the newest `sl-mod_*` file
+there, once. `/sl debug` names the file under `settings carried from:`.
 
 ### Update
 
@@ -591,7 +598,7 @@ re-clones the marketplace, the second swaps the installed copy:
 
 ```bash
 claude plugin marketplace update b3-skills
-claude plugin update sl-mod@b3-skills
+claude plugin update status-line@b3-skills
 ```
 
 It prints the version it moved between, e.g. `updated from 0.1.2 to 0.1.3`, and
@@ -618,7 +625,7 @@ this working copy reaches a session only through the full loop:
 ```bash
 git push
 claude plugin marketplace update b3-skills
-claude plugin update sl-mod@b3-skills
+claude plugin update status-line@b3-skills
 # then /reload-plugins, or restart
 ```
 
@@ -626,7 +633,7 @@ While actually writing code, skip all of that and load the folder directly. One
 flag on one command, nothing tracked:
 
 ```bash
-claude --plugin-dir ~/Workspace/Projects/personal_works/b3-skills/mods/sl-mod
+claude --plugin-dir ~/Workspace/Projects/personal_works/b3-skills/mods/status-line
 ```
 
 The gate before a push:

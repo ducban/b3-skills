@@ -65,6 +65,9 @@ const stand = (
   // Every text the mod puts in the prompt box; the cold gate test checks it
   // stays empty, since the engine keeps a dropped draft itself.
   fills?: string[],
+  // What an `sl-mod_*` store file held before the rename, for the migration
+  // test; absent, the old store directory is empty.
+  legacy?: Readonly<Record<string, unknown>>,
 ) => {
   // mock answers clock, store and env from memory; `on` is how it registers.
   // Registered exactly once per test: a second mock.clock(on) fails the module
@@ -95,7 +98,21 @@ const stand = (
   // safe.
   on('fs.exists', ($, e) => ({ value: hasVersionFile && e.path.endsWith('plugin.json') }))
   // `fs.read` answers the text itself, not an object wrapping it.
-  on('fs.read', () => ({ value: '{"name":"sl-mod","version":"0.1.0"}' }))
+  on('fs.read', ($, e) => ({
+    value: legacy !== undefined && e.path.includes('/plugins/store/sl-mod_')
+      ? JSON.stringify(legacy)
+      : '{"name":"status-line","version":"0.1.0"}',
+  }))
+  // The engine's store directory, where the pre-0.3.0 `sl-mod_*` file lives.
+  if (legacy !== undefined) mock.env(on, { HOME: '/home/u' })
+  on('fs.list', ($, e) => ({
+    value: legacy !== undefined && e.path === '/home/u/.claude/plugins/store'
+      ? [
+          { name: 'bgh_b3-skills-b1a383cba34d.json', kind: 'file' as const, size: 9, mtimeMs: 9, isLink: false },
+          { name: 'sl-mod_sl-mod-61bf679392a2.json', kind: 'file' as const, size: 9, mtimeMs: 5, isLink: false },
+        ]
+      : [],
+  }))
   on('ui.open', ($, e) => {
     opens?.push({ id: e.id, focus: e.focus === true })
 
@@ -158,7 +175,7 @@ test('the band draws on every surface, not just the terminal', async ($, on) => 
   stand(on)
 
   for (const surface of SURFACES) {
-    const ui = await $.ui.mount({ plugin: 'sl-mod', surface, ...BAND })
+    const ui = await $.ui.mount({ plugin: 'status-line', surface, ...BAND })
 
     // The model cell is the one thing always present: there is a model even
     // before any usage figure has been measured.
@@ -173,13 +190,13 @@ test('effort is picked outright, so the band cannot report a level nobody set', 
 
   // No turn has run and no classic hook has fired, so nothing has reported an
   // effort and the model cell carries none.
-  const band = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+  const band = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...BAND })
   expect(await band.find({ type: 'Text', text: /\((L|M|H|X|✦)\)/ })).toBeUndefined()
 
   // The choices run session, low, medium, high, xhigh, max. Two presses from
   // `session` land on medium -- NOT on high, which is where a relative nudge
   // landed when it guessed `medium` for a baseline it had never been told.
-  const pane = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...SETTINGS })
+  const pane = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...SETTINGS })
   await pane.press({ key: 'item-effort' })
   await pane.press({ key: 'item-effort' })
 
@@ -203,7 +220,7 @@ test('a classic hook reports the effort turn.step never carried', async ($, on) 
 
   await $.classic.Stop({ effort: { level: 'medium' }, stop_hook_active: false })
 
-  const ui = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+  const ui = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...BAND })
   expect(await ui.find({ type: 'Text', text: /\(M\)/ })).toBeDefined()
 
   await ui.unmount()
@@ -213,7 +230,7 @@ test('the band stands aside for a survey', async ($, on) => {
   stand(on)
 
   const ui = await $.ui.mount({
-    plugin: 'sl-mod',
+    plugin: 'status-line',
     surface: 'terminal',
     component: 'AbovePrompt',
     props: { ...BAND.props, hasSurvey: true },
@@ -274,7 +291,7 @@ test('with no credential to spend, the live windows stay and nothing is invented
   endpoint(on, { auth: false })
 
   await $.classic.SessionStart({ source: 'startup' })
-  const ui = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+  const ui = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...BAND })
 
   expect(await ui.find({ type: 'Text', text: /36%/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: new RegExp(SCOPED) })).toBeUndefined()
@@ -287,7 +304,7 @@ test('a fresh reading adds the per-model week', async ($, on) => {
   endpoint(on, { body: reply() })
 
   await $.classic.SessionStart({ source: 'startup' })
-  const ui = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+  const ui = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...BAND })
 
   expect(await ui.find({ type: 'Text', text: new RegExp(`${SCOPED}.*26%`) })).toBeDefined()
   // The endpoint's own figure wins over the engine's for the week, so the row
@@ -306,7 +323,7 @@ test('the 5h cell counts down to its reset, and the reset key takes it off', asy
   endpoint(on, { auth: false })
 
   await $.classic.SessionStart({ source: 'startup' })
-  const band = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+  const band = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...BAND })
   // The reset is its own Text, in its own colour, so it is found on its own.
   expect(await band.find({ type: 'Text', text: /5h .* 8%/ })).toBeDefined()
   expect(await band.find({ type: 'Text', text: /\u{21BB}2h14m/u })).toBeDefined()
@@ -314,7 +331,7 @@ test('the 5h cell counts down to its reset, and the reset key takes it off', asy
   // the 9th at 23:00, in days and hours.
   expect(await band.find({ type: 'Text', text: /\u{21BB}3d15h/u })).toBeDefined()
 
-  const pane = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...SETTINGS })
+  const pane = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...SETTINGS })
   await pane.press({ key: 'item-reset' })
   expect(await band.find({ type: 'Text', text: /\u{21BB}/u })).toBeUndefined()
   expect(await band.find({ type: 'Text', text: /5h .* 8%/ })).toBeDefined()
@@ -330,7 +347,7 @@ test('a line the terminal has no room for drops its bars, and keeps its figures'
   await $.classic.SessionStart({ source: 'startup' })
   // Line two in full is some 50 cells; 40 is not enough.
   const narrow = await $.ui.mount({
-    plugin: 'sl-mod',
+    plugin: 'status-line',
     surface: 'terminal',
     ...BAND,
     props: { ...BAND.props, bodyColumns: 40 },
@@ -342,7 +359,7 @@ test('a line the terminal has no room for drops its bars, and keeps its figures'
   expect(await narrow.find({ type: 'Text', text: /sl-mod/ })).toBeDefined()
   await narrow.unmount()
 
-  const wide = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+  const wide = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...BAND })
   expect(await wide.find({ type: 'Text', text: /5h \u{25B0}/u })).toBeDefined()
   await wide.unmount()
 })
@@ -352,7 +369,7 @@ test('switching to a light theme redraws the band in the Day palette', async ($,
   endpoint(on, { auth: false })
 
   await $.classic.SessionStart({ source: 'startup' })
-  const ui = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+  const ui = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...BAND })
   // The harness answers `config.list` itself, with no theme row, so the band
   // starts on Moon: the first cell of a row takes the darkest step.
   const first = () => ui.find({ type: 'Text', text: /\u{25B0}/u })
@@ -378,7 +395,7 @@ test('a reset that has passed reads now, never a negative number', async ($, on)
   endpoint(on, { auth: false })
 
   await $.classic.SessionStart({ source: 'startup' })
-  const ui = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+  const ui = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...BAND })
   expect(await ui.find({ type: 'Text', text: /\u{21BB}now/u })).toBeDefined()
   // 09:31 is an odd minute, so the week shows the date instead. Spelled in
   // the machine's own zone, so only the shape is checked.
@@ -392,7 +409,7 @@ test('a 401 keeps the live windows rather than blanking the row', async ($, on) 
   endpoint(on, { status: 401, body: '{"error":"unauthorized"}' })
 
   await $.classic.SessionStart({ source: 'startup' })
-  const ui = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+  const ui = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...BAND })
 
   expect(await ui.find({ type: 'Text', text: /36%/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: new RegExp(SCOPED) })).toBeUndefined()
@@ -425,7 +442,7 @@ test('a reading another session fetched inside the poll period is adopted, not f
   expect(seen.calls()).toBe(0)
 
   // And it is drawn as this session's own would be: the per-model week is there.
-  const ui = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+  const ui = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...BAND })
   expect(await ui.find({ type: 'Text', text: new RegExp(`${SCOPED}.*26%`) })).toBeDefined()
   // The shared reading is in the old shape, with no reset, so the resets come
   // from the engine's own windows: 09:30 has passed at 12:00, and the week is
@@ -472,7 +489,7 @@ test('a 429 stops the polling instead of hammering a limited endpoint', async ($
   expect(seen.calls()).toBe(1)
 
   // And the band still shows the engine's live windows meanwhile.
-  const ui = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+  const ui = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...BAND })
   expect(await ui.find({ type: 'Text', text: /36%/ })).toBeDefined()
   await ui.unmount()
 })
@@ -483,7 +500,7 @@ test('the version cell reads the open project, not the engine', async ($, on) =>
   stand(on)
 
   await $.classic.SessionStart({ source: 'startup' })
-  const ui = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+  const ui = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...BAND })
 
   // 0.1.0 is the mod's own manifest, which is what this repo declares. Not
   // 2.1.289: claude-powerline's version segment shows the engine's version, and
@@ -497,11 +514,11 @@ test('switching an item off in the settings pane takes it off the band', async (
   stand(on)
 
   await $.classic.SessionStart({ source: 'startup' })
-  const band = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+  const band = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...BAND })
   expect(await band.find({ type: 'Text', text: /0\.1\.0/ })).toBeDefined()
 
   // version starts on line 1, so four presses walk it 2, 3, 4, off.
-  const pane = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...SETTINGS })
+  const pane = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...SETTINGS })
   for (let i = 0; i < 4; i += 1) await pane.press({ key: 'item-version' })
 
   expect(await band.find({ type: 'Text', text: /0\.1\.0/ })).toBeUndefined()
@@ -550,7 +567,7 @@ test('the cache cell says nothing while the cache is healthy', async ($, on) => 
     changed: ['cost'],
   })
 
-  const ui = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+  const ui = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...BAND })
   expect(await ui.find({ type: 'Text', text: /ch \d+%/ })).toBeUndefined()
 
   await ui.unmount()
@@ -589,7 +606,7 @@ test('the cache cell counts the hour down from the last request, and says cold o
     surface: 'terminal',
     isInteractive: true,
   })
-  const ui = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+  const ui = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...BAND })
   expect(await ui.find({ type: 'Text', text: /cache/ })).toBeUndefined()
 
   // The first request: a full hour, five segments.
@@ -623,7 +640,7 @@ test('the settings pane groups its rows, boxes the preview, and drops the last c
   stand(on)
   await $.classic.SessionStart({ source: 'startup' })
 
-  const wide = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...SETTINGS })
+  const wide = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...SETTINGS })
   for (const title of ['Identity', 'Budget', 'Tokens and money', 'Behaviour', 'as the band will draw it']) {
     expect(await wide.find({ type: 'Text', text: new RegExp(title) }), title).toBeDefined()
   }
@@ -634,7 +651,7 @@ test('the settings pane groups its rows, boxes the preview, and drops the last c
   await wide.unmount()
 
   // Under seventy columns the last column goes; the keys, names and states stay.
-  const narrow = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...SETTINGS, props: { ...SETTINGS.props, bodyColumns: 60 } })
+  const narrow = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...SETTINGS, props: { ...SETTINGS.props, bodyColumns: 60 } })
   expect(await narrow.find({ type: 'Text', text: /Identity/ })).toBeDefined()
   expect(await narrow.find({ type: 'Text', text: /nothing to show yet/ })).toBeUndefined()
   expect(await narrow.find({ type: 'Text', text: /1 runs, 2 refuses/ })).toBeUndefined()
@@ -681,7 +698,7 @@ test('the speed cell times the last request, and the turn cell prices the last t
     surface: 'terminal',
     isInteractive: true,
   })
-  const ui = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+  const ui = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...BAND })
   expect(await ui.find({ type: 'Text', text: /tok\/s/ })).toBeUndefined()
   expect(await ui.find({ type: 'Text', text: /turn/ })).toBeUndefined()
 
@@ -739,8 +756,8 @@ test('a spawned subagent is counted on the band while it runs, and listed in the
     surface: 'terminal',
     isInteractive: true,
   })
-  const band = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
-  const pane = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...AGENTS_PANE })
+  const band = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...BAND })
+  const pane = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...AGENTS_PANE })
   expect(await band.find({ type: 'Text', text: /agent/ })).toBeUndefined()
   expect(await pane.find({ type: 'Text', text: /none spawned yet/ })).toBeDefined()
 
@@ -817,7 +834,7 @@ test('with the cold gate on, the prompt after a cold hour is dropped once, and t
     surface: 'terminal',
     isInteractive: true,
   })
-  const ui = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+  const ui = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...BAND })
 
   // Before any request nothing is known about the cache, so nothing is asked.
   expect((await submit('hello')).drop).toBeUndefined()
@@ -948,7 +965,7 @@ test('with the guard on, rm -rf is held in the band, and refuse answers it with 
     surface: 'terminal',
     isInteractive: true,
   })
-  const ui = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+  const ui = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...BAND })
   expect(await ui.find({ type: 'Text', text: /Opus 5/ })).toBeDefined()
 
   const call = $.tool.call({ tool: 'Bash', command: 'rm -rf build' })
@@ -962,7 +979,7 @@ test('with the guard on, rm -rf is held in the band, and refuse answers it with 
   // Measured in the session's folder, the paths as arguments and not as source.
   const measure = processes.find(p => p.argv[0] === 'bash')
   expect(measure?.cwd).toBe('/home/bannd/Workspace/Projects/personal_works/sl-mod')
-  expect(measure?.argv.slice(-2)).toEqual(['sl-mod-guard', 'build'])
+  expect(measure?.argv.slice(-2)).toEqual(['status-line-guard', 'build'])
 
   await ui.press({ key: 'guard-refuse' })
   await clock.advance(250)
@@ -990,7 +1007,7 @@ test('run lets a held force push through, measured where a cd moved it; a harmle
     surface: 'terminal',
     isInteractive: true,
   })
-  const ui = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+  const ui = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...BAND })
 
   // Harmless: straight through, nothing measured, nothing drawn.
   const plain = await $.tool.call({ tool: 'Bash', command: 'ls -la && git status' })
@@ -1040,7 +1057,7 @@ test('a repo with no version does not take the git cell down with it', async ($,
   stand(on, undefined, undefined, false)
 
   await $.classic.SessionStart({ source: 'startup' })
-  const ui = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+  const ui = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...BAND })
 
   expect(await ui.find({ type: 'Text', text: /main/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /0\.1\.0/ })).toBeUndefined()
@@ -1086,7 +1103,7 @@ test('a compaction no hook was allowed to hear is caught by the clock', async ($
     surface: 'terminal',
     isInteractive: true,
   })
-  const ui = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+  const ui = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...BAND })
   expect(await ui.find({ type: 'Text', text: /ct .* 20%/ })).toBeDefined()
 
   // Steady state: the reading carries a percent, so the tick leaves the gauge
@@ -1170,7 +1187,7 @@ test('the first request after a compaction carries half the messages, and the ga
   }
 
   await $.classic.SessionStart({ source: 'startup' })
-  const ui = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+  const ui = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...BAND })
   expect(await ui.find({ type: 'Text', text: /ct .* 20%/ })).toBeDefined()
 
   // The transcript grows: nothing to do, and the breakdown is never asked for.
@@ -1230,7 +1247,7 @@ test('a compaction drops the context gauge instead of pinning the old number', a
   on('classic.PostCompact', () => ({}))
 
   await $.classic.SessionStart({ source: 'startup' })
-  const ui = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+  const ui = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...BAND })
   expect(await ui.find({ type: 'Text', text: /ct .* 66%/ })).toBeDefined()
 
   // The real shape: no `percent`, a breakdown that says 9.
@@ -1316,7 +1333,7 @@ test('a /sl view verb opens all three panes, so the engine draws them as tabs', 
 test('/sl on, off and effort act without a pane, and an unknown verb lists the verbs', async ($, on) => {
   const opens: { id: string; focus: boolean }[] = []
   stand(on, undefined, undefined, true, opens)
-  const ui = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+  const ui = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...BAND })
   const run = (args: string) =>
     $.command.run({
       command: 'sl',
@@ -1378,7 +1395,7 @@ const themed = (on: On, theme: string, mode: 'light' | 'dark' | null) => {
 }
 const firstCell = async ($: Parameters<TestBody>[0]) => {
   await $.classic.SessionStart({ source: 'startup' })
-  const ui = await $.ui.mount({ plugin: 'sl-mod', surface: 'terminal', ...BAND })
+  const ui = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...BAND })
   const colour = (await ui.find({ type: 'Text', text: /\u{25B0}/u }))?.props.backgroundColor
   await ui.unmount()
 
@@ -1413,4 +1430,32 @@ test('dark-ansi on a light desktop draws Day: the terminal, not the name, has th
 test('with no system appearance to read, an -ansi theme falls back to its name', async ($, on) => {
   themed(on, 'light-ansi', null)
   expect(await firstCell($)).toBe(DAY_FIRST)
+})
+
+const runSl = ($: Parameters<TestBody>[0], args: string) =>
+  $.command.run({ command: 'sl', args, origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 120 } })
+
+test('the first start as status-line carries the settings over from the sl-mod store, once', async ($, on) => {
+  const legacy = { guard: true, coldGate: true, layout: { git: 2 }, usage: { stale: true } }
+  stand(on, undefined, undefined, true, undefined, undefined, undefined, undefined, legacy)
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+
+  await $.session.start({ cwd: '/home/u/project', surface: 'terminal', isInteractive: true })
+
+  const debug = (await runSl($, 'debug')).text
+  expect(debug).toMatch(/settings carried from: sl-mod_sl-mod-61bf679392a2\.json/)
+  expect(debug).toMatch(/guard: on/)
+  expect(debug).toMatch(/cold gate: on/)
+  expect(debug).toMatch(/ git=2 /)
+})
+
+test('with no sl-mod store, the first start keeps the defaults', async ($, on) => {
+  stand(on)
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+
+  await $.session.start({ cwd: '/home/u/project', surface: 'terminal', isInteractive: true })
+
+  const debug = (await runSl($, 'debug')).text
+  expect(debug).toMatch(/settings carried from: none/)
+  expect(debug).toMatch(/guard: off/)
 })

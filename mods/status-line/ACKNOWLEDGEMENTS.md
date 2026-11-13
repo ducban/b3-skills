@@ -3,7 +3,8 @@
 Who this mod owes what. One line per debt: the thing, the person, the project,
 the licence. A line goes in with the commit that takes the thing, not before.
 Nothing here is copied code unless the line says so; the rest is an idea read in
-someone else's repo and written again here.
+someone else's repo and written again here. The versions in brackets before
+0.3.0 are under the mod's old name, sl-mod.
 
 ## Inspiration
 

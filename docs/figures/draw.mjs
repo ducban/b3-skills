@@ -19,7 +19,7 @@ render(out + 'fig1-three-channels.svg', compare({
       { title: 'Cập nhật sau mỗi lần push', sub: 'npx skills update' },
     ]},
     { head: 'PLUGIN CLAUDE CODE · mods/', tone: 'pale', items: [
-      { title: 'Chỉ Claude Code chạy mod', sub: 'bgh, sl-mod' },
+      { title: 'Chỉ Claude Code chạy mod', sub: 'bgh, status-line' },
       { title: 'Nằm ở ~/.claude/plugins/', sub: 'marketplace kéo về' },
       { title: 'Cập nhật ngay trong session', sub: '/plugin marketplace update, rồi /reload-plugins' },
     ]},
