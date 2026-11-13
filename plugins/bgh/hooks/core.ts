@@ -565,3 +565,48 @@ export const needsTemplate = (text: string | undefined): boolean =>
 
 // Where harper-cli comes from, per machine. Release builds need no Rust.
 export const HARPER_RELEASES = 'https://github.com/Automattic/harper/releases/latest'
+
+// ---------------------------------------------------------------------------
+// The setup guide the settings pane draws: what this machine still needs, and how.
+
+export type Platform = { os: 'linux' | 'darwin' | 'windows' | 'unknown'; distro: string; arch: string }
+
+// From `uname -s`, `uname -m` and /etc/os-release; Windows has none of them, so a failed uname
+// on a machine with Windows folders reads as Windows.
+export function platformOf(uname: string | undefined, machine: string | undefined, osRelease: string | undefined, windowsDirs: boolean): Platform {
+  const s = (uname ?? '').trim().toLowerCase()
+  const os: Platform['os'] = s === 'linux' ? 'linux' : s === 'darwin' ? 'darwin' : !s && windowsDirs ? 'windows' : 'unknown'
+  const distro = osRelease?.match(/^ID="?([\w.-]+)"?$/m)?.[1]?.toLowerCase() ?? ''
+  const m = (machine ?? '').trim().toLowerCase()
+  const arch = m === 'arm64' || m === 'aarch64' ? 'aarch64' : 'x86_64'
+  return { os, distro, arch }
+}
+
+const RELEASE_URL = 'https://github.com/Automattic/harper/releases/latest/download'
+
+// One command that puts harper-cli on PATH here: the package manager where there is one Harper
+// ships for, else the release build.
+export function harperInstall(p: Platform): string {
+  if (p.os === 'darwin') return 'brew install harper'
+  if (p.os === 'windows') return `download ${RELEASE_URL}/harper-cli-x86_64-pc-windows-msvc.zip, put harper-cli.exe on PATH`
+  if (p.distro === 'arch' || p.distro === 'cachyos' || p.distro === 'endeavouros' || p.distro === 'manjaro')
+    return 'sudo pacman -S harper'
+  return `mkdir -p ~/.local/bin && curl -sL ${RELEASE_URL}/harper-cli-${p.arch}-unknown-linux-gnu.tar.gz | tar xz -C ~/.local/bin`
+}
+
+// Which of the band's two chords ~/.claude/keybindings.json already binds.
+export function boundActions(keybindings: string | undefined, actions: string[]): string[] {
+  return actions.filter((a) => keybindings?.includes(`"${a}"`))
+}
+
+export type TraceResult = { at: number; ok: boolean; detail: string }
+
+// "ok 14:02 (2 min ago)" or "HTTP 401 14:02 (just now)": the pane's last-trace line.
+export function traceLine(last: TraceResult | undefined, now: number): string {
+  if (!last) return 'none sent yet: type an English sentence and wait for the LLM'
+  const d = new Date(last.at)
+  const hhmm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  const mins = Math.floor((now - last.at) / 60_000)
+  const ago = mins < 1 ? 'just now' : mins < 60 ? `${mins} min ago` : `${Math.floor(mins / 60)} h ago`
+  return `${last.ok ? 'ok' : last.detail} ${hhmm} (${ago})`
+}

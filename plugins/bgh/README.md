@@ -59,7 +59,16 @@ alt+a applies every fix on the band. alt+i ignores the first flagged word from t
 
 ## Settings
 
-`/bgh` opens the settings pane. Each row has a key:
+`/bgh` opens the settings pane. It starts with a **Setup** list for this machine, each line ✓ or ✗ with the fix under it:
+
+| Line | ✓ when | ✗ shows |
+|---|---|---|
+| harper | `harper-cli` runs | the install command for this OS and distro |
+| API keys | a route key is set | the keys file to fill in |
+| alt+a alt+i | both actions are in `keybindings.json` | the two lines to add (plus Option-as-Meta on macOS) |
+| langfuse | the last trace got through | when it was sent, the HTTP status, and what a 401 usually means |
+
+The settings below it each have a key:
 
 | Key | Setting |
 |---|---|

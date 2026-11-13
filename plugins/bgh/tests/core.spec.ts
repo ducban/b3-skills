@@ -9,7 +9,11 @@ import {
   codePointToUtf16,
   cycle,
   DEFAULT_PREFS,
+  boundActions,
   dirsFor,
+  harperInstall,
+  platformOf,
+  traceLine,
   ENV_TEMPLATE,
   needsTemplate,
   readPrefs,
@@ -267,5 +271,28 @@ describe('keys template', () => {
   test('the template itself parses to blanks, so it adds no route', () => {
     expect(chain(parseDotenv(ENV_TEMPLATE)).map((h) => h.route)).toEqual(['claude'])
     expect(needsTemplate(ENV_TEMPLATE)).toBe(false)
+  })
+})
+
+describe('setup guide', () => {
+  test('the install command fits the machine', () => {
+    const arch = platformOf('Linux\n', 'x86_64', 'NAME="CachyOS"\nID=cachyos\n', false)
+    expect(harperInstall(arch)).toBe('sudo pacman -S harper')
+    expect(harperInstall(platformOf('Darwin', 'arm64', undefined, false))).toBe('brew install harper')
+    const vps = platformOf('Linux', 'aarch64', 'ID=ubuntu\n', false)
+    expect(harperInstall(vps)).toContain('harper-cli-aarch64-unknown-linux-gnu.tar.gz')
+    expect(platformOf(undefined, undefined, undefined, true).os).toBe('windows')
+    expect(harperInstall(platformOf(undefined, undefined, undefined, true))).toContain('windows-msvc.zip')
+  })
+  test('keybindings: which of the two chords are bound', () => {
+    const kb = '{"bindings":[{"context":"Global","bindings":{"alt+a":"app:cycleDiffBase"}}]}'
+    expect(boundActions(kb, ['app:cycleDiffBase', 'app:toggleDiffNoiseFilter'])).toEqual(['app:cycleDiffBase'])
+    expect(boundActions(undefined, ['x'])).toEqual([])
+  })
+  test('last trace line', () => {
+    const at = new Date(2026, 10, 13, 14, 2).getTime()
+    expect(traceLine(undefined, at)).toContain('none sent yet')
+    expect(traceLine({ at, ok: true, detail: 'ok' }, at + 10_000)).toBe('ok 14:02 (just now)')
+    expect(traceLine({ at, ok: false, detail: 'HTTP 401' }, at + 5 * 60_000)).toBe('HTTP 401 14:02 (5 min ago)')
   })
 })

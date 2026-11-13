@@ -6,7 +6,13 @@ import {
   applyIssues,
   availableRoutes,
   cycle,
+  boundActions,
   dirsFor,
+  harperInstall,
+  platformOf,
+  traceLine,
+  type Platform,
+  type TraceResult,
   ENV_TEMPLATE,
   HARPER_RELEASES,
   needsTemplate,
@@ -49,7 +55,7 @@ import {
   type Usage,
 } from './core'
 
-const RELEASE = '0.5.0'
+const RELEASE = '0.6.0'
 const HARPER_DELAY_MS = 300
 const HOP_TIMEOUT_MS = 6000
 const CACHE_KEY = 'llm-cache-v1'
@@ -101,6 +107,9 @@ export const register: Register = (on) => {
   let langfuse: LangfuseKeys | undefined
   let host = 'unknown'
   let harperOk = false
+  let platform: Platform = { os: 'unknown', distro: '', arch: 'x86_64' }
+  let keybindingsPath = ''
+  let lastTrace: TraceResult | undefined
   let harperProbedAt = 0
   let prefs: Prefs = readPrefs(undefined)
   let draftPath = ''
@@ -221,6 +230,26 @@ export const register: Register = (on) => {
     } catch {
       harperOk = false
     }
+    // What the setup guide needs to name the right install command and keybindings file.
+    const run = async (argv: string[]) => {
+      try {
+        return (await $.process.run(argv, { timeoutMs: 2000 })).stdout
+      } catch {
+        return undefined
+      }
+    }
+    let osRelease: string | undefined
+    try {
+      osRelease = String(await $.fs.read('/etc/os-release'))
+    } catch {
+      // macOS and Windows have none
+    }
+    platform = platformOf(await run(['uname', '-s']), await run(['uname', '-m']), osRelease, dirs.sep === '\\')
+    const claudeDir =
+      (await $.env.get('CLAUDE_CONFIG_DIR')) ||
+      `${processEnv.HOME || processEnv.USERPROFILE || '.'}${dirs.sep}.claude`
+    keybindingsPath = `${claudeDir}${dirs.sep}keybindings.json`
+
     // The machine's name tags each Langfuse trace. Windows sets COMPUTERNAME; elsewhere the
     // shell keeps HOSTNAME to itself, so ask uname, then hostname.
     host = processEnv.COMPUTERNAME || processEnv.HOSTNAME || host
@@ -347,6 +376,33 @@ export const register: Register = (on) => {
       </Box>
     )
 
+    let keybindings: string | undefined
+    try {
+      keybindings = String(await $.fs.read(keybindingsPath))
+    } catch {
+      // no file yet
+    }
+    const chords = [APPLY_ACTION, IGNORE_ACTION]
+    const bound = boundActions(keybindings, chords)
+    const keyed = availableRoutes(env).filter((r) => r !== 'claude')
+    const now = Date.now()
+    const step = (done: boolean, name: string, state: string, how?: string) => (
+      <Box key={`setup-${name}`} flexDirection="column">
+        <Box flexDirection="row" columnGap={1}>
+          <Text color={done ? 'success' : 'warning'}>{done ? ' ✓' : ' ✗'}</Text>
+          <Text>{name.padEnd(12)}</Text>
+          <Text dimColor={done} wrap="truncate-end">
+            {state}
+          </Text>
+        </Box>
+        {!done && how ? (
+          <Text dimColor wrap="wrap">
+            {`    ${how}`}
+          </Text>
+        ) : null}
+      </Box>
+    )
+
     const words = [...ignore].sort().slice(0, 9)
     const llmLine = hops.length ? hops.map((h) => `${h.route} ${modelName(h.model)}`).join(' → ') : 'off'
 
@@ -355,6 +411,41 @@ export const register: Register = (on) => {
         <Text dimColor wrap="wrap">
           A key changes its setting, kept across sessions. API keys stay in the .env file.
         </Text>
+        <Text bold>Setup</Text>
+        {step(harperOk, 'harper', harperOk ? 'found' : 'missing: the LLM pass runs alone', `${harperInstall(platform)}   then press h`)}
+        {step(
+          keyed.length > 0,
+          'API keys',
+          keyed.length ? `${keyed.join(', ')} · ${envFile}` : 'none: Haiku on your Claude login runs meanwhile',
+          `fill in ${envFile}, then press r`,
+        )}
+        {step(
+          bound.length === chords.length,
+          'alt+a alt+i',
+          bound.length === chords.length ? `bound in ${keybindingsPath}` : 'not bound: the band shows fixes, the keys do nothing',
+          `add to the Global block of ${keybindingsPath}: "alt+a": "${APPLY_ACTION}", "alt+i": "${IGNORE_ACTION}"`,
+        )}
+        {platform.os === 'darwin' ? (
+          <Text dimColor wrap="wrap">
+            {'    macOS: turn on "Use Option as Meta key" in the terminal, or Option types å'}
+          </Text>
+        ) : null}
+        {step(
+          !!langfuse && !!lastTrace?.ok,
+          'langfuse',
+          !langfuseKeys(env)
+            ? 'no keys (optional)'
+            : !prefs.langfuse
+              ? 'switched off (t)'
+              : `last trace ${traceLine(lastTrace, now)}`,
+          !langfuseKeys(env)
+            ? `optional: LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY in ${envFile}, then press r`
+            : lastTrace && !lastTrace.ok
+              ? lastTrace.detail === 'HTTP 401'
+                ? 'wrong keys, or the wrong region: US projects need LANGFUSE_BASE_URL=https://us.cloud.langfuse.com'
+                : 'check LANGFUSE_BASE_URL and the network'
+              : undefined,
+        )}
         <Text bold>Checking</Text>
         {row('g', 'grammar', onOff(prefs.enabled), prefs.enabled, 'check the prompt as you type', () => {
           setPrefs({ enabled: !prefs.enabled })
@@ -651,11 +742,15 @@ export const register: Register = (on) => {
         const problem = res.ok ? '' : `Langfuse refused the trace (HTTP ${res.status})`
         if (problem && problem !== lastLangfuseError) $.ui.toast(problem)
         lastLangfuseError = problem
+        lastTrace = { at: Date.now(), ok: res.ok, detail: res.ok ? 'ok' : `HTTP ${res.status}` }
       } catch (err) {
         const problem = `Langfuse unreachable: ${String(err).slice(0, 60)}`
         if (problem !== lastLangfuseError) $.ui.toast(problem)
         lastLangfuseError = problem
+        lastTrace = { at: Date.now(), ok: false, detail: 'unreachable' }
       }
+      // The settings pane shows this; a write to rev draws it again if it's open.
+      void update($, revAtom, (n) => n + 1)
     }
 
     // Stage 2: the LLM chain, on every sentence the cache hasn't seen. Harper's fixes were the
