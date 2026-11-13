@@ -6,7 +6,7 @@ Hai skill Ban tự viết cho Claude Code và các agent đọc được chuẩn
 |---|---|
 | `b3-write-human` | Chặn văn AI ngay lúc viết bản nháp đầu. Cấm khoảng 60 từ business, ép nhịp câu lệch, giữ nguyên lệnh và placeholder, bắt tự soi trước khi xuất. Tiếng Việt có năm tệp tra riêng. Bổ trợ cho [`humanizer`](https://github.com/blader/humanizer), vốn chỉ dọn text đã có. |
 | `b3-figure-drawing` | Tám khuôn vẽ hình cho tài liệu bằng `figlib.mjs`: so sánh, quy trình, dãy số, kiến trúc nhiều tầng, đồ thị hai biến, chênh lệch lời khai với số kiểm chứng, mốc thời gian, ma trận kiểu SWOT. SVG thang xám, trục thật, tự đổi theo nền sáng tối. Chữ trong hình theo luật của `b3-write-human`. |
-| `b3-grammar-helper` | Mod, không phải skill: gạch chân lỗi ngữ pháp ngay trong ô prompt khi gõ tiếng Anh, gợi ý hiện mờ ngay sau chữ sai. Harper chạy offline trước, rồi chuỗi OpenRouter → OpenAI → Fireworks → Haiku sửa cách dùng từ. `/b3-grammar-helper` mở pane settings. Chạy trên Linux, macOS, Windows; khác biệt từng máy ở [README riêng](plugins/b3-grammar-helper/README.md). |
+| `bgh` (B3 Grammar Helper) | Mod, không phải skill: gạch chân lỗi ngữ pháp ngay trong ô prompt khi gõ tiếng Anh, gợi ý hiện mờ ngay sau chữ sai. Harper chạy offline trước, rồi chuỗi OpenRouter → OpenAI → Fireworks → Haiku sửa cách dùng từ. `/bgh` mở pane settings. Chạy trên Linux, macOS, Windows; khác biệt từng máy ở [README riêng](plugins/bgh/README.md). |
 
 Hai skill này đứng ở hai chặng đầu của một bài viết. `humanizer` và Vale đứng sau.
 
@@ -36,11 +36,11 @@ Skill đi từ kho tới máy bằng một trong ba đường. Chọn một, đ�
 
 Máy chỉ chạy Claude Code thì cài plugin. Máy còn chạy Codex, pi, Crush thì dùng `skills` CLI và **không cài plugin**: CLI có `claude-code` trong danh sách agent nên tự link vào `~/.claude/skills/`, cài thêm plugin là Claude nạp hai bản cùng tên và không chắc bản nào thắng. Mac vấp đúng chỗ này từ 21/08 tới 29/10/2026, bản plugin kẹt ở 1.1.0 trong khi bản link đã lên 1.5.0. Đã gỡ plugin, giữ CLI.
 
-Ngoại lệ là `b3-grammar-helper`. Nó là mod (hooks module), không phải skill, nên `skills` CLI không cài được và không có bản link nào để trùng. Máy dùng CLI vẫn cài riêng mod này bằng plugin, và chỉ mod này:
+Ngoại lệ là `bgh` (B3 Grammar Helper). Nó là mod (hooks module), không phải skill, nên `skills` CLI không cài được và không có bản link nào để trùng. Máy dùng CLI vẫn cài riêng mod này bằng plugin, và chỉ mod này:
 
 ```
 /plugin marketplace add ducban/b3-skills
-/plugin install b3-grammar-helper@b3-skills
+/plugin install bgh@b3-skills
 ```
 
 ### Đường 1: plugin cho Claude Code
@@ -49,7 +49,7 @@ Ngoại lệ là `b3-grammar-helper`. Nó là mod (hooks module), không phải 
 /plugin marketplace add ducban/b3-skills
 /plugin install b3-write-human@b3-skills
 /plugin install b3-figure-drawing@b3-skills
-/plugin install b3-grammar-helper@b3-skills
+/plugin install bgh@b3-skills
 ```
 
 Sau đó `/plugin` để bật tắt. Skill nạp theo description, không phải slash command.
@@ -66,7 +66,7 @@ Hoặc từ terminal, nhớ mở session mới sau đó thì bản mới mới �
 claude plugin marketplace update b3-skills
 claude plugin update b3-write-human@b3-skills
 claude plugin update b3-figure-drawing@b3-skills
-claude plugin update b3-grammar-helper@b3-skills
+claude plugin update bgh@b3-skills
 ```
 
 ### Đường 2: skills CLI cho máy chạy nhiều agent

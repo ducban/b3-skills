@@ -1,4 +1,4 @@
-// Pure logic of b3-grammar-helper: nothing here touches the engine, so `bun test` covers it.
+// Pure logic of bgh (B3 Grammar Helper): nothing here touches the engine, so `bun test` covers it.
 
 export type Env = Record<string, string | undefined>
 
@@ -258,12 +258,12 @@ export function dirsFor(env: Env): { config: string; cache: string; sep: string 
     const home = read(env, 'USERPROFILE') ?? 'C:\\'
     const config = read(env, 'APPDATA') ?? `${home}\\AppData\\Roaming`
     const cache = read(env, 'LOCALAPPDATA') ?? `${home}\\AppData\\Local`
-    return { config: `${config}\\b3-grammar-helper`, cache: `${cache}\\b3-grammar-helper`, sep: '\\' }
+    return { config: `${config}\\bgh`, cache: `${cache}\\bgh`, sep: '\\' }
   }
   const home = read(env, 'HOME') ?? '.'
   const config = read(env, 'XDG_CONFIG_HOME') ?? `${home}/.config`
   const cache = read(env, 'XDG_CACHE_HOME') ?? `${home}/.cache`
-  return { config: `${config}/b3-grammar-helper`, cache: `${cache}/b3-grammar-helper`, sep: '/' }
+  return { config: `${config}/bgh`, cache: `${cache}/bgh`, sep: '/' }
 }
 
 export const SYSTEM_PROMPT = [
@@ -307,7 +307,7 @@ export function chatRequest(hop: Hop & { route: ApiRoute }, user: string): HttpR
     'Content-Type': 'application/json',
     Authorization: `Bearer ${hop.apiKey}`,
   }
-  if (hop.route === 'openrouter') headers['X-Title'] = 'b3-grammar-helper'
+  if (hop.route === 'openrouter') headers['X-Title'] = 'B3 Grammar Helper'
   return { url: ENDPOINT[hop.route], headers, body: JSON.stringify(body) }
 }
 
@@ -520,13 +520,13 @@ export function otlpTrace(traceId: string, root: SpanRecord, children: SpanRecor
       {
         resource: {
           attributes: [
-            { key: 'service.name', value: { stringValue: 'b3-grammar-helper' } },
+            { key: 'service.name', value: { stringValue: 'bgh' } },
             { key: 'service.version', value: { stringValue: release } },
           ],
         },
         scopeSpans: [
           {
-            scope: { name: 'b3-grammar-helper', version: release },
+            scope: { name: 'bgh', version: release },
             spans: [span(root, rootId), ...children.map((c) => span(c, hexId(8), rootId))],
           },
         ],
@@ -538,7 +538,7 @@ export function otlpTrace(traceId: string, root: SpanRecord, children: SpanRecor
 // ---------------------------------------------------------------------------
 // The keys file a new machine starts with: every name, every value blank.
 
-export const ENV_TEMPLATE = `# b3-grammar-helper keys. Fill in what you have, then run: /b3-grammar-helper reload
+export const ENV_TEMPLATE = `# B3 Grammar Helper (bgh) keys. Fill in what you have, then run: /bgh reload
 # Variables already in the environment win over this file. Leave a line blank to skip it.
 
 # LLM routes, tried in this order when set. With none, Haiku runs through your Claude login.
@@ -547,7 +547,7 @@ OPENAI_API_KEY=
 FIREWORKS_API_KEY=
 
 # Optional: put one route first (openrouter | openai | fireworks | claude) and pick its model.
-# The settings pane (/b3-grammar-helper, keys f and m) does the same and wins over these.
+# The settings pane (/bgh, keys f and m) does the same and wins over these.
 #B3_GRAMMAR_PROVIDER=
 #B3_GRAMMAR_MODEL=
 # Harper only, no LLM:

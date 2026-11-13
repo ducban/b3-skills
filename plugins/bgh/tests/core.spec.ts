@@ -241,17 +241,17 @@ describe('settings pane prefs', () => {
 describe('folders per OS', () => {
   test('Linux and macOS: XDG first, then ~/.config and ~/.cache', () => {
     expect(dirsFor({ HOME: '/Users/b' })).toEqual({
-      config: '/Users/b/.config/b3-grammar-helper',
-      cache: '/Users/b/.cache/b3-grammar-helper',
+      config: '/Users/b/.config/bgh',
+      cache: '/Users/b/.cache/bgh',
       sep: '/',
     })
-    expect(dirsFor({ HOME: '/home/b', XDG_CONFIG_HOME: '/x' }).config).toBe('/x/b3-grammar-helper')
+    expect(dirsFor({ HOME: '/home/b', XDG_CONFIG_HOME: '/x' }).config).toBe('/x/bgh')
   })
   test('Windows: APPDATA and LOCALAPPDATA', () => {
     const d = dirsFor({ USERPROFILE: 'C:\\Users\\b', APPDATA: 'C:\\Users\\b\\AppData\\Roaming', LOCALAPPDATA: 'C:\\L' })
     expect(d).toEqual({
-      config: 'C:\\Users\\b\\AppData\\Roaming\\b3-grammar-helper',
-      cache: 'C:\\L\\b3-grammar-helper',
+      config: 'C:\\Users\\b\\AppData\\Roaming\\bgh',
+      cache: 'C:\\L\\bgh',
       sep: '\\',
     })
   })

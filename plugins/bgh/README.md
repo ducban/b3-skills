@@ -1,4 +1,4 @@
-# b3-grammar-helper
+# B3 Grammar Helper (`bgh`)
 
 Grammar ghost text in the Claude Code prompt box. A wrong word gets a yellow underline and the fix shows dim right after it. A band above the prompt lists every fix and who suggested it.
 
@@ -13,16 +13,25 @@ every check ─► Langfuse trace (OTLP) · alt+a = score accepted 1 · send unf
 
 ```
 /plugin marketplace add ducban/b3-skills
-/plugin install b3-grammar-helper@b3-skills
+/plugin install bgh@b3-skills
 ```
+
+Coming from `b3-grammar-helper` (0.4.x and earlier)? The mod's short name is now `bgh`, so the command is `/bgh`. Swap the plugin once:
+
+```
+/plugin uninstall b3-grammar-helper@b3-skills
+/plugin install bgh@b3-skills
+```
+
+Your keys file moves to the new folder by itself on first start. Settings, the ignore list and the cache live in the plugin's own store, which goes by the plugin's name, so they start fresh.
 
 The same install works on Linux, macOS and Windows. The mod is plain JavaScript run by Claude Code; only the pieces below differ per machine.
 
 | | Arch Linux | macOS | Windows |
 |---|---|---|---|
 | Harper | `sudo pacman -S harper` | `brew install harper` | `harper-cli-x86_64-pc-windows-msvc.zip` from the releases page, `harper-cli.exe` on PATH |
-| Keys file | `~/.config/b3-grammar-helper/.env` | `~/.config/b3-grammar-helper/.env` | `%APPDATA%\b3-grammar-helper\.env` |
-| Cache | `~/.cache/b3-grammar-helper/` | `~/.cache/b3-grammar-helper/` | `%LOCALAPPDATA%\b3-grammar-helper\` |
+| Keys file | `~/.config/bgh/.env` | `~/.config/bgh/.env` | `%APPDATA%\bgh\.env` |
+| Cache | `~/.cache/bgh/` | `~/.cache/bgh/` | `%LOCALAPPDATA%\bgh\` |
 | alt+a / alt+i | works | turn on "Use Option as Meta key" in the terminal, or Option types `å` | works |
 
 Any other Linux (a VPS, Ubuntu, Debian) takes the release build. No Rust needed:
@@ -50,7 +59,7 @@ alt+a applies every fix on the band. alt+i ignores the first flagged word from t
 
 ## Settings
 
-`/b3-grammar-helper` opens the settings pane. Each row has a key:
+`/bgh` opens the settings pane. Each row has a key:
 
 | Key | Setting |
 |---|---|
@@ -67,11 +76,11 @@ alt+a applies every fix on the band. alt+i ignores the first flagged word from t
 
 Esc closes the pane. Choices are saved in the mod's own store and carry over to the next session; each machine keeps its own.
 
-Text commands still work: `/b3-grammar-helper status | on | off | reload | ignore <word> | unignore <word> | ignored`.
+Text commands still work: `/bgh status | on | off | reload | ignore <word> | unignore <word> | ignored`.
 
 ## Keys
 
-API keys never go in the pane. Put them in the environment or in the keys file from the table above. On first start the mod writes that file with every key name and blank values, owner-only on Linux and macOS; fill in what you have and run `/b3-grammar-helper reload`. It never writes over a file that already holds a value. Point `B3_GRAMMAR_ENV_FILE` at b3-dict's `.env` to share it. The environment wins over the file.
+API keys never go in the pane. Put them in the environment or in the keys file from the table above. On first start the mod writes that file with every key name and blank values, owner-only on Linux and macOS; fill in what you have and run `/bgh reload`. It never writes over a file that already holds a value. Point `B3_GRAMMAR_ENV_FILE` at b3-dict's `.env` to share it. The environment wins over the file.
 
 | Variable | Does |
 |---|---|

@@ -49,13 +49,13 @@ import {
   type Usage,
 } from './core'
 
-const RELEASE = '0.4.1'
+const RELEASE = '0.5.0'
 const HARPER_DELAY_MS = 300
 const HOP_TIMEOUT_MS = 6000
 const CACHE_KEY = 'llm-cache-v1'
 const IGNORE_KEY = 'ignore-v1'
 const PREFS_KEY = 'prefs-v1'
-const PANE = 'b3-grammar-settings'
+const PANE = 'bgh-settings'
 const CACHE_MAX = 400
 
 // Engine keybinding actions that have no handler while the chat is up. The band's Buttons take
@@ -64,9 +64,9 @@ const APPLY_ACTION = 'app:cycleDiffBase'
 const IGNORE_ACTION = 'app:toggleDiffNoiseFilter'
 
 // The shape tag declines what 0.2.0 stored (fixes without `by`), which outlives a reload.
-const fixesAtom = atom({ plugin: 'b3-grammar-helper', key: 'fixes' } as const, [] as Fix[], { shape: 'fixes-2' })
+const fixesAtom = atom({ plugin: 'bgh', key: 'fixes' } as const, [] as Fix[], { shape: 'fixes-2' })
 // Bumped on every settings change, so the settings pane (which reads it) draws again.
-const revAtom = atom({ plugin: 'b3-grammar-helper', key: 'rev' } as const, 0)
+const revAtom = atom({ plugin: 'bgh', key: 'rev' } as const, 0)
 
 // What one check of one draft found, and what it cost.
 type Check = {
@@ -130,11 +130,11 @@ export const register: Register = (on) => {
 
   const modelName = (m: string) => m.replace(/^accounts\/fireworks\/models\//, '')
 
-  // The settings view: one fact per line, for `/b3-grammar-helper` and `settings`.
+  // The settings view: one fact per line, for `/bgh` and `settings`.
   function settings(): string {
     const llm = hops.map((h) => `${h.route} ${modelName(h.model)}`)
     return [
-      `b3-grammar-helper ${RELEASE}  ${prefs.enabled ? 'on' : 'OFF'}`,
+      `B3 Grammar Helper (bgh) ${RELEASE}  ${prefs.enabled ? 'on' : 'OFF'}`,
       `harper    ${harperOk ? 'on' : `missing: install harper-cli from ${HARPER_RELEASES}`}`,
       `llm       ${llm.length ? llm.join(' → ') : 'off'}`,
       `langfuse  ${langfuse ? `on (${langfuse.baseUrl})` : langfuseKeys(env) ? 'off (switched off)' : 'off (no keys)'}`,
@@ -182,6 +182,22 @@ export const register: Register = (on) => {
     } catch {
       // No file: the process environment alone.
     }
+    // Until 0.5.0 the mod was b3-grammar-helper and kept its keys under that folder name. A
+    // machine upgrading carries them over once; the old file stays where it was.
+    if (needsTemplate(fileText) && !processEnv.B3_GRAMMAR_ENV_FILE) {
+      const legacy = `${dirs.config.replace(/bgh$/, 'b3-grammar-helper')}${dirs.sep}.env`
+      try {
+        const old = String(await $.fs.read(legacy))
+        if (!needsTemplate(old)) {
+          await $.fs.write(envFile, old)
+          await $.process.run(['chmod', '600', envFile], { timeoutMs: 2000 }).catch(() => undefined)
+          fileText = old
+          $.ui.toast(`Grammar: keys moved from ${legacy} to ${envFile}`)
+        }
+      } catch {
+        // no old file either
+      }
+    }
     // A new machine gets the template, so there's a file with every key name to fill in. Never
     // over a file that already holds a value.
     if (needsTemplate(fileText)) {
@@ -222,7 +238,7 @@ export const register: Register = (on) => {
     ignore = new Set(Array.isArray(words) ? words : [])
 
     await $.command.register({
-      name: 'b3-grammar-helper',
+      name: 'bgh',
       description: 'Grammar ghost text. No args opens the settings pane. Args: status | on | off | reload | ignore <word> | unignore <word>',
     })
     // Clears the line earlier versions pinned under the prompt.
@@ -243,7 +259,7 @@ export const register: Register = (on) => {
     check = undefined
   }
 
-  on('command.run', { command: 'b3-grammar-helper' }, async ($, e) => {
+  on('command.run', { command: 'bgh' }, async ($, e) => {
     const [verb = '', ...rest] = e.args.trim().split(/\s+/)
     const word = normalizeWord(rest.join(' '))
     const save = async () => {
@@ -271,13 +287,13 @@ export const register: Register = (on) => {
         return { text: `${lastEnvFile === undefined ? `No file at ${envFile}` : 'Reloaded.'}\n${settings()}` }
       }
       case 'ignore':
-        if (!word) return { text: 'Usage: /b3-grammar-helper ignore <word>' }
+        if (!word) return { text: 'Usage: /bgh ignore <word>' }
         ignore.add(word)
         await $.store.set(IGNORE_KEY, [...ignore])
         await update($, revAtom, (n) => n + 1)
         return { text: `Ignoring “${word}”. ${ignore.size} word(s) on the list.` }
       case 'unignore':
-        if (!word) return { text: 'Usage: /b3-grammar-helper unignore <word>' }
+        if (!word) return { text: 'Usage: /bgh unignore <word>' }
         ignore.delete(word)
         await $.store.set(IGNORE_KEY, [...ignore])
         await update($, revAtom, (n) => n + 1)
@@ -286,7 +302,7 @@ export const register: Register = (on) => {
         return { text: ignore.size ? [...ignore].sort().join(', ') : 'Nothing ignored yet.' }
       case '':
       case 'settings': {
-        const opened = await $.ui.open({ id: PANE, title: 'grammar settings', focus: true, closeOnEscape: true })
+        const opened = await $.ui.open({ id: PANE, title: 'B3 Grammar Helper', focus: true, closeOnEscape: true })
         // A surface that can't seat the pane gets the text view instead.
         if (opened.isPlaced) return { text: 'Grammar settings open. Esc closes them.' }
         break

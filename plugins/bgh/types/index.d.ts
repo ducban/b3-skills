@@ -4,6 +4,6 @@ export type Fix = { from: string; to: string; by: string }
 declare module 'claude-code' {
   interface PluginState {
     // rev: bumped on each settings change so the settings pane draws again.
-    'b3-grammar-helper': { fixes: Shaped<Fix[]>; rev: number }
+    'bgh': { fixes: Shaped<Fix[]>; rev: number }
   }
 }
