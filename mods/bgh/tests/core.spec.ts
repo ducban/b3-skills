@@ -33,6 +33,12 @@ import {
   shortModel,
   shouldCheck,
   sourcesOf,
+  addTally,
+  liveModel,
+  newerSibling,
+  parseModelList,
+  readTally,
+  tallyLine,
   type Issue,
 } from '../hooks/core'
 
@@ -316,5 +322,52 @@ describe('setup guide for every OS, and config mistakes', () => {
   test('a 401 names the URL in use, not a guess', () => {
     expect(langfuse401('https://cloud.langfuse.com')).toContain("don't belong to https://cloud.langfuse.com")
     expect(langfuse401('https://cloud.langfuse.com')).toContain('jp.cloud.langfuse.com')
+  })
+})
+
+describe('model lists', () => {
+  const openrouter = JSON.stringify({
+    data: [
+      { id: 'qwen/qwen3-235b-a22b-2507', created: 100, pricing: { prompt: '0.0000001', completion: '0.0000004' } },
+      { id: 'qwen/qwen3-next-80b-a3b', created: 200, pricing: { prompt: '0.0000001', completion: '0.0000003' } },
+      { id: 'qwen/qwen3-coder-next', created: 300, pricing: { prompt: '0.00000005', completion: '0.0000001' } },
+      { id: 'qwen/qwen3-max', created: 250, pricing: { prompt: '0.000001', completion: '0.000004' } },
+      { id: 'qwen/qwen3-next-80b-a3b:free', created: 260, pricing: { prompt: '0', completion: '0' } },
+      { id: 'openai/gpt-5-mini', created: 90 },
+      { nope: true },
+    ],
+  })
+  test('parses ids, dates and prices, and skips junk', () => {
+    const list = parseModelList(openrouter)!
+    expect(list.map((m) => m.id)).toContain('openai/gpt-5-mini')
+    expect(list).toHaveLength(6)
+    expect(list[0]!.price).toBeCloseTo(0.0000005)
+    expect(parseModelList('<html>')).toBeUndefined()
+    expect(parseModelList('{"data":[]}')).toBeUndefined()
+  })
+  test('a listed model stays; a dropped one gives way to the first listed pick', () => {
+    const list = parseModelList(openrouter)
+    expect(liveModel('openrouter', 'qwen/qwen3-235b-a22b-2507', list)).toEqual({ model: 'qwen/qwen3-235b-a22b-2507', gone: false })
+    expect(liveModel('openrouter', 'mistral/old-one', list)).toEqual({ model: 'qwen/qwen3-235b-a22b-2507', gone: true })
+    expect(liveModel('openrouter', 'mistral/old-one', undefined)).toEqual({ model: 'mistral/old-one', gone: false })
+    expect(liveModel('openai', 'gpt-5-mini', [{ id: 'gpt-9' }])).toEqual({ model: 'gpt-5-mini', gone: true })
+  })
+  test('a newer sibling is the same family and kind, no dearer, never a :variant', () => {
+    const list = parseModelList(openrouter)
+    expect(newerSibling('qwen/qwen3-235b-a22b-2507', list)).toBe('qwen/qwen3-next-80b-a3b')
+    expect(newerSibling('openai/gpt-5-mini', list)).toBeUndefined()
+    expect(newerSibling('qwen/qwen3-next-80b-a3b', list)).toBeUndefined()
+  })
+})
+
+describe('tally', () => {
+  test('counts per model and prints busiest first', () => {
+    let t = readTally({ 'claude haiku': { yes: 1, no: 1 }, junk: 3 })
+    expect(Object.keys(t)).toEqual(['claude haiku'])
+    t = addTally(t, 'openrouter qwen3-235b-a22b-2507', true)
+    t = addTally(t, 'openrouter qwen3-235b-a22b-2507', true)
+    t = addTally(t, 'openrouter qwen3-235b-a22b-2507', false)
+    expect(tallyLine(t)).toBe('qwen3-235b-a22b-2507 67% (3) · haiku 50% (2)')
+    expect(tallyLine({})).toBe('nothing yet')
   })
 })

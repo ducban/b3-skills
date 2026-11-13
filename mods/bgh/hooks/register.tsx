@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { Register, Timer } from 'claude-code'
+import type { EngineInterface, Register, Timer } from 'claude-code'
 
 import type { Fix } from '../types'
 import {
@@ -20,6 +20,18 @@ import {
   needsTemplate,
   LLM_DELAYS,
   MODEL_CHOICES,
+  KEY_NAME,
+  ROUTES,
+  MODELS_TTL_MS,
+  MODELS_URL,
+  addTally,
+  liveModel,
+  newerSibling,
+  parseModelList,
+  readTally,
+  tallyLine,
+  type ListedModel,
+  type Tally,
   readPrefs,
   base64,
   chain,
@@ -57,12 +69,14 @@ import {
   type Usage,
 } from './core'
 
-const RELEASE = '0.8.1'
+const RELEASE = '0.9.0'
 const HARPER_DELAY_MS = 300
 const HOP_TIMEOUT_MS = 6000
 const CACHE_KEY = 'llm-cache-v1'
 const IGNORE_KEY = 'ignore-v1'
 const PREFS_KEY = 'prefs-v1'
+const MODELS_KEY = 'models-v1'
+const TALLY_KEY = 'tally-v1'
 const SETUP_PANE = 'bgh-setup'
 const SETTINGS_PANE = 'bgh-settings'
 const DEBUG_PANE = 'bgh-debug'
@@ -138,6 +152,8 @@ type Check = {
   issues: Issue[]
   spans: SpanRecord[]
   route?: string
+  // 'openrouter qwen3-…' for the hop that answered; unset when the cache or nobody did.
+  by?: string
   shown: boolean
 }
 
@@ -149,6 +165,28 @@ type CachedEdit = Omit<Edit, 'i'> & { by?: string }
 const authHeader = (k: LangfuseKeys) => `Basic ${base64(`${k.publicKey}:${k.secretKey}`)}`
 const scoreBody = (traceId: string, value: 0 | 1) =>
   JSON.stringify({ traceId, name: 'accepted', value, dataType: 'NUMERIC' })
+
+// Each provider's model list: OpenRouter always (it needs no key), the others where a key is set.
+// Declared at the top level because it takes `$`.
+async function fetchModels($: EngineInterface, env: Env): Promise<{ lists: Partial<Record<ApiRoute, ListedModel[]>>; errors: Partial<Record<ApiRoute, string>> }> {
+  const lists: Partial<Record<ApiRoute, ListedModel[]>> = {}
+  const errors: Partial<Record<ApiRoute, string>> = {}
+  await Promise.all(
+    ROUTES.map(async (route) => {
+      const key = env[KEY_NAME[route]]?.trim()
+      if (route !== 'openrouter' && !key) return
+      try {
+        const res = await $.http.fetch(MODELS_URL[route], { headers: key ? { Authorization: `Bearer ${key}` } : {} })
+        const parsed = res.ok ? parseModelList(res.text) : undefined
+        if (parsed) lists[route] = parsed
+        else errors[route] = res.ok ? 'the list was not the JSON expected' : `HTTP ${res.status}`
+      } catch (err) {
+        errors[route] = String(err).slice(0, 80)
+      }
+    }),
+  )
+  return { lists, errors }
+}
 
 // The engine's `$` is spelled at each call site, never kept; so every piece of work that calls it
 // lives inside the hook that starts it. Timers set in a hook keep running after it returns.
@@ -177,6 +215,13 @@ export const register: Register = (on) => {
   let cache = new Map<string, CachedEdit[]>()
   let ignore = new Set<string>()
   let spent = 0
+  // What each provider listed, fetched at most every MODELS_TTL_MS; an error says why not.
+  let listed: Partial<Record<ApiRoute, ListedModel[]>> = {}
+  let listErrors: Partial<Record<ApiRoute, string>> = {}
+  let listedAt = 0
+  // Models asked for that the provider no longer lists, as 'route model → stand-in'.
+  let goneNotes: string[] = []
+  let tally: Tally = {}
 
   const stale = (c: Check) => c.gen !== gen
 
@@ -189,11 +234,55 @@ export const register: Register = (on) => {
   function applyEnv(fileText: string | undefined) {
     env = { ...(fileText ? parseDotenv(fileText) : {}) }
     for (const [k, v] of Object.entries(processEnv)) if (v?.trim()) env[k] = v
-    hops = chain(env, prefs)
+    goneNotes = []
+    hops = chain(env, prefs).map((h) => {
+      if (h.route === 'claude') return h
+      const live = liveModel(h.route, h.model, listed[h.route])
+      if (live.gone) goneNotes.push(`${h.route} ${modelName(h.model)} → ${modelName(live.model)}`)
+      return { ...h, model: live.model }
+    })
     langfuse = prefs.langfuse ? langfuseKeys(env) : undefined
   }
 
+  // A fresh fetch replaces the lists it got; a route that failed keeps its last good list.
+  function applyModels(got: { lists: Partial<Record<ApiRoute, ListedModel[]>>; errors: Partial<Record<ApiRoute, string>> }) {
+    listed = { ...listed, ...got.lists }
+    listErrors = got.errors
+    listedAt = Date.now()
+    applyEnv(lastEnvFile)
+  }
+
+  // Whose fixes a check showed, for the tally.
+  const whoOf = (c: Check): string => c.by ?? c.llm[0]?.by?.replace(/ \(cached\)$/, '') ?? 'harper'
+
+  function count(who: string, accepted: boolean) {
+    tally = addTally(tally, who, accepted)
+  }
+
   const modelName = (m: string) => m.replace(/^accounts\/fireworks\/models\//, '')
+
+  // One line per provider list: how many it lists, what is gone, and a newer sibling if any.
+  function modelLines(): string[] {
+    const out: string[] = []
+    for (const route of ROUTES) {
+      const list = listed[route]
+      const err = listErrors[route]
+      if (!list && !err) continue
+      const hop = hops.find((h) => h.route === route)
+      const gone = MODEL_CHOICES[route].filter((m) => list && !list.some((l) => l.id === m)).map(modelName)
+      const newer = hop && route === 'openrouter' ? newerSibling(hop.model, list) : undefined
+      out.push(
+        [
+          `${route.padEnd(10)} ${list ? `${list.length} listed` : 'no list'}`,
+          err ? `last fetch failed: ${err}` : '',
+          gone.length ? `gone: ${gone.join(', ')}` : '',
+          newer ? `newer, same price or less: ${newer}` : '',
+        ].filter(Boolean).join(' · '),
+      )
+    }
+    return out
+  }
+  const listedLine = () => (listedAt ? `fetched ${new Date(listedAt).toLocaleString()}` : 'not fetched yet')
 
   // The settings view: one fact per line, for `/bgh` and `settings`.
   function settings(): string {
@@ -203,6 +292,7 @@ export const register: Register = (on) => {
       `harper    ${harperOk ? 'on' : `missing: install harper-cli from ${HARPER_RELEASES}`}`,
       `llm       ${llm.length ? llm.join(' → ') : 'off'}`,
       `langfuse  ${langfuse ? `on (${langfuse.baseUrl})` : langfuseKeys(env) ? 'off (switched off)' : 'off (no keys)'}`,
+      `accepted  ${tallyLine(tally)}`,
       `cache     ${cache.size} sentences`,
       `ignored   ${ignore.size ? [...ignore].sort().join(', ') : 'none'}`,
       `spent     ${spent ? `$${spent.toFixed(4)} this session` : 'nothing reported'}`,
@@ -275,8 +365,29 @@ export const register: Register = (on) => {
         // read-only home: the environment alone
       }
     }
+    const savedModels = (await $.store.get(MODELS_KEY)) as { at?: unknown; lists?: unknown } | undefined
+    if (savedModels && typeof savedModels.at === 'number' && savedModels.lists && typeof savedModels.lists === 'object') {
+      listed = savedModels.lists as Partial<Record<ApiRoute, ListedModel[]>>
+      listedAt = savedModels.at
+    }
+    tally = readTally(await $.store.get(TALLY_KEY))
     lastEnvFile = fileText
     applyEnv(fileText)
+    // A model a provider dropped: the hop runs a listed pick instead, said once here.
+    const sayGone = () => {
+      if (goneNotes.length) $.ui.toast(`Grammar: no longer listed, standing in: ${goneNotes.join(', ')}`)
+    }
+    sayGone()
+    // The lists are fetched off the start path, and only when the stored ones are old.
+    if (Date.now() - listedAt > MODELS_TTL_MS) {
+      $.clock.after(1500, async () => {
+        const before = goneNotes.join()
+        applyModels(await fetchModels($, env))
+        await $.store.set(MODELS_KEY, { at: listedAt, lists: listed })
+        if (goneNotes.join() !== before) sayGone()
+        await update($, revAtom, (n) => n + 1)
+      })
+    }
 
     // $.fs.write makes the folder on first write, so no mkdir (which Windows lacks).
     draftPath = `${dirs.cache}${dirs.sep}draft.md`
@@ -451,6 +562,12 @@ export const register: Register = (on) => {
       case 'test': {
         // Every route on a sentence with known mistakes, then Langfuse's auth, so a broken key
         // shows here instead of as silence while typing.
+        // The model lists too, beside the routes, so a dropped model shows in the same tab.
+        void fetchModels($, env).then(async (got) => {
+          applyModels(got)
+          await $.store.set(MODELS_KEY, { at: listedAt, lists: listed })
+          await redraw()
+        })
         const sample = 'I has a apple and it are red.'
         const lines: string[] = [`Testing with: ${sample}`]
         const keys = langfuseKeys(env)
@@ -554,6 +671,10 @@ export const register: Register = (on) => {
       `keys file  ${envFile}`,
       `env        ${set.join(', ')}`,
       `chain      ${hops.map((h) => `${h.route} ${modelName(h.model)}`).join(' → ') || 'off'}`,
+      ...(goneNotes.length ? [`standing in ${goneNotes.join(', ')}`] : []),
+      `accepted   ${tallyLine(tally)}`,
+      `models     ${listedLine()}`,
+      ...modelLines().map((l) => `  ${l}`),
       `langfuse   ${langfuse ? langfuse.baseUrl : 'off'} · last trace ${traceLine(lastTrace, Date.now())}`,
       `last error ${lastLangfuseError || 'none'}`,
       `cache      ${cache.size} sentences · ignored ${ignore.size} · spent $${spent.toFixed(4)}`,
@@ -729,7 +850,11 @@ export const register: Register = (on) => {
 
     const routes = availableRoutes(env)
     const firstRoute: Route = prefs.first !== 'auto' ? prefs.first : (hops[0]?.route ?? 'claude')
-    const choices = MODEL_CHOICES[firstRoute]
+    const firstList = firstRoute === 'claude' ? undefined : listed[firstRoute]
+    const isGone = (m: string) => !!firstList && !firstList.some((l) => l.id === m)
+    const allChoices = MODEL_CHOICES[firstRoute]
+    const choices = allChoices.filter((m) => !isGone(m))
+    const newer = firstRoute === 'openrouter' ? newerSibling(hops.find((h) => h.route === firstRoute)?.model ?? '', firstList) : undefined
     const firstModel = prefs.models[firstRoute] ?? hops.find((h) => h.route === firstRoute)?.model ?? choices[0] ?? ''
     const onOff = (b: boolean) => (b ? 'on' : 'off')
     const words = [...ignore].sort().slice(0, 9)
@@ -759,7 +884,8 @@ export const register: Register = (on) => {
           setPrefs({ first: cycle<Route | 'auto'>(['auto', ...routes], prefs.first) })
           save()
         })}
-        {row('m', 'model', modelName(firstModel), !!prefs.models[firstRoute], `${firstRoute}: ${choices.map(modelName).join(', ')}`, () => {
+        {row('m', 'model', modelName(firstModel), !!prefs.models[firstRoute], `${firstRoute}: ${allChoices.map((m) => `${modelName(m)}${isGone(m) ? ' (gone)' : ''}`).join(', ')}${newer ? ` · newer: ${modelName(newer)}` : ''}`, () => {
+          if (!choices.length) return
           setPrefs({ models: { ...prefs.models, [firstRoute]: cycle(choices, firstModel) } })
           save()
         })}
@@ -839,6 +965,14 @@ export const register: Register = (on) => {
           <Text bold>Routes</Text>
         </Box>
         {kv('chain', hops.map((h) => `${h.route} ${modelName(h.model)}`).join(' → ') || 'off', !hops.length)}
+        {goneNotes.length ? kv('standing in', goneNotes.join(', '), true) : null}
+        {kv('accepted', tallyLine(tally))}
+        {kv('model lists', listedLine())}
+        {modelLines().map((l, i) => (
+          <Text key={`ml-${i}`} dimColor wrap="truncate-end">
+            {`  ${l}`}
+          </Text>
+        ))}
         {lastProbe ? (
           <Box flexDirection="column">
             <Text dimColor>{`test at ${new Date(lastProbe.at).toLocaleTimeString()}`}</Text>
@@ -953,6 +1087,8 @@ export const register: Register = (on) => {
       const box = await $.prompt.read()
       if (!check || check.text !== box.text) return
       const fixed = applyIssues(box.text, box.cursor, check.issues)
+      count(whoOf(check), true)
+      void $.store.set(TALLY_KEY, tally)
       if (langfuse) {
         void $.http
           .fetch(`${langfuse.baseUrl}/api/public/scores`, {
@@ -1128,7 +1264,8 @@ export const register: Register = (on) => {
         endMs: Date.now(),
         attrs: {
           'langfuse.trace.name': 'prompt-check',
-          'langfuse.trace.tags': [c.route ?? 'harper-only'],
+          'langfuse.trace.tags': [c.route ?? 'harper-only', ...(c.by ? [shortModel(c.by.split(' ').pop() ?? c.by)] : [])],
+          'langfuse.trace.metadata.model': whoOf(c),
           'langfuse.release': RELEASE,
           'langfuse.trace.metadata.host': host,
           'langfuse.observation.input': c.text,
@@ -1211,6 +1348,7 @@ export const register: Register = (on) => {
           if ('usage' in result && result.usage.cost) spent += result.usage.cost
           c.route = hop.route
           const by = `${hop.route} ${shortModel(hop.model)}`
+          c.by = by
           todo.forEach((s, i) => {
             const mine = edits.filter((x) => x.i === i).map(({ from, to }) => ({ from, to, by }))
             cache.set(s.text, mine)
@@ -1271,6 +1409,10 @@ export const register: Register = (on) => {
     if (bandShown) {
       bandShown = false
       void update($, fixesAtom, () => [])
+    }
+    if (passed) {
+      count(whoOf(passed), false)
+      void $.store.set(TALLY_KEY, tally)
     }
     if (passed && langfuse) {
       void $.http

@@ -7,6 +7,7 @@ pause 0.3 s ─► harper-cli (offline)              ─► underline + ghost te
 pause 1.5 s ─► LLM chain, sentences not cached    ─► word choice, phrasing (wins a clash)
                OpenRouter → OpenAI → Fireworks → Haiku (session)
 every check ─► Langfuse trace (OTLP) · alt+a = score accepted 1 · send unfixed = 0
+session start ─► model lists (12 h) · a dropped model gives way · tally per model
 ```
 
 ## Install
@@ -103,6 +104,14 @@ A key or `LANGFUSE_*` line left behind a `#` in the keys file is flagged on top,
 | `1`–`9` | take a word off the ignore list |
 
 Choices are saved in the mod's own store and carry over to the next session; each machine keeps its own.
+
+### Models that disappear, and which one you keep
+
+The pick lists are written into the mod, and providers retire models. So at session start, at most every 12 hours, the mod fetches each provider's model list: OpenRouter's always (it needs no key), OpenAI's and Fireworks' when their key is set. `/bgh test` fetches them again.
+
+- A model the provider no longer lists is marked `(gone)` in the `m` row and skipped when you cycle. The route runs the first listed pick instead, and a toast names the swap once. Your choice stays saved, so it comes back if the model does.
+- On OpenRouter, a newer model of the same vendor, family and kind that costs the same or less shows as `newer: …`. It's a hint. Nothing switches by itself.
+- Every fix you take with alt+a counts as accepted, and every draft sent with fixes still showing counts as passed up. The tally is kept per model, on this machine, and reads like `qwen3-235b-a22b-2507 72% (40) · haiku 55% (31)` in `/bgh debug`. It's the number to pick a model by. Langfuse traces carry the model as a tag too, so the `accepted` score splits the same way there.
 
 ### Langfuse regions
 

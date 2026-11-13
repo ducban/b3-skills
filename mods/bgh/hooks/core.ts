@@ -248,6 +248,103 @@ export const availableRoutes = (env: Env): Route[] => [
 ]
 
 // ---------------------------------------------------------------------------
+// Which models the providers still serve
+
+// Each provider's model list. OpenRouter's needs no key and carries dates and prices.
+export const MODELS_URL: Record<ApiRoute, string> = {
+  openrouter: 'https://openrouter.ai/api/v1/models',
+  openai: 'https://api.openai.com/v1/models',
+  fireworks: 'https://api.fireworks.ai/inference/v1/models',
+}
+// A list younger than this is reused from `$.store` instead of fetched again.
+export const MODELS_TTL_MS = 12 * 60 * 60 * 1000
+
+// `created` in seconds; `price` is prompt plus completion per token, where the provider says.
+export type ListedModel = { id: string; created?: number; price?: number }
+
+export function parseModelList(text: string): ListedModel[] | undefined {
+  try {
+    const json = JSON.parse(text) as { data?: unknown }
+    if (!Array.isArray(json.data)) return undefined
+    const out: ListedModel[] = []
+    for (const m of json.data as Record<string, unknown>[]) {
+      if (!m || typeof m !== 'object' || typeof m.id !== 'string') continue
+      const entry: ListedModel = { id: m.id }
+      if (typeof m.created === 'number') entry.created = m.created
+      const p = m.pricing as { prompt?: unknown; completion?: unknown } | undefined
+      const price = p ? Number(p.prompt) + Number(p.completion) : NaN
+      if (Number.isFinite(price) && price >= 0) entry.price = price
+      out.push(entry)
+    }
+    return out.length ? out : undefined
+  } catch {
+    return undefined
+  }
+}
+
+// The model a hop runs: the one asked for while the provider lists it, else the first pick-list
+// entry it does list. No list, or none of the picks listed, keeps the one asked for.
+export function liveModel(route: ApiRoute, model: string, listed: ListedModel[] | undefined): { model: string; gone: boolean } {
+  if (!listed?.length || listed.some((m) => m.id === model)) return { model, gone: false }
+  const next = MODEL_CHOICES[route].find((c) => listed.some((m) => m.id === c))
+  return { model: next ?? model, gone: true }
+}
+
+// Words that make a model a different kind of thing; a sibling has the same set.
+const VARIANT_WORDS = new Set(['mini', 'nano', 'lite', 'flash', 'pro', 'small', 'large', 'turbo', 'coder', 'vl', 'thinking', 'instruct', 'image', 'audio', 'preview', 'free', 'codex', 'chat', 'search', 'realtime', 'oss', 'deep', 'research', 'guard', 'embed', 'tts'])
+const variantsOf = (name: string): string => name.split('-').filter((w) => VARIANT_WORDS.has(w)).sort().join('-')
+
+// A newer OpenRouter model of the same vendor, family and kind that costs the same or less.
+// 'qwen/qwen3-235b-a22b-2507' looks for 'qwen/qwen3-…'. Only ever a hint; nothing switches.
+export function newerSibling(model: string, listed: ListedModel[] | undefined): string | undefined {
+  const cur = listed?.find((m) => m.id === model)
+  if (!listed || !cur?.created || cur.price === undefined) return undefined
+  const [vendor, name = ''] = model.split('/')
+  const family = name.split('-')[0]
+  const kind = variantsOf(name)
+  let best: ListedModel | undefined
+  for (const m of listed) {
+    const [v, n = ''] = m.id.split('/')
+    if (m.id === model || m.id.includes(':') || v !== vendor || n.split('-')[0] !== family || variantsOf(n) !== kind) continue
+    if (!m.created || m.created <= cur.created || m.price === undefined || m.price > cur.price) continue
+    if (!best || m.created > (best.created ?? 0)) best = m
+  }
+  return best?.id
+}
+
+// ---------------------------------------------------------------------------
+// How often each model's fixes are taken
+
+// Per model ('openrouter qwen3-235b-a22b-2507', or 'harper' when no LLM spoke): fixes applied
+// with alt+a, and drafts sent with fixes still showing.
+export type Tally = Record<string, { yes: number; no: number }>
+
+export function readTally(saved: unknown): Tally {
+  const out: Tally = {}
+  if (!saved || typeof saved !== 'object') return out
+  for (const [k, v] of Object.entries(saved as Record<string, unknown>)) {
+    const o = v as { yes?: unknown; no?: unknown } | null
+    if (o && typeof o.yes === 'number' && typeof o.no === 'number') out[k] = { yes: o.yes, no: o.no }
+  }
+  return out
+}
+
+export function addTally(t: Tally, who: string, accepted: boolean): Tally {
+  const was = t[who] ?? { yes: 0, no: 0 }
+  return { ...t, [who]: accepted ? { yes: was.yes + 1, no: was.no } : { yes: was.yes, no: was.no + 1 } }
+}
+
+// 'qwen3-235b-a22b-2507 72% (40) · haiku 55% (31)', busiest first, at most `max`.
+export function tallyLine(t: Tally, max = 5): string {
+  const rows = Object.entries(t)
+    .map(([who, { yes, no }]) => ({ who: who.split(' ').pop() ?? who, n: yes + no, pct: Math.round((100 * yes) / Math.max(1, yes + no)) }))
+    .filter((r) => r.n > 0)
+    .sort((a, b) => b.n - a.n)
+  if (!rows.length) return 'nothing yet'
+  return rows.slice(0, max).map((r) => `${r.who} ${r.pct}% (${r.n})`).join(' · ')
+}
+
+// ---------------------------------------------------------------------------
 // Where files go, on Linux, macOS and Windows
 
 // Windows has no HOME (USERPROFILE instead) and keeps settings under APPDATA, caches under
