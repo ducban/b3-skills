@@ -12,6 +12,9 @@ import {
   boundActions,
   dirsFor,
   harperInstall,
+  harperInstallAll,
+  commentedOnly,
+  langfuse401,
   platformOf,
   traceLine,
   ENV_TEMPLATE,
@@ -294,5 +297,24 @@ describe('setup guide', () => {
     expect(traceLine(undefined, at)).toContain('none sent yet')
     expect(traceLine({ at, ok: true, detail: 'ok' }, at + 10_000)).toBe('ok 14:02 (just now)')
     expect(traceLine({ at, ok: false, detail: 'HTTP 401' }, at + 5 * 60_000)).toBe('HTTP 401 14:02 (5 min ago)')
+  })
+})
+
+describe('setup guide for every OS, and config mistakes', () => {
+  test('the guide lists macOS and both Linux ways, this machine marked', () => {
+    const all = harperInstallAll(platformOf('Linux', 'x86_64', 'ID=cachyos', false))
+    expect(all.map((o) => o.label)).toEqual(['macOS', 'Arch Linux', 'other Linux'])
+    expect(all.filter((o) => o.here).map((o) => o.label)).toEqual(['Arch Linux'])
+    expect(harperInstallAll(platformOf('Darwin', 'arm64', undefined, false)).find((o) => o.here)?.cmd).toBe('brew install harper')
+    expect(harperInstallAll(platformOf('Linux', 'aarch64', 'ID=ubuntu', false)).find((o) => o.here)?.cmd).toContain('aarch64')
+  })
+  test('a value left behind a # is reported, a set one is not', () => {
+    const text = 'LANGFUSE_PUBLIC_KEY=pk\n#LANGFUSE_BASE_URL=https://jp.cloud.langfuse.com\n#B3_GRAMMAR_MODEL=\n'
+    expect(commentedOnly(text, ['LANGFUSE_BASE_URL', 'LANGFUSE_PUBLIC_KEY', 'B3_GRAMMAR_MODEL'])).toEqual(['LANGFUSE_BASE_URL'])
+    expect(commentedOnly(ENV_TEMPLATE, ['LANGFUSE_BASE_URL', 'OPENAI_API_KEY'])).toEqual([])
+  })
+  test('a 401 names the URL in use, not a guess', () => {
+    expect(langfuse401('https://cloud.langfuse.com')).toContain("don't belong to https://cloud.langfuse.com")
+    expect(langfuse401('https://cloud.langfuse.com')).toContain('jp.cloud.langfuse.com')
   })
 })

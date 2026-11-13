@@ -57,35 +57,55 @@ The band's buttons borrow two engine actions that do nothing while you're in the
 
 alt+a applies every fix on the band. alt+i ignores the first flagged word from then on.
 
-## Settings
+## Commands
 
-`/bgh` opens the settings pane. It starts with a **Setup** list for this machine, each line ✓ or ✗ with the fix under it:
+| Command | Does |
+|---|---|
+| `/bgh` | the setup guide while something is missing, the settings once all is ✓ |
+| `/bgh setup-guide` | what this machine still needs |
+| `/bgh settings` | grammar, LLM route and model, delay, Langfuse, cache, ignored words |
+| `/bgh debug` | versions, which keys are set (names only), routes, last trace, last check with timings |
+| `/bgh test` | runs every route and Langfuse once on a sample sentence and prints ✓/✗ with times |
+| `/bgh status` | one-screen summary as text |
+| `/bgh on`, `off` | switch checking on or off |
+| `/bgh reload` | read the keys file again |
+| `/bgh ignore <word>`, `unignore <word>`, `ignored` | the ignore list |
+| `/bgh clear-cache` | forget the remembered LLM answers |
+| `/bgh help` | this list |
 
-| Line | ✓ when | ✗ shows |
+The three panes open together as tabs (`bgh setup`, `bgh settings`, `bgh debug`), the one you asked for in front. Esc closes them.
+
+### Setup guide
+
+Four steps, each ✓ or ✗ with the fix under it. Harper's step lists macOS, Arch and other Linux together, this machine marked, so the page read on one machine still tells you what the other needs.
+
+| Step | ✓ when | ✗ shows |
 |---|---|---|
-| harper | `harper-cli` runs | the install command for this OS and distro |
-| API keys | a route key is set | the keys file to fill in |
-| alt+a alt+i | both actions are in `keybindings.json` | the two lines to add (plus Option-as-Meta on macOS) |
-| langfuse | the last trace got through | when it was sent, the HTTP status, and what a 401 usually means |
+| 1. Harper | `harper-cli` runs | `brew install harper` · `sudo pacman -S harper` · the release-build `curl` line; `h` looks again |
+| 2. API keys | a route key is set | the keys file to fill in; `r` reloads it |
+| 3. alt+a alt+i | both actions are in `keybindings.json` | the two lines to add, and Option-as-Meta for macOS |
+| 4. Langfuse | no keys (it's optional), or the last trace got through | when it was sent, the HTTP status, what to change |
 
-The settings below it each have a key:
+A key or `LANGFUSE_*` line left behind a `#` in the keys file is flagged on top, since the mod never reads it. `x` runs `/bgh test`.
+
+### Settings
 
 | Key | Setting |
 |---|---|
 | `g` | grammar check on or off |
-| `h` | look for `harper-cli` again after installing it |
 | `l` | LLM pass on or off (off = Harper only) |
 | `f` | which route goes first: `auto`, or one that has a key |
 | `m` | model for that route, from a short list |
 | `d` | pause before the LLM is asked: 800, 1500 or 3000 ms |
 | `t` | Langfuse tracing on or off |
 | `c` | forget the cached LLM answers |
-| `r` | reload the keys file |
 | `1`–`9` | take a word off the ignore list |
 
-Esc closes the pane. Choices are saved in the mod's own store and carry over to the next session; each machine keeps its own.
+Choices are saved in the mod's own store and carry over to the next session; each machine keeps its own.
 
-Text commands still work: `/bgh status | on | off | reload | ignore <word> | unignore <word> | ignored`.
+### Langfuse regions
+
+Keys only work in the region they were made in. Leave `LANGFUSE_BASE_URL` blank for EU (`https://cloud.langfuse.com`), or set `https://us.cloud.langfuse.com`, `https://jp.cloud.langfuse.com` or `https://hipaa.cloud.langfuse.com`. A 401 from `/bgh test` names the URL the mod used.
 
 ## Keys
 

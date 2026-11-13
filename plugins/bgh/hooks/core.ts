@@ -556,7 +556,9 @@ FIREWORKS_API_KEY=
 # Langfuse tracing, on only when both keys are set. The draft text is sent.
 LANGFUSE_PUBLIC_KEY=
 LANGFUSE_SECRET_KEY=
-#LANGFUSE_BASE_URL=https://cloud.langfuse.com
+# Region your keys were made in; blank means EU (https://cloud.langfuse.com). Others:
+# https://us.cloud.langfuse.com · https://jp.cloud.langfuse.com · https://hipaa.cloud.langfuse.com
+LANGFUSE_BASE_URL=
 `
 
 // A file that holds nothing but blanks and comments needs the template; one with a value doesn't.
@@ -610,3 +612,31 @@ export function traceLine(last: TraceResult | undefined, now: number): string {
   const ago = mins < 1 ? 'just now' : mins < 60 ? `${mins} min ago` : `${Math.floor(mins / 60)} h ago`
   return `${last.ok ? 'ok' : last.detail} ${hhmm} (${ago})`
 }
+
+// The guide lists every machine, the one it runs on marked, so a page read on Arch still tells
+// you what the Mac needs.
+export function harperInstallAll(p: Platform): { label: string; cmd: string; here: boolean }[] {
+  const arch = p.os === 'linux' ? p.arch : 'x86_64'
+  const pacman = harperInstall({ os: 'linux', distro: 'arch', arch })
+  const other = harperInstall({ os: 'linux', distro: '', arch })
+  const isPacman = harperInstall(p) === pacman && p.os === 'linux'
+  return [
+    { label: 'macOS', cmd: harperInstall({ os: 'darwin', distro: '', arch }), here: p.os === 'darwin' },
+    { label: 'Arch Linux', cmd: pacman, here: isPacman },
+    { label: 'other Linux', cmd: other, here: p.os === 'linux' && !isPacman },
+  ]
+}
+
+// Names a file sets only on a commented line (`#LANGFUSE_BASE_URL=https://…`): a value someone
+// meant to use and the mod never reads. The debug and setup panes point at them.
+export function commentedOnly(text: string | undefined, names: string[]): string[] {
+  if (!text) return []
+  const set = parseDotenv(text)
+  return names.filter((n) => !set[n]?.trim() && new RegExp(`^\\s*#\\s*${n}\\s*=\\s*\\S`, 'm').test(text))
+}
+
+// Langfuse keys work only in the region they were made in. Said with the URL in use, so a 401
+// names the fix instead of guessing one.
+export const LANGFUSE_REGIONS = 'cloud.langfuse.com (EU), us.cloud.langfuse.com, jp.cloud.langfuse.com, hipaa.cloud.langfuse.com'
+export const langfuse401 = (baseUrl: string): string =>
+  `HTTP 401: these keys don't belong to ${baseUrl}. Keys only work in the region they were made in (${LANGFUSE_REGIONS}); set LANGFUSE_BASE_URL to yours, without a # in front.`

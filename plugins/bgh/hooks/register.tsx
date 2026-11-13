@@ -8,7 +8,9 @@ import {
   cycle,
   boundActions,
   dirsFor,
-  harperInstall,
+  harperInstallAll,
+  commentedOnly,
+  langfuse401,
   platformOf,
   traceLine,
   type Platform,
@@ -55,13 +57,62 @@ import {
   type Usage,
 } from './core'
 
-const RELEASE = '0.6.0'
+const RELEASE = '0.7.0'
 const HARPER_DELAY_MS = 300
 const HOP_TIMEOUT_MS = 6000
 const CACHE_KEY = 'llm-cache-v1'
 const IGNORE_KEY = 'ignore-v1'
 const PREFS_KEY = 'prefs-v1'
-const PANE = 'bgh-settings'
+const SETUP_PANE = 'bgh-setup'
+const SETTINGS_PANE = 'bgh-settings'
+const DEBUG_PANE = 'bgh-debug'
+const PANES = [
+  { id: SETUP_PANE, title: 'bgh setup' },
+  { id: SETTINGS_PANE, title: 'bgh settings' },
+  { id: DEBUG_PANE, title: 'bgh debug' },
+]
+
+const HELP = [
+  'B3 Grammar Helper (bgh)',
+  '  /bgh                 setup guide while something is missing, else settings',
+  '  /bgh setup-guide     what this machine still needs (macOS and Linux)',
+  '  /bgh settings        grammar, LLM route and model, delay, Langfuse, cache, ignored words',
+  '  /bgh debug           versions, keys set, routes, last trace, last check with timings',
+  '  /bgh test            run every route and Langfuse once on a sample sentence',
+  '  /bgh status          one-screen summary as text',
+  '  /bgh on | off        switch checking on or off',
+  '  /bgh reload          read the keys file again',
+  '  /bgh ignore <word>   never flag this word; unignore <word> undoes it; ignored lists them',
+  '  /bgh clear-cache     forget the remembered LLM answers',
+  '  /bgh help            this list',
+].join('\n')
+
+// The variables the mod reads, for the debug view: names only, never values.
+const KNOWN_ENV = [
+  'OPENROUTER_API_KEY',
+  'OPENAI_API_KEY',
+  'FIREWORKS_API_KEY',
+  'LANGFUSE_PUBLIC_KEY',
+  'LANGFUSE_SECRET_KEY',
+  'LANGFUSE_BASE_URL',
+  'B3_GRAMMAR_PROVIDER',
+  'B3_GRAMMAR_MODEL',
+  'B3_GRAMMAR_LLM',
+  'B3_GRAMMAR_ENV_FILE',
+]
+
+// Keys a # in front of is surely a slip; the B3_GRAMMAR_* switches are commented on purpose.
+const MUST_BE_LIVE = KNOWN_ENV.filter((n) => !n.startsWith('B3_GRAMMAR_'))
+
+type ProbeResult = { name: string; ok: boolean; ms: number; detail: string }
+type LastRun = {
+  at: number
+  text: string
+  harper: number
+  llm: number
+  route?: string
+  spans: { name: string; ms: number; error?: string }[]
+}
 const CACHE_MAX = 400
 
 // Engine keybinding actions that have no handler while the chat is up. The band's Buttons take
@@ -107,6 +158,9 @@ export const register: Register = (on) => {
   let langfuse: LangfuseKeys | undefined
   let host = 'unknown'
   let harperOk = false
+  let harperVersion = ''
+  let lastProbe: { at: number; results: ProbeResult[] } | undefined
+  let lastRun: LastRun | undefined
   let platform: Platform = { os: 'unknown', distro: '', arch: 'x86_64' }
   let keybindingsPath = ''
   let lastTrace: TraceResult | undefined
@@ -226,7 +280,9 @@ export const register: Register = (on) => {
     draftPath = `${dirs.cache}${dirs.sep}draft.md`
     try {
       harperProbedAt = Date.now()
-      harperOk = (await $.process.run(['harper-cli', '--version'], { timeoutMs: 5000 })).exitCode === 0
+      const r = await $.process.run(['harper-cli', '--version'], { timeoutMs: 5000 })
+      harperOk = r.exitCode === 0
+      harperVersion = harperOk ? r.stdout.trim() : ''
     } catch {
       harperOk = false
     }
@@ -268,7 +324,9 @@ export const register: Register = (on) => {
 
     await $.command.register({
       name: 'bgh',
-      description: 'Grammar ghost text. No args opens the settings pane. Args: status | on | off | reload | ignore <word> | unignore <word>',
+      description: 'B3 Grammar Helper: grammar ghost text in the prompt. /bgh help lists every command',
+      argumentHint: 'setup-guide | settings | debug | test | status | on | off | reload | ignore <word> | help',
+      immediate: true,
     })
     // Clears the line earlier versions pinned under the prompt.
     $.ui.status(undefined)
@@ -277,7 +335,7 @@ export const register: Register = (on) => {
 
   // ---- the command ---------------------------------------------------------
 
-  // Settings changes shared by the command and the pane. It touches no $, so each caller saves
+  // Settings changes shared by the command and the panes. It touches no $, so each caller saves
   // and redraws with its own.
   let lastEnvFile: string | undefined
   function setPrefs(change: Partial<Prefs>) {
@@ -288,14 +346,60 @@ export const register: Register = (on) => {
     check = undefined
   }
 
+  // Each setup step, true when done. The setup-guide pane draws them; a bare /bgh opens the
+  // guide while any is still false, the settings once all are.
+  async function setupSteps(keybindings: string | undefined) {
+    return {
+      harper: harperOk,
+      keys: availableRoutes(env).some((r) => r !== 'claude'),
+      chords: boundActions(keybindings, [APPLY_ACTION, IGNORE_ACTION]).length === 2,
+    }
+  }
+
   on('command.run', { command: 'bgh' }, async ($, e) => {
     const [verb = '', ...rest] = e.args.trim().split(/\s+/)
     const word = normalizeWord(rest.join(' '))
+    const redraw = () => update($, revAtom, (n) => n + 1)
     const save = async () => {
       await $.store.set(PREFS_KEY, prefs)
-      await update($, revAtom, (n) => n + 1)
+      await redraw()
     }
+    // The three panes open together as tabs, as /sl-settings does; the one asked for opens last
+    // with the focus, which raises it.
+    const show = async (id: string) => {
+      for (const p of PANES) if (p.id !== id) await $.ui.open({ id: p.id, title: p.title, closeOnEscape: true })
+      const front = PANES.find((p) => p.id === id)!
+      const opened = await $.ui.open({ id: front.id, title: front.title, focus: true, closeOnEscape: true })
+      return opened.isPlaced
+    }
+
     switch (verb.toLowerCase()) {
+      case '': {
+        let keybindings: string | undefined
+        try {
+          keybindings = String(await $.fs.read(keybindingsPath))
+        } catch {
+          // none yet
+        }
+        const steps = await setupSteps(keybindings)
+        const id = Object.values(steps).every(Boolean) ? SETTINGS_PANE : SETUP_PANE
+        if (await show(id)) return { text: 'B3 Grammar Helper open. Esc closes it.' }
+        return { text: settings() }
+      }
+      case 'setup-guide':
+      case 'setup':
+        if (await show(SETUP_PANE)) return { text: 'Setup guide open. Esc closes it.' }
+        return { text: settings() }
+      case 'settings':
+        if (await show(SETTINGS_PANE)) return { text: 'Settings open. Esc closes them.' }
+        return { text: settings() }
+      case 'debug':
+        if (await show(DEBUG_PANE)) return { text: 'Debug open. Esc closes it.' }
+        return { text: debugText() }
+      case 'status':
+        return { text: settings() }
+      case 'help':
+        return { text: HELP }
       case 'on':
       case 'off':
         setPrefs({ enabled: verb.toLowerCase() === 'on' })
@@ -304,7 +408,7 @@ export const register: Register = (on) => {
           void $.prompt.paint({ decorations: [] })
           await update($, fixesAtom, () => [])
         }
-        break
+        return { text: `B3 Grammar Helper is ${prefs.enabled ? 'on' : 'off'}.` }
       case 'reload': {
         try {
           lastEnvFile = String(await $.fs.read(envFile))
@@ -312,56 +416,274 @@ export const register: Register = (on) => {
           lastEnvFile = undefined
         }
         applyEnv(lastEnvFile)
-        await update($, revAtom, (n) => n + 1)
+        await redraw()
         return { text: `${lastEnvFile === undefined ? `No file at ${envFile}` : 'Reloaded.'}\n${settings()}` }
       }
       case 'ignore':
         if (!word) return { text: 'Usage: /bgh ignore <word>' }
         ignore.add(word)
         await $.store.set(IGNORE_KEY, [...ignore])
-        await update($, revAtom, (n) => n + 1)
+        await redraw()
         return { text: `Ignoring “${word}”. ${ignore.size} word(s) on the list.` }
       case 'unignore':
         if (!word) return { text: 'Usage: /bgh unignore <word>' }
         ignore.delete(word)
         await $.store.set(IGNORE_KEY, [...ignore])
-        await update($, revAtom, (n) => n + 1)
+        await redraw()
         return { text: `“${word}” is checked again.` }
       case 'ignored':
         return { text: ignore.size ? [...ignore].sort().join(', ') : 'Nothing ignored yet.' }
-      case '':
-      case 'settings': {
-        const opened = await $.ui.open({ id: PANE, title: 'B3 Grammar Helper', focus: true, closeOnEscape: true })
-        // A surface that can't seat the pane gets the text view instead.
-        if (opened.isPlaced) return { text: 'Grammar settings open. Esc closes them.' }
-        break
+      case 'clear-cache':
+        cache.clear()
+        await $.store.set(CACHE_KEY, [])
+        await redraw()
+        return { text: 'LLM answers forgotten. The next check asks again.' }
+      case 'test': {
+        // Every route on a sentence with known mistakes, then Langfuse's auth, so a broken key
+        // shows here instead of as silence while typing.
+        const sample = 'I has a apple and it are red.'
+        const lines: string[] = [`Testing with: ${sample}`]
+        const results: ProbeResult[] = []
+        for (const hop of hops) {
+          const t0 = Date.now()
+          let out: { content: string } | { error: string }
+          try {
+            if (hop.route === 'claude') {
+              const r = await $.model.complete({
+                model: hop.model,
+                system: SYSTEM_PROMPT,
+                prompt: userPrompt([sample]),
+                maxTokens: 400,
+                timeoutMs: HOP_TIMEOUT_MS,
+              })
+              out = r.isAnswered ? { content: r.text } : { error: String(r.reason) }
+            } else {
+              const req = chatRequest(hop as Hop & { route: ApiRoute }, userPrompt([sample]))
+              let timer: Timer | undefined
+              const res = await Promise.race([
+                $.http.fetch(req.url, { method: 'POST', headers: req.headers, body: req.body }),
+                new Promise<never>((_, reject) => {
+                  timer = $.clock.after(HOP_TIMEOUT_MS, () => reject(new Error(`timeout after ${HOP_TIMEOUT_MS}ms`)))
+                }),
+              ])
+              timer?.cancel()
+              out = res.ok ? parseChat(res.text) : { error: `HTTP ${res.status}: ${res.text.slice(0, 120)}` }
+            }
+          } catch (err) {
+            out = { error: String(err).slice(0, 160) }
+          }
+          const edits = 'content' in out ? parseEdits(out.content) : undefined
+          const ok = edits !== undefined
+          const detail = ok
+            ? edits.length
+              ? edits.map((x) => `${x.from}→${x.to}`).join(', ')
+              : 'no edits (the model missed the mistakes)'
+            : 'error' in out
+              ? out.error
+              : 'reply was not the JSON asked for'
+          results.push({ name: `${hop.route} ${modelName(hop.model)}`, ok, ms: Date.now() - t0, detail })
+        }
+        if (!hops.length) results.push({ name: 'llm', ok: false, ms: 0, detail: 'off (settings l, or B3_GRAMMAR_LLM=off)' })
+        const keys = langfuseKeys(env)
+        if (keys) {
+          const t0 = Date.now()
+          try {
+            const res = await $.http.fetch(`${keys.baseUrl}/api/public/projects`, { headers: { Authorization: authHeader(keys) } })
+            let project = ''
+            try {
+              project = (JSON.parse(res.text) as { data?: { name?: string }[] }).data?.[0]?.name ?? ''
+            } catch {
+              // not JSON
+            }
+            results.push({
+              name: 'langfuse',
+              ok: res.ok,
+              ms: Date.now() - t0,
+              detail: res.ok
+                ? `project ${project || '(unnamed)'} at ${keys.baseUrl}${prefs.langfuse ? '' : ' · tracing is switched off (settings t)'}`
+                : res.status === 401
+                  ? langfuse401(keys.baseUrl)
+                  : `HTTP ${res.status}`,
+            })
+          } catch (err) {
+            results.push({ name: 'langfuse', ok: false, ms: Date.now() - t0, detail: `unreachable: ${String(err).slice(0, 100)}` })
+          }
+        } else {
+          results.push({ name: 'langfuse', ok: false, ms: 0, detail: `no keys in ${envFile} (optional)` })
+        }
+        lastProbe = { at: Date.now(), results }
+        await redraw()
+        for (const r of results) lines.push(`${r.ok ? '✓' : '✗'} ${r.name.padEnd(28)} ${String(r.ms).padStart(5)} ms  ${r.detail}`)
+        return { text: lines.join('\n') }
       }
-      case 'status':
-        break
       default:
-        return { text: `Unknown: ${verb}. Try: settings | status | on | off | reload | ignore <word> | unignore <word>` }
+        return { text: `Unknown: ${verb}\n\n${HELP}` }
     }
-    return { text: settings() }
   })
 
-  // ---- the settings pane: one key per setting, as /sl-settings does ---------
+  // The debug view as text: for a surface with no panes, and for pasting into a bug report.
+  function debugText(): string {
+    const set = KNOWN_ENV.map((k) => `${k}${env[k]?.trim() ? '' : ' (unset)'}`)
+    return [
+      `B3 Grammar Helper (bgh) ${RELEASE} on ${host} · ${platform.os} ${platform.distro} ${platform.arch}`.trim(),
+      `harper     ${harperOk ? harperVersion || 'found' : 'missing'}`,
+      `keys file  ${envFile}`,
+      `env        ${set.join(', ')}`,
+      `chain      ${hops.map((h) => `${h.route} ${modelName(h.model)}`).join(' → ') || 'off'}`,
+      `langfuse   ${langfuse ? langfuse.baseUrl : 'off'} · last trace ${traceLine(lastTrace, Date.now())}`,
+      `last error ${lastLangfuseError || 'none'}`,
+      `cache      ${cache.size} sentences · ignored ${ignore.size} · spent $${spent.toFixed(4)}`,
+      `files      ${draftPath} · ${draftPath.replace(/draft\.md$/, 'last-paint.json')}`,
+      `keybinds   ${keybindingsPath}`,
+      ...(lastRun
+        ? [
+            `last check ${new Date(lastRun.at).toLocaleTimeString()} · harper ${lastRun.harper} · llm ${lastRun.llm} · ${lastRun.route ?? 'no LLM answer'}`,
+            ...lastRun.spans.map((s) => `  ${s.name.padEnd(16)} ${String(s.ms).padStart(5)} ms ${s.error ?? 'ok'}`),
+          ]
+        : ['last check none yet']),
+    ].join('\n')
+  }
 
-  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
+  // ---- the three panes ------------------------------------------------------
+
+  on('ui.render', { component: 'Pane', requestId: SETUP_PANE }, async ($, e) => {
+    await read($, revAtom)
+    const { Box, Text, Button } = $.ui.resolve(e)
+    let keybindings: string | undefined
+    try {
+      keybindings = String(await $.fs.read(keybindingsPath))
+    } catch {
+      // no file yet
+    }
+    const steps = await setupSteps(keybindings)
+    const keyed = availableRoutes(env).filter((r) => r !== 'claude')
+    const now = Date.now()
+    const redraw = () => void update($, revAtom, (n) => n + 1)
+
+    const step = (n: number, done: boolean, name: string, state: string, how: string[]) => (
+      <Box key={`setup-${name}`} flexDirection="column">
+        <Box flexDirection="row" columnGap={1}>
+          <Text color={done ? 'success' : 'warning'}>{done ? ` ✓ ${n}.` : ` ✗ ${n}.`}</Text>
+          <Text bold={!done}>{name.padEnd(12)}</Text>
+          <Text dimColor={done} wrap="truncate-end">
+            {state}
+          </Text>
+        </Box>
+        {done
+          ? null
+          : how.map((line, i) => (
+              <Text key={`how-${name}-${i}`} dimColor wrap="wrap">
+                {`       ${line}`}
+              </Text>
+            ))}
+      </Box>
+    )
+
+    const allDone = Object.values(steps).every(Boolean)
+    return (
+      <Box flexDirection="column">
+        <Text dimColor wrap="wrap">
+          {allDone
+            ? 'All set on this machine. /bgh settings to tune it, /bgh test to try every route.'
+            : 'What this machine still needs, in order. Each line turns ✓ by itself once done.'}
+        </Text>
+        {commentedOnly(lastEnvFile, MUST_BE_LIVE).map((n) => (
+          <Text key={`commented-${n}`} color="warning" wrap="wrap">
+            {` ! ${n} is commented out in ${envFile} (a # in front), so it isn't used. Remove the # and press r.`}
+          </Text>
+        ))}
+        {step(1, steps.harper, 'Harper', steps.harper ? `${harperVersion || 'found'}` : 'missing: only the LLM pass runs', [
+          ...harperInstallAll(platform).map((o) => `${o.here ? '▸' : ' '} ${o.label.padEnd(12)} ${o.cmd}${o.here ? '   ← this machine' : ''}`),
+          'then press h here to look again',
+        ])}
+        {step(
+          2,
+          steps.keys,
+          'API keys',
+          steps.keys ? `${keyed.join(', ')} · ${envFile}` : 'none: Haiku on your Claude login runs meanwhile',
+          [
+            `open ${envFile} and fill in OPENROUTER_API_KEY, OPENAI_API_KEY or FIREWORKS_API_KEY`,
+            'the file sits at ~/.config/bgh/.env on both macOS and Linux (XDG_CONFIG_HOME moves it)',
+            'then press r here to reload it',
+          ],
+        )}
+        {step(
+          3,
+          steps.chords,
+          'alt+a alt+i',
+          steps.chords ? `bound in ${keybindingsPath}` : 'not bound: the band shows fixes, the keys do nothing',
+          [
+            `add to the "Global" bindings in ${keybindingsPath}:`,
+            `"alt+a": "${APPLY_ACTION}",`,
+            `"alt+i": "${IGNORE_ACTION}"`,
+            'macOS only: turn on "Use Option as Meta key" in the terminal (Terminal: Settings › Profiles › Keyboard; iTerm2: Profiles › Keys, Left Option = Esc+), or Option types å',
+          ],
+        )}
+        {step(
+          4,
+          !langfuseKeys(env) || !!lastTrace?.ok,
+          'Langfuse',
+          !langfuseKeys(env)
+            ? 'optional, no keys'
+            : !prefs.langfuse
+              ? 'keys set, tracing switched off (settings t)'
+              : `last trace ${traceLine(lastTrace, now)}`,
+          lastTrace && !lastTrace.ok
+            ? lastTrace.detail === 'HTTP 401'
+              ? [langfuse401(langfuse?.baseUrl ?? langfuseKeys(env)?.baseUrl ?? 'https://cloud.langfuse.com')]
+              : ['check LANGFUSE_BASE_URL and the network, then /bgh test']
+            : ['type an English sentence and wait, or run /bgh test'],
+        )}
+        <Box flexDirection="row" columnGap={2}>
+          <Button
+            key="h"
+            label="look for harper"
+            hotkey="h"
+            plain
+            onPress={() => {
+              void $.process
+                .run(['harper-cli', '--version'], { timeoutMs: 5000 })
+                .then((r) => {
+                  harperOk = r.exitCode === 0
+                  harperVersion = harperOk ? r.stdout.trim() : ''
+                })
+                .catch(() => {
+                  harperOk = false
+                })
+                .finally(redraw)
+            }}
+          />
+          <Button
+            key="r"
+            label="reload keys"
+            hotkey="r"
+            plain
+            onPress={() => {
+              void $.fs
+                .read(envFile)
+                .then((t) => {
+                  lastEnvFile = String(t)
+                })
+                .catch(() => {
+                  lastEnvFile = undefined
+                })
+                .finally(() => {
+                  applyEnv(lastEnvFile)
+                  redraw()
+                  $.ui.toast(lastEnvFile === undefined ? `Grammar: no file at ${envFile}` : 'Grammar: keys reloaded')
+                })
+            }}
+          />
+          <Button key="x" label="test every route" hotkey="x" plain onPress={() => void $.command.run({ command: 'bgh', args: 'test' })} />
+        </Box>
+      </Box>
+    )
+  })
+
+  on('ui.render', { component: 'Pane', requestId: SETTINGS_PANE }, async ($, e) => {
     await read($, revAtom)
     const { Box, Text, Button } = $.ui.resolve(e)
     const narrow = e.props.bodyColumns < 70
-    const redraw = () => void update($, revAtom, (n) => n + 1)
-    const save = () => {
-      void $.store.set(PREFS_KEY, prefs)
-      redraw()
-    }
-
-    const routes = availableRoutes(env)
-    const firstRoute: Route = prefs.first !== 'auto' ? prefs.first : (hops[0]?.route ?? 'claude')
-    const choices = MODEL_CHOICES[firstRoute]
-    const firstModel = prefs.models[firstRoute] ?? hops.find((h) => h.route === firstRoute)?.model ?? choices[0] ?? ''
-    const onOff = (b: boolean) => (b ? 'on' : 'off')
-
     const row = (hotkey: string, label: string, state: string, isOn: boolean, tail: string, onPress: () => void) => (
       <Box key={`row-${hotkey}`} flexDirection="row" columnGap={1}>
         <Button key={`b-${hotkey}`} label={label.padEnd(9)} hotkey={hotkey} plain onPress={onPress} />
@@ -375,34 +697,17 @@ export const register: Register = (on) => {
         )}
       </Box>
     )
-
-    let keybindings: string | undefined
-    try {
-      keybindings = String(await $.fs.read(keybindingsPath))
-    } catch {
-      // no file yet
+    const redraw = () => void update($, revAtom, (n) => n + 1)
+    const save = () => {
+      void $.store.set(PREFS_KEY, prefs)
+      redraw()
     }
-    const chords = [APPLY_ACTION, IGNORE_ACTION]
-    const bound = boundActions(keybindings, chords)
-    const keyed = availableRoutes(env).filter((r) => r !== 'claude')
-    const now = Date.now()
-    const step = (done: boolean, name: string, state: string, how?: string) => (
-      <Box key={`setup-${name}`} flexDirection="column">
-        <Box flexDirection="row" columnGap={1}>
-          <Text color={done ? 'success' : 'warning'}>{done ? ' ✓' : ' ✗'}</Text>
-          <Text>{name.padEnd(12)}</Text>
-          <Text dimColor={done} wrap="truncate-end">
-            {state}
-          </Text>
-        </Box>
-        {!done && how ? (
-          <Text dimColor wrap="wrap">
-            {`    ${how}`}
-          </Text>
-        ) : null}
-      </Box>
-    )
 
+    const routes = availableRoutes(env)
+    const firstRoute: Route = prefs.first !== 'auto' ? prefs.first : (hops[0]?.route ?? 'claude')
+    const choices = MODEL_CHOICES[firstRoute]
+    const firstModel = prefs.models[firstRoute] ?? hops.find((h) => h.route === firstRoute)?.model ?? choices[0] ?? ''
+    const onOff = (b: boolean) => (b ? 'on' : 'off')
     const words = [...ignore].sort().slice(0, 9)
     const llmLine = hops.length ? hops.map((h) => `${h.route} ${modelName(h.model)}`).join(' → ') : 'off'
 
@@ -411,41 +716,6 @@ export const register: Register = (on) => {
         <Text dimColor wrap="wrap">
           A key changes its setting, kept across sessions. API keys stay in the .env file.
         </Text>
-        <Text bold>Setup</Text>
-        {step(harperOk, 'harper', harperOk ? 'found' : 'missing: the LLM pass runs alone', `${harperInstall(platform)}   then press h`)}
-        {step(
-          keyed.length > 0,
-          'API keys',
-          keyed.length ? `${keyed.join(', ')} · ${envFile}` : 'none: Haiku on your Claude login runs meanwhile',
-          `fill in ${envFile}, then press r`,
-        )}
-        {step(
-          bound.length === chords.length,
-          'alt+a alt+i',
-          bound.length === chords.length ? `bound in ${keybindingsPath}` : 'not bound: the band shows fixes, the keys do nothing',
-          `add to the Global block of ${keybindingsPath}: "alt+a": "${APPLY_ACTION}", "alt+i": "${IGNORE_ACTION}"`,
-        )}
-        {platform.os === 'darwin' ? (
-          <Text dimColor wrap="wrap">
-            {'    macOS: turn on "Use Option as Meta key" in the terminal, or Option types å'}
-          </Text>
-        ) : null}
-        {step(
-          !!langfuse && !!lastTrace?.ok,
-          'langfuse',
-          !langfuseKeys(env)
-            ? 'no keys (optional)'
-            : !prefs.langfuse
-              ? 'switched off (t)'
-              : `last trace ${traceLine(lastTrace, now)}`,
-          !langfuseKeys(env)
-            ? `optional: LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY in ${envFile}, then press r`
-            : lastTrace && !lastTrace.ok
-              ? lastTrace.detail === 'HTTP 401'
-                ? 'wrong keys, or the wrong region: US projects need LANGFUSE_BASE_URL=https://us.cloud.langfuse.com'
-                : 'check LANGFUSE_BASE_URL and the network'
-              : undefined,
-        )}
         <Text bold>Checking</Text>
         {row('g', 'grammar', onOff(prefs.enabled), prefs.enabled, 'check the prompt as you type', () => {
           setPrefs({ enabled: !prefs.enabled })
@@ -454,17 +724,6 @@ export const register: Register = (on) => {
             void update($, fixesAtom, () => [])
           }
           save()
-        })}
-        {row('h', 'harper', harperOk ? 'found' : 'missing', harperOk, harperOk ? 'offline first pass · press to look again' : `install harper-cli (${HARPER_RELEASES}), then press h`, () => {
-          void $.process
-            .run(['harper-cli', '--version'], { timeoutMs: 5000 })
-            .then((r) => {
-              harperOk = r.exitCode === 0
-            })
-            .catch(() => {
-              harperOk = false
-            })
-            .finally(redraw)
         })}
         {row('l', 'llm', onOff(prefs.llm), prefs.llm, 'second pass: word choice and phrasing', () => {
           setPrefs({ llm: !prefs.llm })
@@ -495,21 +754,6 @@ export const register: Register = (on) => {
           void $.store.set(CACHE_KEY, [])
           redraw()
         })}
-        {row('r', 'reload', 'keys', true, envFile, () => {
-          void $.fs
-            .read(envFile)
-            .then((t) => {
-              lastEnvFile = String(t)
-            })
-            .catch(() => {
-              lastEnvFile = undefined
-            })
-            .finally(() => {
-              applyEnv(lastEnvFile)
-              redraw()
-              $.ui.toast(lastEnvFile === undefined ? `Grammar: no file at ${envFile}` : 'Grammar: keys reloaded')
-            })
-        })}
         <Text bold>{ignore.size > 9 ? `Ignored words (first 9 of ${ignore.size})` : 'Ignored words'}</Text>
         {words.length ? (
           <Box flexDirection="row" columnGap={2} flexWrap="wrap">
@@ -532,6 +776,81 @@ export const register: Register = (on) => {
           <Text dimColor>none yet: alt+i on the band ignores a word</Text>
         )}
         {words.length ? <Text dimColor>a number puts that word back in the check</Text> : null}
+      </Box>
+    )
+  })
+
+  on('ui.render', { component: 'Pane', requestId: DEBUG_PANE }, async ($, e) => {
+    await read($, revAtom)
+    const { Box, Text, Button } = $.ui.resolve(e)
+    const redraw = () => void update($, revAtom, (n) => n + 1)
+    const kv = (k: string, v: string, bad = false) => (
+      <Box key={`kv-${k}`} flexDirection="row" columnGap={1}>
+        <Text dimColor>{k.padEnd(11)}</Text>
+        <Text color={bad ? 'warning' : undefined} wrap="truncate-end">
+          {v}
+        </Text>
+      </Box>
+    )
+    const keysSet = KNOWN_ENV.filter((k) => env[k]?.trim())
+    return (
+      <Box flexDirection="column">
+        <Text bold>This machine</Text>
+        {kv('version', `${RELEASE} on ${host} · ${platform.os} ${platform.distro} ${platform.arch}`)}
+        {kv('harper', harperOk ? harperVersion || 'found' : 'missing', !harperOk)}
+        {kv('keys file', envFile)}
+        {kv('set', keysSet.length ? keysSet.join(', ') : 'nothing', !keysSet.length)}
+        {commentedOnly(lastEnvFile, MUST_BE_LIVE).length
+          ? kv('commented', `${commentedOnly(lastEnvFile, MUST_BE_LIVE).join(', ')}: a # in front, not used`, true)
+          : null}
+        {kv('keybinds', keybindingsPath)}
+        {kv('files', `${draftPath} · last-paint.json beside it`)}
+        <Text bold>Routes</Text>
+        {kv('chain', hops.map((h) => `${h.route} ${modelName(h.model)}`).join(' → ') || 'off', !hops.length)}
+        {lastProbe ? (
+          <Box flexDirection="column">
+            <Text dimColor>{`test at ${new Date(lastProbe.at).toLocaleTimeString()}`}</Text>
+            {lastProbe.results.map((r) => (
+              <Box key={`probe-${r.name}`} flexDirection="row" columnGap={1}>
+                <Text color={r.ok ? 'success' : 'warning'}>{r.ok ? '✓' : '✗'}</Text>
+                <Text>{r.name.padEnd(26)}</Text>
+                <Text dimColor>{`${String(r.ms).padStart(5)} ms`}</Text>
+                <Text dimColor wrap="truncate-end">
+                  {r.detail}
+                </Text>
+              </Box>
+            ))}
+          </Box>
+        ) : (
+          <Text dimColor>not tested yet: press x</Text>
+        )}
+        <Text bold>Langfuse</Text>
+        {kv('endpoint', langfuse ? langfuse.baseUrl : langfuseKeys(env) ? 'switched off' : 'no keys')}
+        {kv('last trace', traceLine(lastTrace, Date.now()), !!lastTrace && !lastTrace.ok)}
+        {kv('last error', lastLangfuseError || 'none', !!lastLangfuseError)}
+        <Text bold>Last check</Text>
+        {lastRun ? (
+          <Box flexDirection="column">
+            {kv('at', `${new Date(lastRun.at).toLocaleTimeString()} · “${lastRun.text.slice(0, 60)}${lastRun.text.length > 60 ? '…' : ''}”`)}
+            {kv('found', `harper ${lastRun.harper} · llm ${lastRun.llm} · answered by ${lastRun.route ?? 'cache or nobody'}`)}
+            {lastRun.spans.map((s, i) => (
+              <Box key={`span-${i}`} flexDirection="row" columnGap={1}>
+                <Text dimColor>{`  ${s.name.padEnd(16)}`}</Text>
+                <Text dimColor>{`${String(s.ms).padStart(5)} ms`}</Text>
+                <Text color={s.error ? 'warning' : 'success'} wrap="truncate-end">
+                  {s.error ?? 'ok'}
+                </Text>
+              </Box>
+            ))}
+          </Box>
+        ) : (
+          <Text dimColor>none yet: type an English sentence of four words or more</Text>
+        )}
+        {kv('session', `cache ${cache.size} · ignored ${ignore.size} · spent $${spent.toFixed(4)}`)}
+        <Box flexDirection="row" columnGap={2}>
+          <Button key="x" label="test every route" hotkey="x" plain onPress={() => void $.command.run({ command: 'bgh', args: 'test' })} />
+          <Button key="u" label="refresh" hotkey="u" plain onPress={redraw} />
+        </Box>
       </Box>
     )
   })
@@ -602,6 +921,7 @@ export const register: Register = (on) => {
         .run(['harper-cli', '--version'], { timeoutMs: 5000 })
         .then((r) => {
           harperOk = r.exitCode === 0
+          harperVersion = harperOk ? r.stdout.trim() : ''
           if (harperOk) $.ui.toast('Grammar: Harper found')
         })
         .catch(() => undefined)
@@ -816,6 +1136,19 @@ export const register: Register = (on) => {
         }
       }
       await repaint()
+      // What /bgh debug shows as the last check: counts, who answered, each stage's time and error.
+      lastRun = {
+        at: Date.now(),
+        text: c.text,
+        harper: c.harper.length,
+        llm: c.llm.length,
+        route: c.route,
+        spans: c.spans.map((sp) => {
+          const err = sp.attrs['langfuse.observation.status_message']
+          return { name: sp.name, ms: sp.endMs - sp.startMs, error: typeof err === 'string' ? err.slice(0, 120) : undefined }
+        }),
+      }
+      void update($, revAtom, (n) => n + 1)
       void sendTrace()
     }
 
