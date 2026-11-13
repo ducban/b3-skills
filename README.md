@@ -472,7 +472,7 @@ are Karan Bansal's, from
 again without its price table, and off until `k` in `/sl settings` turns it on.
 
 `ch`, the hit rate, joins the same cell only under **70%**. Above that it
-reads 98–100% and says nothing, and a permanent cell for a constant is spent
+reads 98 to 100% and says nothing, and a permanent cell for a constant is spent
 width. It is also the one figure here that reports the past: by the time it
 drops, the money is gone. It is summed over the session rather than read off the
 last response, which needs a dedup signal: `session.measure` naming `cost` in
