@@ -10,6 +10,8 @@ import {
   cycle,
   DEFAULT_PREFS,
   dirsFor,
+  ENV_TEMPLATE,
+  needsTemplate,
   readPrefs,
   decorations,
   harperReplacement,
@@ -252,5 +254,18 @@ describe('folders per OS', () => {
       cache: 'C:\\L\\b3-grammar-helper',
       sep: '\\',
     })
+  })
+})
+
+describe('keys template', () => {
+  test('missing, empty or comment-only files get it; a file with a value keeps its own', () => {
+    expect(needsTemplate(undefined)).toBe(true)
+    expect(needsTemplate('')).toBe(true)
+    expect(needsTemplate('# only a note\n\n')).toBe(true)
+    expect(needsTemplate('OPENAI_API_KEY=x\n')).toBe(false)
+  })
+  test('the template itself parses to blanks, so it adds no route', () => {
+    expect(chain(parseDotenv(ENV_TEMPLATE)).map((h) => h.route)).toEqual(['claude'])
+    expect(needsTemplate(ENV_TEMPLATE)).toBe(false)
   })
 })

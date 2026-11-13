@@ -534,3 +534,34 @@ export function otlpTrace(traceId: string, root: SpanRecord, children: SpanRecor
     ],
   })
 }
+
+// ---------------------------------------------------------------------------
+// The keys file a new machine starts with: every name, every value blank.
+
+export const ENV_TEMPLATE = `# b3-grammar-helper keys. Fill in what you have, then run: /b3-grammar-helper reload
+# Variables already in the environment win over this file. Leave a line blank to skip it.
+
+# LLM routes, tried in this order when set. With none, Haiku runs through your Claude login.
+OPENROUTER_API_KEY=
+OPENAI_API_KEY=
+FIREWORKS_API_KEY=
+
+# Optional: put one route first (openrouter | openai | fireworks | claude) and pick its model.
+# The settings pane (/b3-grammar-helper, keys f and m) does the same and wins over these.
+#B3_GRAMMAR_PROVIDER=
+#B3_GRAMMAR_MODEL=
+# Harper only, no LLM:
+#B3_GRAMMAR_LLM=off
+
+# Langfuse tracing, on only when both keys are set. The draft text is sent.
+LANGFUSE_PUBLIC_KEY=
+LANGFUSE_SECRET_KEY=
+#LANGFUSE_BASE_URL=https://cloud.langfuse.com
+`
+
+// A file that holds nothing but blanks and comments needs the template; one with a value doesn't.
+export const needsTemplate = (text: string | undefined): boolean =>
+  text === undefined || !text.split(/\r?\n/).some((l) => l.trim() && !l.trim().startsWith('#'))
+
+// Where harper-cli comes from, per machine. Release builds need no Rust.
+export const HARPER_RELEASES = 'https://github.com/Automattic/harper/releases/latest'

@@ -7,6 +7,9 @@ import {
   availableRoutes,
   cycle,
   dirsFor,
+  ENV_TEMPLATE,
+  HARPER_RELEASES,
+  needsTemplate,
   LLM_DELAYS,
   MODEL_CHOICES,
   readPrefs,
@@ -46,7 +49,7 @@ import {
   type Usage,
 } from './core'
 
-const RELEASE = '0.4.0'
+const RELEASE = '0.4.1'
 const HARPER_DELAY_MS = 300
 const HOP_TIMEOUT_MS = 6000
 const CACHE_KEY = 'llm-cache-v1'
@@ -132,7 +135,7 @@ export const register: Register = (on) => {
     const llm = hops.map((h) => `${h.route} ${modelName(h.model)}`)
     return [
       `b3-grammar-helper ${RELEASE}  ${prefs.enabled ? 'on' : 'OFF'}`,
-      `harper    ${harperOk ? 'on' : 'missing (install harper)'}`,
+      `harper    ${harperOk ? 'on' : `missing: install harper-cli from ${HARPER_RELEASES}`}`,
       `llm       ${llm.length ? llm.join(' → ') : 'off'}`,
       `langfuse  ${langfuse ? `on (${langfuse.baseUrl})` : langfuseKeys(env) ? 'off (switched off)' : 'off (no keys)'}`,
       `cache     ${cache.size} sentences`,
@@ -178,6 +181,18 @@ export const register: Register = (on) => {
       fileText = String(await $.fs.read(envFile))
     } catch {
       // No file: the process environment alone.
+    }
+    // A new machine gets the template, so there's a file with every key name to fill in. Never
+    // over a file that already holds a value.
+    if (needsTemplate(fileText)) {
+      try {
+        await $.fs.write(envFile, ENV_TEMPLATE)
+        // Keys are secrets: owner-only where chmod exists (not on Windows, hence the catch).
+        await $.process.run(['chmod', '600', envFile], { timeoutMs: 2000 }).catch(() => undefined)
+        if (fileText === undefined) $.ui.toast(`Grammar: key template written to ${envFile}`)
+      } catch {
+        // read-only home: the environment alone
+      }
     }
     lastEnvFile = fileText
     applyEnv(fileText)
@@ -333,7 +348,7 @@ export const register: Register = (on) => {
           }
           save()
         })}
-        {row('h', 'harper', harperOk ? 'found' : 'missing', harperOk, harperOk ? 'offline first pass · press to look again' : 'install harper-cli, then press h', () => {
+        {row('h', 'harper', harperOk ? 'found' : 'missing', harperOk, harperOk ? 'offline first pass · press to look again' : `install harper-cli (${HARPER_RELEASES}), then press h`, () => {
           void $.process
             .run(['harper-cli', '--version'], { timeoutMs: 5000 })
             .then((r) => {
