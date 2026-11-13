@@ -99,7 +99,9 @@ const stand = (
   on('fs.exists', ($, e) => ({ value: hasVersionFile && e.path.endsWith('plugin.json') }))
   // `fs.read` answers the text itself, not an object wrapping it.
   on('fs.read', ($, e) => ({
-    value: legacy !== undefined && e.path.includes('/plugins/store/sl-mod_')
+    value: legacy !== undefined && e.path.includes('/plugins/store/sl-mod_b3-skills')
+      ? '{"usage":{"stale":true}}'
+      : legacy !== undefined && e.path.includes('/plugins/store/sl-mod_')
       ? JSON.stringify(legacy)
       : '{"name":"status-line","version":"0.1.0"}',
   }))
@@ -110,6 +112,8 @@ const stand = (
       ? [
           { name: 'bgh_b3-skills-b1a383cba34d.json', kind: 'file' as const, size: 9, mtimeMs: 9, isLink: false },
           { name: 'sl-mod_sl-mod-61bf679392a2.json', kind: 'file' as const, size: 9, mtimeMs: 5, isLink: false },
+          // Newer, but only the usage cache: what the move to b3-skills left.
+          { name: 'sl-mod_b3-skills-b6dd1afc9c72.json', kind: 'file' as const, size: 9, mtimeMs: 7, isLink: false },
         ]
       : [],
   }))

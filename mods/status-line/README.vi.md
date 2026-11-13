@@ -226,7 +226,7 @@ phần ba và đồng hồ lấy breakdown.
 
 ## Trạng thái
 
-Bản 0.3.0, cài từ marketplace b3-skills ở scope **user**, nên phiên
+Bản 0.3.1, cài từ marketplace b3-skills ở scope **user**, nên phiên
 nào trên máy cũng có. Một lệnh `/sl` với tám verb. 41 test qua
 `claude plugin test`, `tsc -p .` sạch, `claude plugin validate` qua.
 
@@ -576,7 +576,7 @@ Engine giữ settings của mod ở
 `~/.claude/plugins/store/<plugin>_<marketplace>-<hash>.json`, nên đổi tên hay đổi
 marketplace là bắt đầu với file trống. Lần chạy đầu dưới tên `status-line`, mod
 chép layout, guard, cold gate và hai công tắc ẩn band, hiện giờ reset từ file
-`sl-mod_*` mới nhất trong đó sang, chỉ một lần. `/sl debug` ghi tên file ở dòng
+`sl-mod_*` mới nhất có settings trong đó sang, chỉ một lần. `/sl debug` ghi tên file ở dòng
 `settings carried from:`.
 
 ### Cập nhật

@@ -228,7 +228,7 @@ one, then the main loop's falling to a third and the gauge taking the breakdown.
 
 ## State
 
-Version 0.3.0, installed from the b3-skills marketplace at scope **user**, so
+Version 0.3.1, installed from the b3-skills marketplace at scope **user**, so
 it draws in every session on this box. One command, `/sl`, with eight verbs.
 Forty-one tests pass under `claude plugin test`, `tsc -p .` is clean and
 `claude plugin validate` passes.
@@ -589,6 +589,7 @@ The engine keeps a mod's settings in
 `~/.claude/plugins/store/<plugin>_<marketplace>-<hash>.json`, so a new name or a
 new marketplace starts empty. The first start as `status-line` copies the layout,
 guard, cold gate and the hide and reset switches from the newest `sl-mod_*` file
+that holds any of them
 there, once. `/sl debug` names the file under `settings carried from:`.
 
 ### Update

@@ -1621,7 +1621,9 @@ async function debugText($: EngineInterface) {
 // The mod was `sl-mod` until 0.3.0. The engine keeps a plugin's store in
 // `<config>/plugins/store/<plugin>_<marketplace>-<hash>.json`, so a new name or a
 // new marketplace starts on an empty one. The first start under this name copies
-// the preferences from the newest `sl-mod_*` file, once. The usage cache and a
+// the preferences from the newest `sl-mod_*` file that holds any, once: a newer
+// one can hold only the usage cache, as `sl-mod@b3-skills` did after the move
+// from its own marketplace, and copying from it would carry nothing. The usage cache and a
 // dropped prompt stay behind: both are stale by then. A failure leaves the
 // defaults, as a fresh install would.
 const LEGACY_STORE = /^sl-mod_.+\.json$/
@@ -1642,15 +1644,22 @@ async function migrateStore($: EngineInterface) {
     const config = (await $.env.get('CLAUDE_CONFIG_DIR')) ?? (home === undefined ? undefined : `${home}/.claude`)
     if (config !== undefined) {
       const dir = `${config}/plugins/store`
-      const old = (await $.fs.list(dir))
+      const candidates = (await $.fs.list(dir))
         .filter(f => f.kind === 'file' && LEGACY_STORE.test(f.name))
-        .sort((a, b) => b.mtimeMs - a.mtimeMs)[0]
-      if (old !== undefined) {
-        const saved = JSON.parse(String(await $.fs.read(`${dir}/${old.name}`))) as Record<string, unknown>
+        .sort((a, b) => b.mtimeMs - a.mtimeMs)
+      for (const old of candidates) {
+        let saved: Record<string, unknown>
+        try {
+          saved = JSON.parse(String(await $.fs.read(`${dir}/${old.name}`))) as Record<string, unknown>
+        } catch {
+          continue
+        }
+        if (!CARRIED_KEYS.some(key => saved[key] !== undefined)) continue
         for (const key of CARRIED_KEYS) {
           if (saved[key] !== undefined && (await $.store.get(key)) === undefined) await $.store.set(key, saved[key])
         }
         from = old.name
+        break
       }
     }
   } catch {
