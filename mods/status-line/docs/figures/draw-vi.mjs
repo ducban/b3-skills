@@ -16,7 +16,7 @@ render(`${out}/statusline-vs-mod.svg`, compare({
       { title: 'Lệnh đọc 127 MB bản ghi hội thoại', sub: 'để cộng token, lần nào cũng đọc lại' },
       { title: 'Lệnh vẽ dưới ô gõ', sub: 'và nằm yên chỗ đó' },
     ] },
-    { head: 'SL-MOD', tone: 'ink', items: [
+    { head: 'STATUS-LINE', tone: 'ink', items: [
       { title: 'Engine nạp module một lần duy nhất', sub: 'vẽ lại chỉ là gọi một hàm' },
       { title: 'Lúc vẽ chỉ đọc bộ nhớ', sub: 'số đã ghi sẵn khi sự kiện tới' },
       { title: 'Việc đọc nặng chạy theo bộ hẹn giờ', sub: 'mỗi máy gọi hạn mức một lần, ba phút một' },

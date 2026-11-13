@@ -16,7 +16,7 @@ render(`${out}/statusline-vs-mod.svg`, compare({
       { title: 'It reads 127 MB of transcripts', sub: 'to total the tokens, each time' },
       { title: 'It draws under the prompt', sub: 'and stays where it was put' },
     ] },
-    { head: 'SL-MOD', tone: 'ink', items: [
+    { head: 'STATUS-LINE', tone: 'ink', items: [
       { title: 'The engine loads a module once', sub: 'a redraw is a function call' },
       { title: 'The draw path reads memory', sub: 'the figures were kept as events landed' },
       { title: 'The expensive reads sit on a timer', sub: 'one quota fetch a machine, every three minutes' },
