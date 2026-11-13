@@ -36,10 +36,11 @@ trong `ACKNOWLEDGEMENTS.md`. Mỗi thứ một dòng, có tên người và gi�
 Lúc vẽ, dải không đi hỏi ai cả. Mọi con số đã nằm sẵn trong bộ nhớ từ trước.
 Engine phát sự kiện mỗi khi có yêu cầu đi, mỗi lần đo, mỗi lần compaction, mỗi
 lần tác tử con (subagent) chạy. Hook của mod bắt sự kiện đó và ghi số xuống
-ngay. Ngoài ra mod có bộ hẹn giờ riêng, mười giây chạy một lần, để soát lại đồng
-hồ ngữ cảnh (context gauge). Thêm một lần gọi mạng ba phút một, dùng chung cho
-mọi phiên trên cùng máy, để lấy hạn mức (quota) mà engine không đưa. Chỉ có bố
-cục là lưu vào `$.store`, nên đóng phiên mở lại vẫn còn.
+ngay. Ngoài ra mod có hai bộ hẹn giờ riêng: một cái mười giây chạy một lần để
+soát lại đồng hồ ngữ cảnh (context gauge), một cái mỗi phút để đọc lại theme và
+nhích đếm ngược reset. Thêm một lần gọi mạng ba phút một, dùng chung cho mọi
+phiên trên cùng máy, để lấy hạn mức (quota) mà engine không đưa. Chỉ có bố cục
+là lưu vào `$.store`, nên đóng phiên mở lại vẫn còn.
 
 ![Ba tầng: engine đưa sự kiện, mod giữ số, rồi dải và các khung vẽ ra](docs/figures/vi/wiring.svg)
 
@@ -99,6 +100,26 @@ sáng dùng Tokyo Night Day. Trước đây dải chỉ có một bảng, trên 
 là dải đổi theo ngay, không cần mở phiên mới. Có một chỉnh nhỏ: các nấc nền của
 Moon từng sát màu nền terminal quá, ngày 22/10/2026 có người không phân biệt nổi
 ô với hàng phía sau, nên nay mỗi nấc lên một bậc trong bảng màu.
+
+Tên theme chỉ trả lời được khi chính theme đó tô nền:
+
+| `/theme` | Ai giữ màu nền | Dải hỏi |
+|---|---|---|
+| `light`, `dark`, cặp `-daltonized` | theme | tên theme |
+| `auto` (match Terminal), `light-ansi`, `dark-ansi`, `custom:…` | terminal, và không ai báo cho plugin | hệ điều hành |
+
+`auto` là engine tự hỏi terminal mà ra, nhưng dòng trong `/config` vẫn ghi
+`auto`. Cặp `-ansi` thì giao màu cho terminal, tức là một lời khai chứ không
+phải số đo: có một máy Mac chạy `dark-ansi` trên profile Terminal nền sáng suốt
+một tháng, ô xanh navy nằm trên hàng trắng, trong khi phần còn lại của Claude
+Code dùng màu ANSI nên trông vẫn ổn. Với mấy dòng đó, mod hỏi thẳng giao diện hệ
+thống (system appearance), vì terminal nào theo hệ thống thì hệ thống chính là
+sự thật về màu nền. Trên macOS là `defaults read -g AppleInterfaceStyle` (ra
+`Dark`, còn chế độ sáng thì không có key luôn), trên Linux có desktop là
+`gsettings get org.gnome.desktop.interface color-scheme`. Máy không có cả hai
+thì lấy theo đầu tên theme. Việc này chạy theo bộ hẹn giờ mỗi phút, nên desktop
+tự chuyển tối lúc chiều xuống thì dải cũng theo trong vòng một phút. `/sl debug`
+in bảng màu đang dùng và vì sao chọn nó.
 
 Mốc reset nằm trong ô của thanh nhưng không ăn theo màu thanh. Sắp tới thì xanh
 lơ (trong một phần năm cuối cửa sổ: giờ cuối của 5h, hơn một ngày cuối của 7d),

@@ -72,7 +72,7 @@ const bg = (i: number) => BG[i % BG.length] as string
 
 type Scheme = 'dark' | 'light'
 let scheme: Scheme = 'dark'
-// How the palette was decided, in words, for /sl-debug.
+// How the palette was decided, in words, for /sl debug.
 let themeNote = 'not read yet'
 
 function applyScheme(s: Scheme) {

@@ -29,10 +29,11 @@ the licence.
 
 Everything the band draws was written to memory before the redraw asked for
 it. The engine raises an event for each request, each reading, each compaction
-and each subagent, and a hook writes the figure down as it lands. One timer of
-the mod's own ticks every ten seconds to check the gauge, and one fetch every
-three minutes, shared across the sessions on a machine, brings in the quota
-windows the engine does not hand out. Only the layout is stored, in `$.store`,
+and each subagent, and a hook writes the figure down as it lands. Two timers
+are the mod's own: one ticks every ten seconds to check the gauge, one every
+minute to re-read the theme and move the reset countdown. One fetch every three
+minutes, shared across the sessions on a machine, brings in the quota windows
+the engine does not hand out. Only the layout is stored, in `$.store`,
 so it outlives the session.
 
 ![Three layers: the events the engine hands the mod, the state the mod keeps, and the band and panes it draws](docs/figures/wiring.svg)

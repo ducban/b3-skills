@@ -9,7 +9,7 @@
   "plugins": [
     {
       "name": "sl-mod",
-      "description": "Status line in the band above the prompt: folder, model with effort, git, and the context, 5h, 7d and per-model quota gauges. Up to four lines, chosen in /sl-settings.",
+      "description": "Status line in the band above the prompt: folder, model with effort, git, and the context, 5h, 7d and per-model quota gauges. Up to four lines, chosen in /sl settings.",
       "source": ".",
       "category": "productivity",
       "tags": ["statusline", "mod", "usage", "quota", "terminal"]
