@@ -226,7 +226,7 @@ phần ba và đồng hồ lấy breakdown.
 
 ## Trạng thái
 
-Bản 0.4.0, cài từ marketplace b3-skills ở scope **user**, nên phiên
+Bản 0.4.1, cài từ marketplace b3-skills ở scope **user**, nên phiên
 nào trên máy cũng có. Một lệnh `/sl` với tám verb. 50 test qua
 `claude plugin test`, `tsc -p .` sạch, `claude plugin validate` qua.
 

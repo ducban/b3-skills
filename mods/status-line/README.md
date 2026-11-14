@@ -228,7 +228,7 @@ one, then the main loop's falling to a third and the gauge taking the breakdown.
 
 ## State
 
-Version 0.4.0, installed from the b3-skills marketplace at scope **user**, so
+Version 0.4.1, installed from the b3-skills marketplace at scope **user**, so
 it draws in every session on this box. One command, `/sl`, with eight verbs.
 Fifty tests pass under `claude plugin test`, `tsc -p .` is clean and
 `claude plugin validate` passes.

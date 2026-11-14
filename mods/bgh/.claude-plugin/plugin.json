@@ -1,6 +1,7 @@
 {
   "name": "bgh",
-  "version": "0.10.3",
+  "displayName": "B3 Grammar Helper",
+  "version": "0.10.4",
   "license": "MIT",
   "description": "B3 Grammar Helper: grammar ghost text in the prompt box. Harper first, then OpenRouter, OpenAI, Fireworks or Haiku, traced to Langfuse when keys are set.",
   "author": {

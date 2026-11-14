@@ -79,7 +79,7 @@ import {
   type Usage,
 } from './core'
 
-const RELEASE = '0.10.3'
+const RELEASE = '0.10.4'
 const HARPER_DELAY_MS = 300
 const HOP_TIMEOUT_MS = 6000
 // Model lists, Langfuse scores and traces: none should hold a command or a tab open for long.

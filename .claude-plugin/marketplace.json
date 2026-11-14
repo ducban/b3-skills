@@ -9,6 +9,7 @@
   "plugins": [
     {
       "name": "bgh",
+      "displayName": "B3 Grammar Helper",
       "description": "B3 Grammar Helper: gạch chân lỗi ngữ pháp ngay trong ô prompt khi gõ tiếng Anh: Harper chạy offline trước, rồi OpenRouter, OpenAI, Fireworks hoặc Haiku sửa cách dùng từ. Có pane settings, danh sách từ bỏ qua, trace Langfuse.",
       "source": "./mods/bgh",
       "category": "productivity",
@@ -22,7 +23,8 @@
     },
     {
       "name": "status-line",
-      "description": "Status line trong dải phía trên ô prompt: thư mục, model kèm effort, git, và các thước context, 5h, 7d, quota theo model. Tối đa bốn dòng, chọn trong /sl settings. Trước 0.3.0 tên là sl-mod.",
+      "displayName": "Status Line",
+      "description": "Status Line: status line trong dải phía trên ô prompt: thư mục, model kèm effort, git, rồi thước context, 5h, 7d và quota theo model. Tối đa bốn dòng, chọn trong /sl settings. Trước 0.3.0 tên là sl-mod.",
       "source": "./mods/status-line",
       "category": "productivity",
       "tags": [
