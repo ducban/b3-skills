@@ -44,7 +44,8 @@ someone else's repo and written again here. The versions in brackets before
   Written again here without its price table, in tokens (sl-mod 0.1.12)
 - Output tokens a second, timed from a request's first chunk to its stop, and
   a turn's cost as the session total at its end less the total at its start:
-  johnnyvizz, session-band `hooks/register.tsx`, MIT (sl-mod 0.1.14)
+  johnnyvizz, session-band `hooks/register.tsx`, MIT (sl-mod 0.1.14). Since
+  status-line 0.4.0 the turn cell counts output tokens instead of dollars
 - A ledger of the session's subagents built from `agent.spawn`, each loop's
   `turn.step` and its `turn.complete`, drawn as a pane with a row an agent:
   johnnyvizz, [savvy-progress](https://github.com/JohnnyVizz/claude-kit/tree/main/plugins/savvy-progress)

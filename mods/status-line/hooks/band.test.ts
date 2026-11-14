@@ -645,7 +645,7 @@ test('the settings pane groups its rows, boxes the preview, and drops the last c
   await $.classic.SessionStart({ source: 'startup' })
 
   const wide = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...SETTINGS })
-  for (const title of ['Identity', 'Budget', 'Tokens and money', 'Behaviour', 'as the band will draw it']) {
+  for (const title of ['Identity', 'Budget', 'Tokens', 'Behaviour', 'as the band will draw it']) {
     expect(await wide.find({ type: 'Text', text: new RegExp(title) }), title).toBeDefined()
   }
   // The item row carries what it draws now; a switch row carries what it does.
@@ -664,7 +664,7 @@ test('the settings pane groups its rows, boxes the preview, and drops the last c
 })
 
 // --- speed and the last turn --------------------------------------------------
-test('the speed cell times the last request, and the turn cell prices the last turn', async ($, on) => {
+test('the speed cell times the last request, and the turn cell counts the last turn in tokens', async ($, on) => {
   // The stand-in request yields a chunk, moves the clock two seconds, and
   // stops with two hundred output tokens: a hundred a second. The session total
   // is read at each end of the turn, so the turn costs their difference.
@@ -718,14 +718,16 @@ test('the speed cell times the last request, and the turn cell prices the last t
   await step()
   expect(await ui.find({ type: 'Text', text: /100 tok\/s/ })).toBeDefined()
 
-  // The turn ends 25 cents and 38 seconds later.
+  // The turn ends 38 seconds later: the main loop's 200 and 5 output tokens,
+  // not the subagent's 500, and no dollars whatever the session cost.
   usd = 1.25
   await $.turn.complete({ answer: 'hello', durationMs: 38_000, isAborted: false, turnId: 't', reason: 'answer' })
-  expect(await ui.find({ type: 'Text', text: /turn \$ 0\.25 38s/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /turn 205 out 38s/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /\$/ })).toBeUndefined()
 
   // A subagent's turn leaves it alone.
   await $.turn.complete({ answer: '', durationMs: 5_000, isAborted: false, turnId: 't2', agentId: 'agent-1', reason: 'answer' })
-  expect(await ui.find({ type: 'Text', text: /turn \$ 0\.25 38s/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /turn 205 out 38s/ })).toBeDefined()
 
   await ui.unmount()
 })
@@ -1453,8 +1455,8 @@ test('the first start as status-line carries the settings over from the sl-mod s
   expect(debug).toMatch(/ git=2 /)
 })
 
-test('with no sl-mod store, the first start keeps the defaults', async ($, on) => {
-  stand(on)
+test('with no sl-mod store that holds settings, the first start keeps the defaults', async ($, on) => {
+  stand(on, undefined, undefined, true, undefined, undefined, undefined, undefined, {})
   on('session.start', ($, e) => ({ cwd: e.cwd }))
 
   await $.session.start({ cwd: '/home/u/project', surface: 'terminal', isInteractive: true })
@@ -1462,4 +1464,92 @@ test('with no sl-mod store, the first start keeps the defaults', async ($, on) =
   const debug = (await runSl($, 'debug')).text
   expect(debug).toMatch(/settings carried from: none/)
   expect(debug).toMatch(/guard: off/)
+})
+
+test('a 0.3.0 marker that named a usage-only store does not stop the carry-over', async ($, on) => {
+  const legacy = { guard: true, layout: { git: 2 } }
+  stand(on, undefined, undefined, true, undefined, { migratedFrom: 'sl-mod_b3-skills-b6dd1afc9c72.json' }, undefined, undefined, legacy)
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+
+  await $.session.start({ cwd: '/home/u/project', surface: 'terminal', isInteractive: true })
+
+  const debug = (await runSl($, 'debug')).text
+  expect(debug).toMatch(/settings carried from: sl-mod_sl-mod-61bf679392a2\.json/)
+  expect(debug).toMatch(/guard: on/)
+})
+
+test('a store folder that cannot be read writes no marker, so the next start tries again', async ($, on) => {
+  stand(on)
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+
+  await $.session.start({ cwd: '/home/u/project', surface: 'terminal', isInteractive: true })
+
+  expect((await runSl($, 'debug')).text).toMatch(/settings carried from: not yet: /)
+})
+
+// --- the guard's reading of a command line --------------------------------------
+const startGuarded = async ($: Parameters<TestBody>[0]) =>
+  $.session.start({ cwd: '/home/bannd/Workspace/Projects/personal_works/sl-mod', surface: 'terminal', isInteractive: true })
+
+test('text that only mentions rm -rf, in quotes or a heredoc, is not held', async ($, on) => {
+  const { ran } = beneath(on, { ...FRESH_STORE, guard: true }, () => '')
+  await startGuarded($)
+  const lines = [
+    'git commit -m "clean up; rm -rf build was the old way"',
+    "git commit -F - <<'EOF'\nrm -rf build\nEOF",
+    'cat <<EOF > notes.md\nthen rm -rf dist\nEOF\nls',
+    'make build 2>&1 | tee log.txt',
+  ]
+  for (const command of lines) expect((await $.tool.call({ tool: 'Bash', command })).deny, command).toBeUndefined()
+  expect(ran).toEqual(lines)
+})
+
+for (const [command, label] of [
+  ['sudo -u root rm -rf /srv/x', /guard · rm -rf/],
+  ['git push -uf origin main', /guard · git push --force/],
+  ['sleep 1 & rm -rf build', /guard · rm -rf/],
+  ["echo 'a;b' ; rm -rf build", /guard · rm -rf/],
+] as const) {
+  test(`${command} is held`, async ($, on) => {
+    const { ran, clock, until } = beneath(on, { ...FRESH_STORE, guard: true }, argv => (argv[0] === 'bash' ? '0 0 0\n' : ''))
+    await startGuarded($)
+    const ui = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...BAND })
+    const call = $.tool.call({ tool: 'Bash', command })
+    await until(ui, label)
+    await ui.press({ key: 'guard-refuse' })
+    await clock.advance(250)
+    expect((await call).deny).toMatch(/pressed refuse/)
+    expect(ran).toEqual([])
+    await ui.unmount()
+  })
+}
+
+test('rm on a shell variable says it cannot be measured, not that it deletes nothing', async ($, on) => {
+  const { processes, clock, until } = beneath(on, { ...FRESH_STORE, guard: true }, () => '0 0 0\n')
+  await startGuarded($)
+  const ui = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...BAND })
+  const call = $.tool.call({ tool: 'Bash', command: 'rm -rf "$TMPDIR/build"' })
+  await until(ui, /can't measure: \$TMPDIR\/build expands at run time/)
+  expect(await ui.find({ type: 'Text', text: /delete nothing/ })).toBeUndefined()
+  expect(processes.find(p => p.argv[0] === 'bash')).toBeUndefined()
+  await ui.press({ key: 'guard-refuse' })
+  await clock.advance(250)
+  await call
+  await ui.unmount()
+})
+
+test('git reset --hard with a ref lists the commits that leave the branch', async ($, on) => {
+  const { processes, clock, until } = beneath(on, { ...FRESH_STORE, guard: true }, argv =>
+    argv[1] === 'log' ? 'aaa1111 third\nbbb2222 second\nccc3333 first\n' : '',
+  )
+  await startGuarded($)
+  const ui = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...BAND })
+  const call = $.tool.call({ tool: 'Bash', command: 'git reset --hard HEAD~3' })
+  await until(ui, /move the branch back 3 commits/)
+  expect(await ui.find({ type: 'Text', text: /commit aaa1111 third/ })).toBeDefined()
+  expect(processes.find(p => p.argv[1] === 'log')?.argv).toContain('HEAD~3..HEAD')
+  await ui.press({ key: 'guard-refuse' })
+  await clock.advance(250)
+  await call
+  await ui.unmount()
 })

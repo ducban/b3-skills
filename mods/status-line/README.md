@@ -228,9 +228,9 @@ one, then the main loop's falling to a third and the gauge taking the breakdown.
 
 ## State
 
-Version 0.3.1, installed from the b3-skills marketplace at scope **user**, so
+Version 0.4.0, installed from the b3-skills marketplace at scope **user**, so
 it draws in every session on this box. One command, `/sl`, with eight verbs.
-Forty-one tests pass under `claude plugin test`, `tsc -p .` is clean and
+Fifty tests pass under `claude plugin test`, `tsc -p .` is clean and
 `claude plugin validate` passes.
 
 Every polled figure carries a note saying why it has nothing, and `/sl debug`
@@ -342,10 +342,10 @@ What each one measures:
 
 | Command | Shown |
 |---|---|
-| `rm -r`, `rm -f`, `rm -rf` | the files it would delete, count and size; globs and `~` expanded |
-| `git reset --hard` | the files with uncommitted changes, and `git diff --shortstat` |
+| `rm -r`, `rm -f`, `rm -rf` | the files it would delete, count and size; globs and `~` expanded. A path holding `$VAR` or a backtick says *can't measure: it expands at run time*, never *delete nothing* |
+| `git reset --hard` | the files with uncommitted changes, and `git diff --shortstat`; with a ref (`HEAD~3`), also the commits that leave the branch |
 | `git clean` | what `git clean -n` with the same flags would remove |
-| `git push --force`, `-f`, `--force-with-lease`, `+ref` | the commits on the remote branch that the push would drop, as of the last fetch |
+| `git push --force`, `-f` (also inside `-uf`), `--force-with-lease`, `+ref` | the commits on the remote branch that the push would drop, as of the last fetch |
 
 A `cd dir &&` or `git -C dir` earlier on the line moves where it is measured.
 Paths go to `bash`, `find`, `du` and `git` as **arguments**, never as source, so
@@ -359,6 +359,11 @@ until a button's `onPress` sets the decision, the turn's `next.signal` aborts,
 or ten minutes pass. One command is held at a time; a second risky call waits
 for the first. A guard that throws fails *open* unless its registration carries
 a `.catch`, so it does, and the handler refuses.
+
+The line is cut at `;`, `|`, `&`, `&&`, `||` and newlines outside quotes,
+and a heredoc's body is skipped, so a commit message or a heredoc that mentions
+`rm -rf` is not held. `sudo -u root` and other sudo flags with a value are read
+past to the command behind them.
 
 What it does not do: it reads the command text and does not parse shell.
 `$(...)`, `eval`, `bash -c "..."`, `xargs rm`, `find -delete`, and scripts that
@@ -493,8 +498,8 @@ last response, which needs a dedup signal: `session.measure` naming `cost` in
 The engine hands a mod one money figure: the session total, `cost.usd`, with no
 split between input and output. Turning tokens into dollars would mean a price
 table in this file, and a price table in a file is a number that goes wrong
-silently the day the prices change. So `i` and `o` are token counts and `$` is
-the session total.
+silently the day the prices change. So `i` and `o` are token counts, and the
+band shows no dollars at all.
 
 A lifetime total, spend and tokens across every session rather than this one,
 is out of reach entirely. It needs either the transcript scan this mod exists to
@@ -505,16 +510,17 @@ avoid, or `ccuc`, which is not on every machine.
 Two cells off by default, `s` and `n` in `/sl settings` turn them on:
 
 ```
- ct ▰▰▰▰▱ 66%   cache ▰▰▰▰▰ 1h00m   84 tok/s   turn $ 0.25 38s
+ ct ▰▰▰▰▱ 66%   cache ▰▰▰▰▰ 1h00m   84 tok/s   turn 1.2k out 38s
 ```
 
 `speed` is the main loop's last request in output tokens a second, timed from
 its first chunk to its stop, so the wait for the first token is left out and a
 slow start does not read as a slow model. A request under 20 tokens or under a
-second is not scored. `turn` is the last finished turn: its cost is the session
-total at the end less the total at the start, since the engine hands a mod one
-money figure and no split, and its length is the engine's own `durationMs`. A
-subagent's requests and turns touch neither. Both are johnnyvizz's, from
+second is not scored. `turn` is the last finished turn: the output tokens of
+the main loop's responses in it, and its length, the engine's own `durationMs`.
+Before 0.4.0 it showed dollars, and a `cost` cell showed the session's; both went,
+since a Claude plan bills by subscription and a dollar figure there means nothing.
+A subagent's requests and turns touch neither. Both are johnnyvizz's, from
 [session-band](https://github.com/JohnnyVizz/claude-kit/tree/main/plugins/session-band),
 written again here.
 

@@ -110,3 +110,68 @@
 | `do.py` with a missing `.vale.ini` (scratch copy) | Exits 1 with Vale's `E100` instead of printing "0 lỗi" |
 | status-line checks | Not run: no status-line file changed |
 | Live check in Claude Code | Not done: bgh 0.10.3 was not reloaded in a session |
+
+---
+
+## CF-20261114-002
+
+- **Entry ID**: CF-20261114-002
+- **Source Review**: CR-20261114-002 (status-line findings carried from CR-20261114-001, deferred by CF-20261114-001)
+- **Machine**: Arch Linux, which owns status-line (POLICY.md rule 9). Only `mods/status-line` changed.
+- **Version**: status-line 0.3.1 → 0.4.0 (`mods/status-line/.claude-plugin/plugin.json:3`). Minor bump because the `cost` cell was removed.
+
+### Fixes Applied
+
+**Finding #1 (High)**: The migration has a new marker, `migratedFrom2` (`mods/status-line/hooks/register.ts:1746`, read at `:1748`, written at `:1786`). A 0.3.0 `migratedFrom` value no longer stops the scan. A re-run fills only keys the store doesn't hold yet. Test: `mods/status-line/hooks/band.test.ts:1469`.
+
+**Finding #13 (Low)**: A store whose JSON is not an object is skipped (`mods/status-line/hooks/register.ts:1767`). When the store folder can't be listed, no marker is written. `/sl debug` reports `not yet: <reason>`, and the next start tries again (`:1783`). Test: `mods/status-line/hooks/band.test.ts:1481`.
+
+**Finding #8 (Medium)**:
+- An `rm` target holding `$` or a backtick reports `can't measure: … expands at run time`, and nothing is run to measure it (`mods/status-line/hooks/register.ts:1268`).
+- A `cd` target with an expansion gets the same report (`:2150`).
+- Test: `mods/status-line/hooks/band.test.ts:1527`.
+
+**Finding #9 (Medium)**:
+- `git reset --hard <ref>` keeps the ref in the risk (`mods/status-line/hooks/register.ts:1201`).
+- The measurement lists `git log <ref>..HEAD` as the commits that leave the branch, beside the uncommitted files (`:1359`, summary at `:1372`).
+- An unknown or expanding ref is said in the note.
+- Test: `mods/status-line/hooks/band.test.ts:1541`.
+
+**Finding #10 (Medium)**:
+- `splitCommands` cuts at `;`, `|`, `&`, `&&`, `||` and newlines outside quotes only, and skips heredoc bodies. `2>&1` and `&>` are left whole (`mods/status-line/hooks/register.ts:1083`, used at `:1157`).
+- sudo/doas flags that take a value are skipped together with their value (`:1074`, `:1165`).
+- Force push matches any short-flag group containing `f` (`:1207`).
+- Tests at `mods/status-line/hooks/band.test.ts:1494` (not held: quoted message, heredoc, redirection) and `:1507` (held: `sudo -u root`, `-uf`, background `&`, quoted `;`).
+
+**Finding #14 (Low)**:
+- `classic.SessionStart` with `source: 'clear'` resets `cacheWarmAt`, `coldAskedAt` and `mainMessages` (`mods/status-line/hooks/register.ts:1875`).
+- The effort override applies only to a main-loop request that already carries a string effort (`:1989`).
+
+**Finding #15 (Low)**: Resolved under the 14/11/2026 decision in `CLAUDE.md` ("Tokens, never dollars" is status-line's rule).
+- The `cost` cell and its `ItemKey` were removed (`mods/status-line/hooks/register.ts:303`, group renamed `Tokens` at `:312`).
+- `turn` now shows the main loop's output tokens for the turn, summed in `turn.step` (`:1998`), stored at `:2044` and drawn at `:1579`.
+- The `cost:` line was dropped from `/sl debug`.
+- Test updated: `mods/status-line/hooks/band.test.ts:725`.
+- README.md, README.vi.md and ACKNOWLEDGEMENTS.md updated to match.
+
+**Finding #17 (Low)**, `/sl` part: The command description now lists `restore` (`mods/status-line/hooks/register.ts:1799`).
+
+Docs: README.md and README.vi.md updated for the version (0.4.0), the test count (50), the guard table and splitting rules, and the `turn` cell.
+
+### Deferred
+
+| Finding | Rationale | Revisit trigger |
+|---|---|---|
+| #20 (Low), deleting the files | Unchanged from CF-20261114-001: deletion needs Ban's go-ahead | Ban says "dọn" |
+| #4 (Medium), prefs part | Unchanged from CF-20261114-001 | A report of a lost setting |
+
+### Verification Notes
+
+| Check | Result |
+|---|---|
+| `claude plugin test .` in `mods/status-line` | Pass: 50 pass, 0 fail (41 before, 9 new) |
+| `claude plugin validate .` in `mods/status-line` | Pass |
+| Type-check (`bun x tsc -p .` with engine types) | Pass, no errors |
+| bgh, Vale tooling | Not run: no file changed |
+| #14 | No new test. The `/clear` reset and the effort guard were checked by reading the code only |
+| Live check in Claude Code | Not done: 0.4.0 is not installed until it is pushed and updated. During the fix, the installed 0.3.1 guard held a scratch command whose quoted text contained an `rm -rf`, which is the #10 false positive |

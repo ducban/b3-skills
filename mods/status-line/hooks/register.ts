@@ -281,7 +281,6 @@ type ItemKey =
   | 'input'
   | 'output'
   | 'cache'
-  | 'cost'
   | 'speed'
   | 'turn'
   | 'agents'
@@ -300,9 +299,8 @@ const ITEMS: { key: ItemKey; hotkey: string; name: string; about: string }[] = [
   { key: 'input', hotkey: 'i', name: 'input', about: 'uncached input tokens this session' },
   { key: 'output', hotkey: 'o', name: 'output', about: 'output tokens this session' },
   { key: 'cache', hotkey: 'h', name: 'cache', about: 'the hour left on the prompt cache, and the hit rate once it is low' },
-  { key: 'cost', hotkey: 'u', name: 'cost', about: 'what this session has cost, in USD' },
   { key: 'speed', hotkey: 's', name: 'speed', about: 'output tokens a second, over the last request' },
-  { key: 'turn', hotkey: 'n', name: 'turn', about: 'what the last turn cost, and how long it ran' },
+  { key: 'turn', hotkey: 'n', name: 'turn', about: 'output tokens of the last turn, and how long it ran' },
   { key: 'agents', hotkey: 'b', name: 'agents', about: 'how many subagents are running; /sl agents lists them' },
 ]
 
@@ -311,7 +309,7 @@ const ITEMS: { key: ItemKey; hotkey: string; name: string; about: string }[] = [
 const SETTINGS_GROUPS: { title: string; keys: ItemKey[] }[] = [
   { title: 'Identity', keys: ['dir', 'model', 'git', 'version'] },
   { title: 'Budget', keys: ['context', 'five_hour', 'seven_day', 'scoped', 'spend', 'other', 'cache', 'agents'] },
-  { title: 'Tokens and money', keys: ['input', 'output', 'cost', 'speed', 'turn'] },
+  { title: 'Tokens', keys: ['input', 'output', 'speed', 'turn'] },
 ]
 
 // 0 is off; 1 to 4 is which line it sits on. Four lines is the cap.
@@ -331,7 +329,6 @@ const DEFAULT_LAYOUT: Layout = {
   input: 0,
   output: 0,
   cache: 2,
-  cost: 0,
   speed: 0,
   turn: 0,
   agents: 2,
@@ -480,7 +477,6 @@ let effortOverride: Effort | null = null
 // would mean a price table in this file, and a price table in a file is a number
 // that goes wrong silently the day the prices change.
 let tokens = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }
-let costUsd: number | null = null
 
 // The main loop's last request in output tokens a second, timed from its first
 // chunk to its stop so the wait for the first token is left out; a request too
@@ -491,8 +487,8 @@ let costUsd: number | null = null
 let speed: number | null = null
 const SPEED_MIN_TOKENS = 20
 const SPEED_MIN_MS = 1_000
-let turnCostAtStart: number | null = null
-let lastTurn: { usd: number | null; ms: number } | null = null
+let turnOutput: number | null = null
+let lastTurn: { output: number | null; ms: number } | null = null
 
 // The session's subagents, one row each, from the events their loops raise:
 // `agent.spawn` opens a row, each `turn.step` in that loop adds a request and
@@ -1042,7 +1038,7 @@ async function afterCompaction($: EngineInterface, source: string) {
 // permission rules.
 type Risk =
   | { kind: 'rm'; label: string; targets: string[]; dir: string | null }
-  | { kind: 'git-reset'; label: string; dir: string | null }
+  | { kind: 'git-reset'; label: string; ref: string | null; dir: string | null }
   | { kind: 'git-clean'; label: string; args: string[]; dir: string | null }
   | { kind: 'git-push-force'; label: string; args: string[]; dir: string | null }
 type Report = { summary: string; lines: string[]; more: number; note: string }
@@ -1074,16 +1070,100 @@ const joinDir = (dir: string | null, to: string | undefined) => {
 // Words that sit in front of the real command and change nothing about it.
 const WRAPPERS = new Set(['command', 'exec', 'env', 'nohup', 'time', 'then', 'do', 'else'])
 
+// sudo's flags that take a value: `sudo -u root rm -rf x` runs rm, not root.
+const SUDO_VALUE_FLAGS = new Set([
+  '-u', '-g', '-C', '-D', '-h', '-p', '-r', '-t', '-U', '-T',
+  '--user', '--group', '--chdir', '--close-from', '--host', '--prompt', '--role', '--type', '--other-user', '--command-timeout',
+])
+
+// The line cut into simple commands at `;`, `|`, `||`, `&`, `&&` and newlines,
+// outside quotes only, with heredoc bodies left out: a commit message or a
+// heredoc that says `rm -rf build` is text, not a command. `2>&1` and `&>` are
+// redirections, not separators.
+function splitCommands(command: string): string[] {
+  const out: string[] = []
+  let cur = ''
+  let quote: string | null = null
+  let heredocs: string[] = []
+  let i = 0
+  while (i < command.length) {
+    const c = command[i] ?? ''
+    const after = command[i + 1] ?? ''
+    if (quote !== null) {
+      if (c === '\\' && quote === '"') {
+        cur += c + after
+        i += 2
+        continue
+      }
+      if (c === quote) quote = null
+      cur += c
+      i += 1
+      continue
+    }
+    if (c === '\\') {
+      cur += c + after
+      i += 2
+      continue
+    }
+    if (c === '"' || c === "'") {
+      quote = c
+      cur += c
+      i += 1
+      continue
+    }
+    if (c === '<' && after === '<' && command[i + 2] !== '<') {
+      const m = /^<<-?\s*(['"]?)([A-Za-z0-9_]+)\1/.exec(command.slice(i))
+      if (m !== null) {
+        heredocs.push(m[2] ?? '')
+        cur += m[0]
+        i += m[0].length
+        continue
+      }
+    }
+    if (c === '\n') {
+      out.push(cur)
+      cur = ''
+      i += 1
+      for (const end of heredocs) {
+        while (i < command.length) {
+          const nl = command.indexOf('\n', i)
+          const line = command.slice(i, nl === -1 ? command.length : nl)
+          i = nl === -1 ? command.length : nl + 1
+          if (line.replace(/^\t+/, '') === end) break
+        }
+      }
+      heredocs = []
+      continue
+    }
+    const prev = command[i - 1] ?? ''
+    if (c === ';' || c === '|' || (c === '&' && prev !== '>' && prev !== '<' && after !== '>')) {
+      out.push(cur)
+      cur = ''
+      i += (c === '|' || c === '&') && after === c ? 2 : 1
+      continue
+    }
+    cur += c
+    i += 1
+  }
+  out.push(cur)
+
+  return out
+}
+
 // The first risky segment of a command line, or null. A `cd` earlier on the
 // line moves where the next segment is measured.
 function classifyCommand(command: string): Risk | null {
   let dir: string | null = null
-  for (const raw of command.split(/&&|\|\||;|\||\n/)) {
+  for (const raw of splitCommands(command)) {
     const words = shellWords(raw.trim().replace(/^[({\s]+/, '').replace(/[)}\s]+$/, ''))
     while (words.length > 0 && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[0] ?? '')) words.shift()
-    if (words[0] === 'sudo') {
+    if (words[0] === 'sudo' || words[0] === 'doas') {
       words.shift()
-      while (words.length > 0 && (words[0] ?? '').startsWith('-')) words.shift()
+      while (words.length > 0 && (words[0] ?? '').startsWith('-')) {
+        const flag = words.shift() ?? ''
+        if (flag === '--') break
+        if (SUDO_VALUE_FLAGS.has(flag)) words.shift()
+      }
     }
     while (words.length > 0 && WRAPPERS.has(words[0] ?? '')) words.shift()
     const [first, ...args] = words
@@ -1117,11 +1197,14 @@ function classifyCommand(command: string): Risk | null {
       }
       const sub = args[at]
       const rest = args.slice(at + 1)
-      if (sub === 'reset' && rest.includes('--hard')) return { kind: 'git-reset', label: 'git reset --hard', dir: gitDir }
+      if (sub === 'reset' && rest.includes('--hard')) {
+        const ref = rest.find(a => !a.startsWith('-'))
+        return { kind: 'git-reset', label: 'git reset --hard', ref: ref ?? null, dir: gitDir }
+      }
       if (sub === 'clean') return { kind: 'git-clean', label: 'git clean', args: rest, dir: gitDir }
       if (
         sub === 'push' &&
-        rest.some(a => a === '--force' || a === '-f' || a.startsWith('--force-with-lease') || a.startsWith('+'))
+        rest.some(a => a === '--force' || /^-[a-zA-Z]*f[a-zA-Z]*$/.test(a) || a.startsWith('--force-with-lease') || (a.startsWith('+') && a.length > 1))
       ) {
         return { kind: 'git-push-force', label: 'git push --force', args: rest, dir: gitDir }
       }
@@ -1180,6 +1263,17 @@ async function measureRisk($: EngineInterface, risk: Risk, cwd: string): Promise
   try {
     if (risk.kind === 'rm') {
       if (risk.targets.length === 0) return { summary: 'rm with no paths', lines: [], more: 0, note: 'nothing to expand' }
+      // A variable or a command substitution is filled in by the shell when the
+      // command runs; measured as written it matches nothing and would read as harmless.
+      const expands = risk.targets.filter(t => /[$`]/.test(t))
+      if (expands.length > 0) {
+        return {
+          summary: `can't measure: ${expands.join(' ')} expands at run time`,
+          lines: [],
+          more: 0,
+          note: 'the shell fills it in when the command runs; check what it holds before you press 1',
+        }
+      }
       const run = await $.process.run(['bash', '-c', RM_SCRIPT, 'status-line-guard', ...risk.targets], { cwd, timeoutMs: 15000 })
       const [head = '0 0 0', ...names] = run.stdout.split('\n').filter(l => l !== '')
       const [files = 0, size = 0, found = 0] = head.split(' ').map(Number)
@@ -1256,17 +1350,38 @@ async function measureRisk($: EngineInterface, risk: Risk, cwd: string): Promise
       }
     }
 
-    // git reset --hard: staged and unstaged changes both go.
+    // git reset --hard: staged and unstaged changes both go, and with a ref the
+    // commits between it and HEAD leave the branch too.
     const status = await $.process.run(['git', 'status', '--porcelain'], { cwd, timeoutMs: 15000 })
     if (status.exitCode !== 0) return { summary: `${risk.label} (not a git repo here?)`, lines: [], more: 0, note: status.stderr.trim().slice(0, 160) }
     const rows = status.stdout.split('\n').filter(l => l.length > 3 && !l.startsWith('??'))
     const stat = await $.process.run(['git', 'diff', '--shortstat', 'HEAD'], { cwd, timeoutMs: 15000 })
+    let leaving: string[] = []
+    let refNote = ''
+    if (risk.ref !== null && risk.ref !== 'HEAD') {
+      if (/[$`]/.test(risk.ref)) {
+        refNote = `${risk.ref} expands at run time, so the commits it drops could not be listed`
+      } else {
+        const log = await $.process.run(['git', 'log', '--oneline', '--no-decorate', `${risk.ref}..HEAD`, '--'], { cwd, timeoutMs: 15000 })
+        if (log.exitCode === 0) leaving = log.stdout.split('\n').filter(l => l !== '')
+        else refNote = `git does not know ${risk.ref}, so the commits it drops could not be listed`
+      }
+    }
+    const parts: string[] = []
+    if (rows.length > 0) parts.push(`discard uncommitted changes in ${plural(rows.length, 'file')}`)
+    if (leaving.length > 0) parts.push(`move the branch back ${plural(leaving.length, 'commit')}`)
+    const shown = [...leaving.map(l => `commit ${l}`), ...rows.map(l => `${l.slice(0, 2)} ${l.slice(3)}`)]
+    const notes = [
+      stat.stdout.trim() === '' ? '' : `${stat.stdout.trim()}; uncommitted changes cannot be recovered`,
+      leaving.length > 0 ? `the commits stay in the reflog for a while (git reflog)` : '',
+      refNote,
+    ].filter(n => n !== '')
 
     return {
-      summary: rows.length === 0 ? 'discard nothing: no uncommitted changes' : `discard uncommitted changes in ${plural(rows.length, 'file')}`,
-      lines: rows.slice(0, GUARD_LIST).map(l => `${l.slice(0, 2)} ${l.slice(3)}`),
-      more: Math.max(0, rows.length - GUARD_LIST),
-      note: stat.stdout.trim() === '' ? '' : `${stat.stdout.trim()}; uncommitted changes cannot be recovered`,
+      summary: parts.length === 0 ? 'discard nothing: no uncommitted changes, no commits leave the branch' : parts.join(' and '),
+      lines: shown.slice(0, GUARD_LIST),
+      more: Math.max(0, shown.length - GUARD_LIST),
+      note: notes.join('; '),
     }
   } catch (error) {
     return { summary: `${risk.label} (could not measure it)`, lines: [], more: 0, note: String((error as Error)?.message ?? error).slice(0, 160) }
@@ -1451,12 +1566,6 @@ function partsFor(key: ItemKey, ctx: Ctx): Part[] {
     return parts
   }
 
-  if (key === 'cost') {
-    if (costUsd === null) return []
-
-    return [{ fg: FG, text: `$ ${costUsd.toFixed(2)}` }]
-  }
-
   if (key === 'speed') {
     if (speed === null) return []
 
@@ -1465,9 +1574,9 @@ function partsFor(key: ItemKey, ctx: Ctx): Part[] {
 
   if (key === 'turn') {
     if (lastTurn === null) return []
-    const cost = lastTurn.usd === null ? '' : `$ ${lastTurn.usd.toFixed(2)} `
+    const out = lastTurn.output === null ? '' : `${tk(lastTurn.output)} out `
 
-    return [{ fg: FG, text: `turn ${cost}${elapsed(lastTurn.ms)}` }]
+    return [{ fg: FG, text: `turn ${out}${elapsed(lastTurn.ms)}` }]
   }
 
   if (key === 'agents') {
@@ -1594,7 +1703,6 @@ async function debugText($: EngineInterface) {
       `context: ${JSON.stringify(usage.context)}`,
       `  band ct: ${contextPercent === null ? 'none' : `${contextPercent}%`} window=${contextWindow ?? 'none'} from=${contextSource}${age}`,
       `  breakdown (what /context shows): ${estimate === null ? 'none' : `${estimate}%`}`,
-      `cost: ${JSON.stringify(usage.cost)}`,
       `model: ${model}`,
       `effort (from turn.step): ${effort ?? 'not seen yet'}`,
       `effort override: ${effortOverride ?? 'none'}`,
@@ -1602,7 +1710,7 @@ async function debugText($: EngineInterface) {
       `project version: ${projectVersion ?? 'none found'} -- ${versionNote}`,
       `tokens: ${JSON.stringify(tokens)} cacheHit=${cacheHit() ?? 'n/a'}%`,
       `cache: ${cacheWarmAt === null ? 'no request seen yet' : `warm at ${new Date(cacheWarmAt).toISOString()}, ${countdown(cacheWarmAt + CACHE_TTL_MS, now)} left`}`,
-      `speed: ${speed === null ? 'not timed yet' : `${speed} tok/s`}; last turn: ${lastTurn === null ? 'none' : `${lastTurn.usd === null ? 'cost unknown' : `$${lastTurn.usd.toFixed(2)}`}, ${elapsed(lastTurn.ms)}`}`,
+      `speed: ${speed === null ? 'not timed yet' : `${speed} tok/s`}; last turn: ${lastTurn === null ? 'none' : `${lastTurn.output === null ? 'tokens unknown' : `${tk(lastTurn.output)} out`}, ${elapsed(lastTurn.ms)}`}`,
       `agents: ${agentsRunning()} running, ${agents.filter(a => a.status === 'done').length} done, ${agents.filter(a => a.status === 'failed').length} failed`,
       `settings carried from: ${migratedFrom}`,
       `layout: ${ITEMS.map(i => `${i.name}=${layout[i.key] || 'off'}`).join(' ')}`,
@@ -1632,8 +1740,13 @@ const CARRIED_KEYS = ['isHidden', 'showReset', 'guard', 'coldGate', 'layout'] as
 // What the migration found, for /sl debug.
 let migratedFrom = 'not checked yet'
 
+// The marker 0.3.0 wrote could name a store that held only the usage cache, so
+// 0.3.2 keeps its own marker and scans once more. Re-running is safe: a key the
+// new store already holds is never written over.
+const MIGRATED_MARK = 'migratedFrom2'
+
 async function migrateStore($: EngineInterface) {
-  const done = await $.store.get('migratedFrom')
+  const done = await $.store.get(MIGRATED_MARK)
   if (typeof done === 'string') {
     migratedFrom = done
     return
@@ -1650,7 +1763,9 @@ async function migrateStore($: EngineInterface) {
       for (const old of candidates) {
         let saved: Record<string, unknown>
         try {
-          saved = JSON.parse(String(await $.fs.read(`${dir}/${old.name}`))) as Record<string, unknown>
+          const parsed: unknown = JSON.parse(String(await $.fs.read(`${dir}/${old.name}`)))
+          if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) continue
+          saved = parsed as Record<string, unknown>
         } catch {
           continue
         }
@@ -1662,10 +1777,13 @@ async function migrateStore($: EngineInterface) {
         break
       }
     }
-  } catch {
-    // No old store, or one that can't be read: the defaults stand.
+  } catch (error) {
+    // The folder could not be listed: the defaults stand for now, and no marker
+    // is written, so the next start tries again.
+    migratedFrom = `not yet: ${String((error as Error)?.message ?? error).slice(0, 80)}`
+    return
   }
-  await $.store.set('migratedFrom', from)
+  await $.store.set(MIGRATED_MARK, from)
   migratedFrom = from
 }
 
@@ -1678,7 +1796,7 @@ export const register: Register = on => {
     // and the band switch mid-turn.
     await $.command.register({
       name: 'sl',
-      description: 'The status line band: settings, help, agents, effort, debug, on, off',
+      description: 'The status line band: settings, help, agents, effort, restore, debug, on, off',
       argumentHint: VERB_HINT,
       immediate: true,
     })
@@ -1718,7 +1836,6 @@ export const register: Register = on => {
       await setContext($, usage.context.percent, 'session.start')
     }
     windows = fromEngine(usage.rateLimits)
-    costUsd = usage.cost?.usd ?? null
     await refreshTheme($)
 
     // Timers FIRST, then the probes. The other way round, a probe that threw
@@ -1753,13 +1870,19 @@ export const register: Register = on => {
   // session began. This picks them up again. It also happens to be the only
   // event a test can raise, which is how the fallback paths below are covered.
   on('classic.SessionStart', async ($, e, next) => {
+    // /clear starts an empty transcript: nothing is cached and nothing would be
+    // re-read, so the cache hour and the gate start over.
+    if (e.source === 'clear') {
+      cacheWarmAt = null
+      coldAskedAt = null
+      mainMessages = 0
+    }
     const usage = await $.session.usage()
     contextWindow = usage.context.window ?? null
     if (typeof usage.context.percent === 'number') {
       await setContext($, usage.context.percent, 'classic.SessionStart')
     }
     windows = fromEngine(usage.rateLimits)
-    costUsd = usage.cost?.usd ?? null
     // Awaited here, not fired and forgotten: this is the only event a test can
     // raise, so the probes have to have finished before the test looks. Each one
     // swallows its own failure, which is what makes awaiting them safe in a
@@ -1788,7 +1911,6 @@ export const register: Register = on => {
     }
     contextWindow = e.context.window ?? contextWindow
     windows = fromEngine(e.rateLimits)
-    costUsd = e.cost?.usd ?? costUsd
     // `cost` in `changed` is the engine saying a priced response landed, which
     // is exactly once per response: the dedup signal the token counts need.
     if (e.changed.includes('cost')) await sampleTokens($)
@@ -1862,7 +1984,10 @@ export const register: Register = on => {
       cacheWarmAt = await $.clock.now()
       coldAskedAt = null
     }
-    const stream = effortOverride !== null && effortOverride !== e.effort ? next({ ...e, effort: effortOverride }) : next(e)
+    // Only the main loop's request, and only one that already carries an effort:
+    // a subagent's model, or one with no effort setting, may refuse it.
+    const override = e.agentId === undefined && typeof e.effort === 'string' && effortOverride !== null && effortOverride !== e.effort
+    const stream = override && effortOverride !== null ? next({ ...e, effort: effortOverride }) : next(e)
     let firstAt: number | null = null
     for await (const chunk of stream) {
       if (e.agentId === undefined) {
@@ -1870,6 +1995,7 @@ export const register: Register = on => {
         if (chunk.kind === 'stop' && chunk.usage !== null) {
           const ms = (await $.clock.now()) - firstAt
           const out = chunk.usage.output_tokens
+          turnOutput = (turnOutput ?? 0) + out
           if (out >= SPEED_MIN_TOKENS && ms >= SPEED_MIN_MS) speed = Math.round((out / ms) * 1000)
         }
       }
@@ -1896,15 +2022,10 @@ export const register: Register = on => {
     return result
   })
 
-  // A turn's cost is the difference of two session totals, read fresh at each
-  // end; a reading that fails leaves the cost off the cell and keeps the
-  // length. A subagent's turn is not the one you asked for.
+  // A turn's output is summed from the main loop's own responses, counted in
+  // `turn.step` as each one stops. A subagent's turn is not the one you asked for.
   on('turn.start', async ($, e, next) => {
-    try {
-      turnCostAtStart = (await $.session.usage()).cost?.usd ?? null
-    } catch {
-      turnCostAtStart = null
-    }
+    turnOutput = 0
 
     return next(e)
   })
@@ -1920,14 +2041,7 @@ export const register: Register = on => {
       }
     }
     if (e.agentId === undefined) {
-      let usd: number | null = null
-      try {
-        const total = (await $.session.usage()).cost?.usd
-        if (typeof total === 'number' && turnCostAtStart !== null) usd = Math.max(0, total - turnCostAtStart)
-      } catch {
-        // the length still stands
-      }
-      lastTurn = { usd, ms: e.durationMs }
+      lastTurn = { output: turnOutput, ms: e.durationMs }
       $.ui.invalidate('ui.render')
     }
 
@@ -2033,9 +2147,12 @@ export const register: Register = on => {
 
     try {
       const from = await $.session.cwd()
-      const cwd = risk.dir === null ? from : await resolveDir($, from, risk.dir)
+      const expandsDir = risk.dir !== null && /[$`]/.test(risk.dir)
+      const cwd = risk.dir === null ? from : expandsDir ? null : await resolveDir($, from, risk.dir)
       mine.report =
-        cwd === null
+        expandsDir
+          ? { summary: `can't measure: ${risk.label} in ${risk.dir}`, lines: [], more: 0, note: 'the folder expands at run time; check what it holds before you press 1' }
+          : cwd === null
           ? { summary: `${risk.label} in ${risk.dir}`, lines: [], more: 0, note: `the folder ${risk.dir} is not there, so this could not be measured` }
           : await measureRisk($, risk, cwd)
       $.ui.invalidate('ui.render')

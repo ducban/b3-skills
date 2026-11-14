@@ -226,8 +226,8 @@ phần ba và đồng hồ lấy breakdown.
 
 ## Trạng thái
 
-Bản 0.3.1, cài từ marketplace b3-skills ở scope **user**, nên phiên
-nào trên máy cũng có. Một lệnh `/sl` với tám verb. 41 test qua
+Bản 0.4.0, cài từ marketplace b3-skills ở scope **user**, nên phiên
+nào trên máy cũng có. Một lệnh `/sl` với tám verb. 50 test qua
 `claude plugin test`, `tsc -p .` sạch, `claude plugin validate` qua.
 
 Số nào lấy định kỳ đều kèm một ghi chú nói vì sao nó trống, và `/sl debug` in
@@ -338,10 +338,10 @@ Mỗi lệnh đo gì:
 
 | Lệnh | Hiện |
 |---|---|
-| `rm -r`, `rm -f`, `rm -rf` | số file và dung lượng sẽ xoá; glob và `~` đã mở rộng |
-| `git reset --hard` | các file có thay đổi chưa commit, và `git diff --shortstat` |
+| `rm -r`, `rm -f`, `rm -rf` | số file và dung lượng sẽ xoá; glob và `~` đã mở rộng. Đường dẫn có `$VAR` hay dấu backtick thì báo *can't measure: it expands at run time*, không bao giờ báo *delete nothing* |
+| `git reset --hard` | các file có thay đổi chưa commit, và `git diff --shortstat`; có ref (`HEAD~3`) thì liệt kê luôn các commit sẽ rời nhánh |
 | `git clean` | thứ `git clean -n` với cùng cờ sẽ xoá |
-| `git push --force`, `-f`, `--force-with-lease`, `+ref` | các commit trên nhánh remote mà lần push sẽ làm mất, tính tới lần fetch gần nhất |
+| `git push --force`, `-f` (kể cả nằm trong `-uf`), `--force-with-lease`, `+ref` | các commit trên nhánh remote mà lần push sẽ làm mất, tính tới lần fetch gần nhất |
 
 `cd dir &&` hay `git -C dir` đứng trước thì chỗ đo dời theo. Đường dẫn đưa cho
 `bash`, `find`, `du`, `git` dưới dạng **tham số**, không bao giờ là mã, nên không
@@ -355,6 +355,11 @@ nút đặt quyết định, hoặc `next.signal` của lượt báo huỷ, ho�
 lúc chỉ giữ một lệnh; lệnh nguy hiểm thứ hai xếp hàng sau lệnh thứ nhất. Guard
 mà ném lỗi thì *mở* cửa cho qua, trừ khi đăng ký của nó có `.catch`. Nên nó có,
 và handler đó từ chối.
+
+Dòng lệnh được cắt ở `;`, `|`, `&`, `&&`, `||` và chỗ xuống dòng nằm ngoài
+dấu nháy, còn thân heredoc thì bỏ qua. Nên commit message hay heredoc chỉ nhắc
+tới `rm -rf` không bị giữ. Với `sudo -u root` và các cờ sudo có kèm giá trị, guard
+đọc qua để tới lệnh thật phía sau.
 
 Thứ guard không làm: nó đọc chuỗi lệnh, không phân tích cú pháp shell. `$(...)`,
 `eval`, `bash -c "..."`, `xargs rm`, `find -delete`, script có gọi `rm` bên
@@ -483,7 +488,7 @@ gần nhất, nên cần một tín hiệu khử trùng: `session.measure` nêu 
 Engine chỉ đưa cho mod đúng một con số tiền, `cost.usd`, tổng của phiên, không
 tách đầu vào với đầu ra. Muốn đổi token ra đô thì phải nhét bảng giá vào file
 này, mà bảng giá trong file là con số sai lặng lẽ ngay ngày giá đổi. Nên `i` và
-`o` là token, còn `$` là tổng phiên.
+`o` là token, và dải không hiện đô ở đâu cả.
 
 Tổng trọn đời, tiền và token qua mọi phiên, nằm ngoài tầm với hẳn. Muốn có thì
 hoặc quét bản ghi, chính việc mà mod này sinh ra để tránh, hoặc dùng `ccuc`, thứ
@@ -494,15 +499,16 @@ không phải máy nào cũng có.
 Hai ô này mặc định tắt, bật bằng `s` và `n` trong `/sl settings`:
 
 ```
- ct ▰▰▰▰▱ 66%   cache ▰▰▰▰▰ 1h00m   84 tok/s   turn $ 0.25 38s
+ ct ▰▰▰▰▱ 66%   cache ▰▰▰▰▰ 1h00m   84 tok/s   turn 1.2k out 38s
 ```
 
 `speed` là tốc độ của yêu cầu gần nhất trong vòng chính, tính bằng token đầu ra
 mỗi giây, đo từ mẩu đầu tiên tới lúc dừng. Khoảng đợi token đầu không tính, nên
 khởi động chậm không bị đọc thành model chậm. Yêu cầu dưới 20 token hay dưới một
-giây thì không chấm. `turn` là lượt vừa xong: giá là tổng phiên lúc kết thúc trừ
-tổng lúc bắt đầu, vì engine chỉ đưa một con số tiền không tách; độ dài là
-`durationMs` của chính engine. Yêu cầu và lượt của tác tử con không đụng vào hai
+giây thì không chấm. `turn` là lượt vừa xong: số token đầu ra của các phản hồi
+vòng chính trong lượt đó, kèm độ dài là `durationMs` của chính engine. Trước
+0.4.0 ô này hiện đô, và có thêm ô `cost` hiện tiền cả phiên. Cả hai đã bỏ: gói
+Claude tính tiền theo thuê bao, nên con số đô ở đây chẳng nói lên gì. Yêu cầu và lượt của tác tử con không đụng vào hai
 ô này. Cả hai ô là của johnnyvizz, từ
 [session-band](https://github.com/JohnnyVizz/claude-kit/tree/main/plugins/session-band),
 viết lại ở đây.
