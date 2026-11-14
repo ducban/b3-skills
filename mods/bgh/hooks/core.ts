@@ -698,6 +698,109 @@ export function boundActions(keybindings: string | undefined, actions: string[])
   return actions.filter((a) => keybindings?.includes(`"${a}"`))
 }
 
+// ---------------------------------------------------------------------------
+// Setup key k (and /bgh keys): bind the band's two actions in keybindings.json. No terminal
+// setting is touched. alt+a and alt+i come first; a chord another action holds is left to it and
+// the next candidate is tried. On a Mac, Option types \u{e5} unless the terminal sends it as Alt,
+// so there an alt chord also gets a ctrl+x one beside it, which works in every terminal.
+
+export type FileEdit = { status: 'ok' | 'set' | 'manual'; text?: string; note: string }
+
+// One action and its chords, most wanted first.
+export type ChordWant = { action: string; keys: string[] }
+
+type KeybindingsDoc = { bindings?: unknown } & Record<string, unknown>
+type Block = { context?: unknown; bindings?: Record<string, unknown> }
+
+const isAlt = (key: string) => /^(alt|opt|option|meta)\+/i.test(key)
+
+// Every key the file binds to `action`, in any context.
+export function keysFor(text: string | undefined, action: string): string[] {
+  try {
+    const doc = JSON.parse(text ?? '') as KeybindingsDoc
+    if (!Array.isArray(doc.bindings)) return []
+    return (doc.bindings as Block[]).flatMap((b) =>
+      b && typeof b === 'object' && b.bindings && typeof b.bindings === 'object'
+        ? Object.entries(b.bindings).filter(([, a]) => a === action).map(([k]) => k)
+        : [],
+    )
+  } catch {
+    return []
+  }
+}
+
+// What the band's buttons and the help show: the keys bound to an action, or the default.
+export const chordLabel = (keys: string[], fallback: string): string => (keys.length ? keys.join(' / ') : fallback)
+
+export function addChords(text: string | undefined, wants: ChordWant[], mac: boolean): FileEdit {
+  let doc: KeybindingsDoc
+  if (text === undefined || !text.trim()) {
+    doc = { $schema: 'https://www.schemastore.org/claude-code-keybindings.json', bindings: [] }
+  } else {
+    try {
+      doc = JSON.parse(text) as KeybindingsDoc
+    } catch {
+      return { status: 'manual', note: 'not valid JSON, left alone' }
+    }
+  }
+  if (!doc || typeof doc !== 'object' || Array.isArray(doc)) return { status: 'manual', note: 'not a JSON object, left alone' }
+  if (doc.bindings === undefined) doc.bindings = []
+  if (!Array.isArray(doc.bindings)) return { status: 'manual', note: '"bindings" is not a list, left alone' }
+  const blocks = doc.bindings as Block[]
+  const held = new Map<string, unknown>()
+  for (const b of blocks) {
+    if (b && typeof b === 'object' && b.bindings && typeof b.bindings === 'object') {
+      for (const [k, a] of Object.entries(b.bindings)) held.set(k.toLowerCase(), a)
+    }
+  }
+  let global = blocks.find((b) => b?.context === 'Global')
+  const added: string[] = []
+  const passed: string[] = []
+  const missing: string[] = []
+  // Each group needs one key: any key elsewhere; on a Mac an alt key and a non-alt key.
+  const groups: ((k: string) => boolean)[] = mac ? [isAlt, (k) => !isAlt(k)] : [() => true]
+  for (const want of wants) {
+    for (const fits of groups) {
+      const bound = [...held].some(([k, a]) => a === want.action && fits(k))
+      if (bound) continue
+      const candidates = want.keys.filter(fits)
+      const free = candidates.find((k) => !held.has(k.toLowerCase()))
+      for (const k of candidates) {
+        if (k === free) break
+        passed.push(`${k} runs ${String(held.get(k.toLowerCase()))}`)
+      }
+      if (!free) continue
+      if (!global) {
+        global = { context: 'Global', bindings: {} }
+        blocks.unshift(global)
+      }
+      if (!global.bindings || typeof global.bindings !== 'object') global.bindings = {}
+      global.bindings[free] = want.action
+      held.set(free.toLowerCase(), want.action)
+      added.push(free)
+    }
+    if (![...held.values()].includes(want.action)) missing.push(want.action)
+  }
+  const tail = [passed.length && `skipped ${passed.join(', ')}`, missing.length && `no free key left for ${missing.join(', ')}`].filter(Boolean).join('; ')
+  if (!added.length) {
+    return missing.length ? { status: 'manual', note: `${tail}: bind it by hand` } : { status: 'ok', note: 'keys bound already' }
+  }
+  return {
+    status: missing.length ? 'manual' : 'set',
+    text: `${JSON.stringify(doc, null, 2)}\n`,
+    note: `bound ${added.join(', ')}${tail ? `; ${tail}` : ''}`,
+  }
+}
+
+export type KeyLine = { name: string; status: 'ok' | 'set' | 'manual' | 'failed'; note: string }
+
+// One line per item for the setup pane and /bgh keys.
+export function keyLines(lines: KeyLine[]): string[] {
+  const mark = { ok: '\u{2713}', set: '+', manual: '!', failed: '\u{2717}' } as const
+  const width = Math.max(0, ...lines.map((l) => l.name.length))
+  return lines.map((l) => `${mark[l.status]} ${l.name.padEnd(width)}  ${l.note}`)
+}
+
 export type TraceResult = { at: number; ok: boolean; detail: string }
 
 // "ok 14:02 (2 min ago)" or "HTTP 401 14:02 (just now)": the pane's last-trace line.

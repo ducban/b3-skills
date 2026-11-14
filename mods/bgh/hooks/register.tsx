@@ -6,7 +6,6 @@ import {
   applyIssues,
   availableRoutes,
   cycle,
-  boundActions,
   dirsFor,
   harperInstallAll,
   commentedOnly,
@@ -18,6 +17,12 @@ import {
   ENV_TEMPLATE,
   HARPER_RELEASES,
   needsTemplate,
+  addChords,
+  chordLabel,
+  keyLines,
+  keysFor,
+  type ChordWant,
+  type KeyLine,
   LLM_DELAYS,
   MODEL_CHOICES,
   KEY_NAME,
@@ -69,7 +74,7 @@ import {
   type Usage,
 } from './core'
 
-const RELEASE = '0.9.0'
+const RELEASE = '0.10.0'
 const HARPER_DELAY_MS = 300
 const HOP_TIMEOUT_MS = 6000
 const CACHE_KEY = 'llm-cache-v1'
@@ -98,6 +103,7 @@ const HELP = [
   '  /bgh status          one-screen summary as text',
   '  /bgh on | off        switch checking on or off',
   '  /bgh reload          read the keys file again',
+  '  /bgh keys            bind apply and ignore: alt+a and alt+i, else ctrl+x a and ctrl+x i (setup key k)',
   '  /bgh ignore <word>   never flag this word; unignore <word> undoes it; ignored lists them',
   '  /bgh clear-cache     forget the remembered LLM answers',
   '  /bgh help            this list',
@@ -135,6 +141,12 @@ const CACHE_MAX = 400
 // them, so the chords the person binds to them (alt+a, alt+i) press the Buttons from the prompt.
 const APPLY_ACTION = 'app:cycleDiffBase'
 const IGNORE_ACTION = 'app:toggleDiffNoiseFilter'
+// The keys setup key k tries for each, in order. Single ctrl+letters stay out: the prompt uses
+// them for editing. ctrl+x is Claude Code's own chord prefix, and these two are free there.
+const CHORD_WANTS: ChordWant[] = [
+  { action: APPLY_ACTION, keys: ['alt+a', 'ctrl+x a'] },
+  { action: IGNORE_ACTION, keys: ['alt+i', 'ctrl+x i'] },
+]
 
 // The shape tag declines what 0.2.0 stored (fixes without `by`), which outlives a reload.
 const fixesAtom = atom({ plugin: 'bgh', key: 'fixes' } as const, [] as Fix[], { shape: 'fixes-2' })
@@ -188,6 +200,67 @@ async function fetchModels($: EngineInterface, env: Env): Promise<{ lists: Parti
   return { lists, errors }
 }
 
+// ---- setup key k: the band's chords ------------------------------------------------------------
+// Declared at the top level because each takes `$`.
+
+type KeysPlace = {
+  os: Platform['os']
+  // where the backup goes
+  cache: string
+  sep: string
+  keybindingsPath: string
+  wants: ChordWant[]
+}
+
+async function readText($: EngineInterface, path: string) {
+  try {
+    return String(await $.fs.read(path))
+  } catch {
+    return undefined
+  }
+}
+
+// What setup key k and /bgh keys do: bind the chords in keybindings.json, the old file copied to
+// the cache folder first. Terminal settings stay as they are.
+async function setUpKeys($: EngineInterface, p: KeysPlace): Promise<KeyLine[]> {
+  const before = await readText($, p.keybindingsPath)
+  const edit = addChords(before, p.wants, p.os === 'darwin')
+  const out: KeyLine[] = []
+  if (edit.text === undefined) {
+    out.push({ name: 'keybindings', status: edit.status, note: edit.note })
+  } else {
+    try {
+      if (before !== undefined) {
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+        const backup = `${p.cache}${p.sep}keybindings-${stamp}.json`
+        await $.fs.write(backup, before)
+        out.push({ name: 'keybindings', status: edit.status, note: `${edit.note} \u{b7} old file in ${backup}` })
+      } else {
+        out.push({ name: 'keybindings', status: edit.status, note: `${edit.note} \u{b7} new file` })
+      }
+      await $.fs.write(p.keybindingsPath, edit.text)
+    } catch (err) {
+      return [{ name: 'keybindings', status: 'failed', note: `could not write ${p.keybindingsPath}: ${String(err).slice(0, 80)}` }]
+    }
+  }
+  const after = edit.text ?? before
+  for (const w of p.wants) {
+    const keys = keysFor(after, w.action)
+    out.push({ name: w.action === p.wants[0]!.action ? 'apply' : 'ignore', status: keys.length ? 'ok' : 'manual', note: keys.length ? keys.join(' / ') : 'no key' })
+  }
+  if (p.os === 'darwin') {
+    out.push({ name: 'macOS', status: 'ok', note: 'alt+ keys work where the terminal sends Option as Alt; ctrl+x ones work everywhere' })
+  }
+  return out
+}
+
+// "Grammar keys: bound" for the toast.
+function keysSummary(lines: KeyLine[]): string {
+  if (lines.some((l) => l.status === 'failed')) return 'Grammar keys: could not write keybindings.json'
+  if (lines.some((l) => l.status === 'manual')) return 'Grammar keys: one needs a hand, see the setup guide'
+  return lines.some((l) => l.status === 'set') ? 'Grammar keys: bound' : 'Grammar keys: bound already'
+}
+
 // The engine's `$` is spelled at each call site, never kept; so every piece of work that calls it
 // lives inside the hook that starts it. Timers set in a hook keep running after it returns.
 export const register: Register = (on) => {
@@ -203,6 +276,14 @@ export const register: Register = (on) => {
   let lastRun: LastRun | undefined
   let platform: Platform = { os: 'unknown', distro: '', arch: 'x86_64' }
   let keybindingsPath = ''
+  // Where setup key k reads and writes: set at session start.
+  let keysCache = ''
+  let keysSep = '/'
+  // The keys the band's buttons and the help name, from keybindings.json.
+  let applyKeys = 'alt+a'
+  let ignoreKeys = 'alt+i'
+  // What setup key k or /bgh keys did last, one line per program.
+  let keysReport: string[] = []
   let lastTrace: TraceResult | undefined
   let harperProbedAt = 0
   let prefs: Prefs = readPrefs(undefined)
@@ -418,6 +499,13 @@ export const register: Register = (on) => {
       (await $.env.get('CLAUDE_CONFIG_DIR')) ||
       `${processEnv.HOME || processEnv.USERPROFILE || '.'}${dirs.sep}.claude`
     keybindingsPath = `${claudeDir}${dirs.sep}keybindings.json`
+    keysCache = dirs.cache
+    keysSep = dirs.sep
+    try {
+      learnKeys(String(await $.fs.read(keybindingsPath)))
+    } catch {
+      // no keybindings file yet: the labels keep alt+a and alt+i
+    }
 
     // The machine's name tags each Langfuse trace. Windows sets COMPUTERNAME; elsewhere the
     // shell keeps HOSTNAME to itself, so ask uname, then hostname.
@@ -438,7 +526,7 @@ export const register: Register = (on) => {
     await $.command.register({
       name: 'bgh',
       description: 'B3 Grammar Helper: grammar ghost text in the prompt. /bgh help lists every command',
-      argumentHint: 'setup-guide | settings | debug | test | status | on | off | reload | ignore <word> | help',
+      argumentHint: 'setup-guide | settings | debug | test | status | on | off | reload | keys | ignore <word> | help',
       immediate: true,
     })
     // Clears the line earlier versions pinned under the prompt.
@@ -459,13 +547,27 @@ export const register: Register = (on) => {
     check = undefined
   }
 
+  const keysPlace = (): KeysPlace => ({
+    os: platform.os,
+    cache: keysCache,
+    sep: keysSep,
+    keybindingsPath,
+    wants: CHORD_WANTS,
+  })
+
+  // Reads which keys run the two actions, for the labels.
+  const learnKeys = (keybindings: string | undefined) => {
+    applyKeys = chordLabel(keysFor(keybindings, APPLY_ACTION), 'alt+a')
+    ignoreKeys = chordLabel(keysFor(keybindings, IGNORE_ACTION), 'alt+i')
+  }
+
   // Each setup step, true when done. The setup-guide pane draws them; a bare /bgh opens the
   // guide while any is still false, the settings once all are.
   async function setupSteps(keybindings: string | undefined) {
     return {
       harper: harperOk,
       keys: availableRoutes(env).some((r) => r !== 'claude'),
-      chords: boundActions(keybindings, [APPLY_ACTION, IGNORE_ACTION]).length === 2,
+      chords: addChords(keybindings, CHORD_WANTS, platform.os === 'darwin').status === 'ok',
     }
   }
 
@@ -553,6 +655,18 @@ export const register: Register = (on) => {
       case 'ignored':
         if (await show(SETTINGS_PANE)) return { text: 'Ignored words are at the bottom of bgh settings; 1–9 takes one off.' }
         return { text: ignore.size ? [...ignore].sort().join(', ') : 'Nothing ignored yet.' }
+      case 'keys': {
+        const lines = await setUpKeys($, keysPlace())
+        keysReport = keyLines(lines)
+        try {
+          learnKeys(String(await $.fs.read(keybindingsPath)))
+        } catch {
+          // left as they were
+        }
+        await redraw()
+        $.ui.toast(keysSummary(lines))
+        return { text: keysReport.join('\n') }
+      }
       case 'clear-cache':
         cache.clear()
         await $.store.set(CACHE_KEY, [])
@@ -700,6 +814,7 @@ export const register: Register = (on) => {
     } catch {
       // no file yet
     }
+    learnKeys(keybindings)
     const steps = await setupSteps(keybindings)
     const keyed = availableRoutes(env).filter((r) => r !== 'claude')
     const now = Date.now()
@@ -755,13 +870,12 @@ export const register: Register = (on) => {
         {step(
           3,
           steps.chords,
-          'alt+a alt+i',
-          steps.chords ? `bound in ${keybindingsPath}` : 'not bound: the band shows fixes, the keys do nothing',
+          'keys',
+          steps.chords ? `apply ${applyKeys} \u{b7} ignore ${ignoreKeys}` : 'not bound: the band shows fixes, the keys do nothing',
           [
-            `add to the "Global" bindings in ${keybindingsPath}:`,
-            `"alt+a": "${APPLY_ACTION}",`,
-            `"alt+i": "${IGNORE_ACTION}"`,
-            'macOS only: turn on "Use Option as Meta key" in the terminal (Terminal: Settings › Profiles › Keyboard; iTerm2: Profiles › Keys, Left Option = Esc+), or Option types å',
+            `press k: binds apply and ignore in ${keybindingsPath}, alt+a and alt+i first`,
+            'a key another action holds stays with it, and the next one is tried (ctrl+x a, ctrl+x i)',
+            'on macOS ctrl+x a and ctrl+x i come too: Option types \u{e5} unless the terminal sends it as Alt, and bgh leaves terminal settings alone',
           ],
         )}
         {step(
@@ -819,8 +933,30 @@ export const register: Register = (on) => {
                 })
             }}
           />
+          <Button
+            key="k"
+            label="bind keys"
+            hotkey="k"
+            plain
+            onPress={() => {
+              void setUpKeys($, keysPlace())
+                .then((lines) => {
+                  keysReport = keyLines(lines)
+                  $.ui.toast(keysSummary(lines))
+                })
+                .catch((err) => {
+                  keysReport = [`\u{2717} ${String(err).slice(0, 120)}`]
+                })
+                .finally(redraw)
+            }}
+          />
           <Button key="x" label="test every route" hotkey="x" plain onPress={() => void $.command.run({ command: 'bgh', args: 'test' })} />
         </Box>
+        {keysReport.map((line, i) => (
+          <Text key={`keys-${i}`} dimColor={line.startsWith('\u{2713}')} color={line.startsWith('!') || line.startsWith('\u{2717}') ? 'warning' : undefined} wrap="wrap">
+            {` ${line}`}
+          </Text>
+        ))}
       </Box>
     )
   })
@@ -929,7 +1065,7 @@ export const register: Register = (on) => {
             ))}
           </Box>
         ) : (
-          <Text dimColor>none yet: alt+i on the band ignores a word</Text>
+          <Text dimColor>{`none yet: ${ignoreKeys} on the band ignores a word`}</Text>
         )}
         {words.length ? <Text dimColor>a number puts that word back in the check</Text> : null}
       </Box>
@@ -1057,8 +1193,8 @@ export const register: Register = (on) => {
         <Box marginTop={1}>
           <Text bold>In the prompt</Text>
         </Box>
-        {line('alt+a', 'apply every fix the band above the prompt shows')}
-        {line('alt+i', 'ignore the first flagged word from now on')}
+        {line(applyKeys, 'apply every fix the band above the prompt shows')}
+        {line(ignoreKeys, 'ignore the first flagged word from now on')}
         <Box marginTop={1}>
           <Text bold>In the tabs</Text>
         </Box>
@@ -1122,9 +1258,9 @@ export const register: Register = (on) => {
       <Box>
         <Text dimColor>grammar · {sourcesOf(fixes)} </Text>
         <Text>{fixes.map((f) => `${f.from || '·'}→${f.to || '∅'}`).join('  ')} </Text>
-        <Button key="apply" label="apply (alt+a)" action={APPLY_ACTION} onPress={apply} />
+        <Button key="apply" label={`apply (${applyKeys})`} action={APPLY_ACTION} onPress={apply} />
         {first?.from ? (
-          <Button key="ignore" label={`ignore “${first.from}” (alt+i)`} action={IGNORE_ACTION} onPress={ignoreFirst} />
+          <Button key="ignore" label={`ignore “${first.from}” (${ignoreKeys})`} action={IGNORE_ACTION} onPress={ignoreFirst} />
         ) : null}
       </Box>
     )

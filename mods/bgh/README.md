@@ -33,7 +33,7 @@ The same install works on Linux, macOS and Windows. The mod is plain JavaScript 
 | Harper | `sudo pacman -S harper` | `brew install harper` | `harper-cli-x86_64-pc-windows-msvc.zip` from the releases page, `harper-cli.exe` on PATH |
 | Keys file | `~/.config/bgh/.env` | `~/.config/bgh/.env` | `%APPDATA%\bgh\.env` |
 | Cache | `~/.cache/bgh/` | `~/.cache/bgh/` | `%LOCALAPPDATA%\bgh\` |
-| alt+a / alt+i | works | turn on "Use Option as Meta key" in the terminal, or Option types `å` | works |
+| Keys | `k` in the setup guide binds alt+a, alt+i | `k` adds ctrl+x a, ctrl+x i beside them | `k` binds alt+a, alt+i |
 
 Any other Linux (a VPS, Ubuntu, Debian) takes the release build. No Rust needed:
 
@@ -49,14 +49,18 @@ Without Harper the LLM stage still runs. `XDG_CONFIG_HOME` and `XDG_CACHE_HOME` 
 
 ## Keys for alt+a and alt+i
 
-The band's buttons borrow two engine actions that do nothing while you're in the chat. Bind them once in `~/.claude/keybindings.json`, in the `Global` block:
+alt+a applies every fix on the band. alt+i ignores the first flagged word from then on.
+
+The band's buttons borrow two engine actions that do nothing while you're in the chat. Press `k` in the setup guide, or run `/bgh keys`, and the mod binds them in the `Global` block of `~/.claude/keybindings.json`. It copies the old file to the cache folder first.
 
 ```json
 "alt+a": "app:cycleDiffBase",
 "alt+i": "app:toggleDiffNoiseFilter"
 ```
 
-alt+a applies every fix on the band. alt+i ignores the first flagged word from then on.
+A key another action already holds stays with it, and `k` takes the next one: `ctrl+x a` to apply, `ctrl+x i` to ignore. `ctrl+x` is the prefix Claude Code's own chords use (`ctrl+x ctrl+e` opens the editor), so you press ctrl+x, let go, then the letter. Single ctrl+letters are never taken; the prompt uses them to edit the line.
+
+On a Mac, `k` binds both pairs. Option types `å` unless the terminal is set to send it as Alt, and the mod leaves terminal settings alone, so `ctrl+x a` and `ctrl+x i` are the keys that work in any terminal. Where Option already sends Alt (Ghostty with `macos-option-as-alt`, say), alt+a and alt+i work too. The band's buttons name the keys that are bound.
 
 ## Commands
 
@@ -70,6 +74,7 @@ alt+a applies every fix on the band. alt+i ignores the first flagged word from t
 | `/bgh status` | opens `bgh debug` |
 | `/bgh on`, `off` | switch checking on or off |
 | `/bgh reload` | read the keys file again |
+| `/bgh keys` | bind apply and ignore: alt+a and alt+i, else ctrl+x a and ctrl+x i, and on a Mac both; same as `k` in the setup guide |
 | `/bgh ignore <word>`, `unignore <word>` | add to or take off the ignore list |
 | `/bgh ignored` | opens `bgh settings`, where the list is |
 | `/bgh clear-cache` | forget the remembered LLM answers |

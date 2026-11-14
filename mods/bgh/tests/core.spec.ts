@@ -10,6 +10,10 @@ import {
   cycle,
   DEFAULT_PREFS,
   boundActions,
+  addChords,
+  chordLabel,
+  keyLines,
+  keysFor,
   dirsFor,
   harperInstall,
   harperInstallAll,
@@ -369,5 +373,57 @@ describe('tally', () => {
     t = addTally(t, 'openrouter qwen3-235b-a22b-2507', false)
     expect(tallyLine(t)).toBe('qwen3-235b-a22b-2507 67% (3) · haiku 50% (2)')
     expect(tallyLine({})).toBe('nothing yet')
+  })
+})
+
+describe('setup key k', () => {
+  const wants = [
+    { action: 'app:cycleDiffBase', keys: ['alt+a', 'ctrl+x a'] },
+    { action: 'app:toggleDiffNoiseFilter', keys: ['alt+i', 'ctrl+x i'] },
+  ]
+  const globalOf = (text: string | undefined) => JSON.parse(text!).bindings.find((b: { context: string }) => b.context === 'Global').bindings
+
+  test('Linux and Windows: alt+a and alt+i in the Global block, the rest kept', () => {
+    const kb = JSON.stringify({ bindings: [{ context: 'Global', bindings: { 'ctrl+t': 'app:toggleTodos' } }, { context: 'Chat', bindings: {} }] })
+    const r = addChords(kb, wants, false)
+    expect(r.status).toBe('set')
+    expect(globalOf(r.text)).toEqual({ 'ctrl+t': 'app:toggleTodos', 'alt+a': 'app:cycleDiffBase', 'alt+i': 'app:toggleDiffNoiseFilter' })
+    expect(addChords(r.text, wants, false)).toEqual({ status: 'ok', note: 'keys bound already' })
+  })
+  test('a chord another action holds stays with it; the next one is taken', () => {
+    const kb = JSON.stringify({ bindings: [{ context: 'Chat', bindings: { 'alt+i': 'chat:stash' } }] })
+    const r = addChords(kb, wants, false)
+    expect(r.status).toBe('set')
+    expect(globalOf(r.text)).toEqual({ 'alt+a': 'app:cycleDiffBase', 'ctrl+x i': 'app:toggleDiffNoiseFilter' })
+    expect(r.note).toContain('skipped alt+i runs chat:stash')
+  })
+  test('macOS: the alt chord and a ctrl+x one beside it, terminal settings untouched', () => {
+    const r = addChords(undefined, wants, true)
+    expect(globalOf(r.text)).toEqual({
+      'alt+a': 'app:cycleDiffBase',
+      'ctrl+x a': 'app:cycleDiffBase',
+      'alt+i': 'app:toggleDiffNoiseFilter',
+      'ctrl+x i': 'app:toggleDiffNoiseFilter',
+    })
+    // alt+a alone, as bound by hand, still needs the ctrl+x one on a Mac but not elsewhere.
+    const handMade = JSON.stringify({ bindings: [{ context: 'Global', bindings: { 'alt+a': 'app:cycleDiffBase', 'alt+i': 'app:toggleDiffNoiseFilter' } }] })
+    expect(addChords(handMade, wants, false).status).toBe('ok')
+    expect(globalOf(addChords(handMade, wants, true).text)['ctrl+x a']).toBe('app:cycleDiffBase')
+  })
+  test('nothing free means a hand is needed; broken files are left alone', () => {
+    const kb = JSON.stringify({ bindings: [{ context: 'Global', bindings: { 'alt+i': 'chat:stash', 'ctrl+x i': 'chat:undo' } }] })
+    const r = addChords(kb, wants, false)
+    expect(r.status).toBe('manual')
+    expect(r.note).toContain('no free key left for app:toggleDiffNoiseFilter')
+    expect(addChords('{ not json', wants, false).status).toBe('manual')
+    expect(addChords('{"bindings":{}}', wants, false).status).toBe('manual')
+  })
+  test('labels name every key bound to an action', () => {
+    const kb = JSON.stringify({ bindings: [{ context: 'Global', bindings: { 'alt+a': 'app:cycleDiffBase', 'ctrl+x a': 'app:cycleDiffBase' } }] })
+    expect(chordLabel(keysFor(kb, 'app:cycleDiffBase'), 'alt+a')).toBe('alt+a / ctrl+x a')
+    expect(chordLabel(keysFor(undefined, 'app:toggleDiffNoiseFilter'), 'alt+i')).toBe('alt+i')
+  })
+  test('report lines line up', () => {
+    expect(keyLines([{ name: 'apply', status: 'set', note: 'a' }, { name: 'keybindings', status: 'manual', note: 'b' }])).toEqual(['+ apply        a', '! keybindings  b'])
   })
 })
