@@ -700,9 +700,9 @@ export function boundActions(keybindings: string | undefined, actions: string[])
 
 // ---------------------------------------------------------------------------
 // Setup key k (and /bgh keys): bind the band's two actions in keybindings.json. No terminal
-// setting is touched. alt+a and alt+i come first; a chord another action holds is left to it and
-// the next candidate is tried. On a Mac, Option types \u{e5} unless the terminal sends it as Alt,
-// so there an alt chord also gets a ctrl+x one beside it, which works in every terminal.
+// setting is touched. alt+a and alt+i come first; a key another action holds is left to it and the
+// next candidate is tried. Candidates are single strokes: a ctrl+x chord never reached these two
+// actions when tried in Orca on 14/11/2026, from the Global block or the Chat one.
 
 export type FileEdit = { status: 'ok' | 'set' | 'manual'; text?: string; note: string }
 
@@ -711,8 +711,6 @@ export type ChordWant = { action: string; keys: string[] }
 
 type KeybindingsDoc = { bindings?: unknown } & Record<string, unknown>
 type Block = { context?: unknown; bindings?: Record<string, unknown> }
-
-const isAlt = (key: string) => /^(alt|opt|option|meta)\+/i.test(key)
 
 // Every key the file binds to `action`, in any context.
 export function keysFor(text: string | undefined, action: string): string[] {
@@ -729,8 +727,7 @@ export function keysFor(text: string | undefined, action: string): string[] {
   }
 }
 
-// A key as the OS names it: `alt + a` on Linux and Windows, `Option + a` on a Mac. The parts of a
-// chord stay apart: `ctrl + x a`.
+// A key as the OS names it: `alt + a` on Linux and Windows, `Option + a` on a Mac.
 export function keyName(key: string, os: string): string {
   return key
     .split(' ')
@@ -748,7 +745,7 @@ export function keyName(key: string, os: string): string {
 export const chordLabel = (keys: string[], fallback: string, os: string): string =>
   (keys.length ? keys : [fallback]).map((k) => keyName(k, os)).join(' / ')
 
-export function addChords(text: string | undefined, wants: ChordWant[], mac: boolean): FileEdit {
+export function addChords(text: string | undefined, wants: ChordWant[]): FileEdit {
   let doc: KeybindingsDoc
   if (text === undefined || !text.trim()) {
     doc = { $schema: 'https://www.schemastore.org/claude-code-keybindings.json', bindings: [] }
@@ -773,29 +770,25 @@ export function addChords(text: string | undefined, wants: ChordWant[], mac: boo
   const added: string[] = []
   const passed: string[] = []
   const missing: string[] = []
-  // Each group needs one key: any key elsewhere; on a Mac an alt key and a non-alt key.
-  const groups: ((k: string) => boolean)[] = mac ? [isAlt, (k) => !isAlt(k)] : [() => true]
   for (const want of wants) {
-    for (const fits of groups) {
-      const bound = [...held].some(([k, a]) => a === want.action && fits(k))
-      if (bound) continue
-      const candidates = want.keys.filter(fits)
-      const free = candidates.find((k) => !held.has(k.toLowerCase()))
-      for (const k of candidates) {
-        if (k === free) break
-        passed.push(`${k} runs ${String(held.get(k.toLowerCase()))}`)
-      }
-      if (!free) continue
-      if (!global) {
-        global = { context: 'Global', bindings: {} }
-        blocks.unshift(global)
-      }
-      if (!global.bindings || typeof global.bindings !== 'object') global.bindings = {}
-      global.bindings[free] = want.action
-      held.set(free.toLowerCase(), want.action)
-      added.push(free)
+    if ([...held.values()].includes(want.action)) continue
+    const free = want.keys.find((k) => !held.has(k.toLowerCase()))
+    for (const k of want.keys) {
+      if (k === free) break
+      passed.push(`${k} runs ${String(held.get(k.toLowerCase()))}`)
     }
-    if (![...held.values()].includes(want.action)) missing.push(want.action)
+    if (!free) {
+      missing.push(want.action)
+      continue
+    }
+    if (!global) {
+      global = { context: 'Global', bindings: {} }
+      blocks.unshift(global)
+    }
+    if (!global.bindings || typeof global.bindings !== 'object') global.bindings = {}
+    global.bindings[free] = want.action
+    held.set(free.toLowerCase(), want.action)
+    added.push(free)
   }
   const tail = [passed.length && `skipped ${passed.join(', ')}`, missing.length && `no free key left for ${missing.join(', ')}`].filter(Boolean).join('; ')
   if (!added.length) {

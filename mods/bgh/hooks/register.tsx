@@ -74,7 +74,7 @@ import {
   type Usage,
 } from './core'
 
-const RELEASE = '0.10.1'
+const RELEASE = '0.10.2'
 const HARPER_DELAY_MS = 300
 const HOP_TIMEOUT_MS = 6000
 const CACHE_KEY = 'llm-cache-v1'
@@ -103,7 +103,7 @@ const HELP = [
   '  /bgh status          one-screen summary as text',
   '  /bgh on | off        switch checking on or off',
   '  /bgh reload          read the keys file again',
-  '  /bgh keys            bind apply and ignore: alt+a and alt+i, else ctrl+x a and ctrl+x i (setup key k)',
+  '  /bgh keys            bind apply and ignore: alt+a and alt+i, else alt+shift+a and alt+shift+i (setup key k)',
   '  /bgh ignore <word>   never flag this word; unignore <word> undoes it; ignored lists them',
   '  /bgh clear-cache     forget the remembered LLM answers',
   '  /bgh help            this list',
@@ -142,10 +142,10 @@ const CACHE_MAX = 400
 const APPLY_ACTION = 'app:cycleDiffBase'
 const IGNORE_ACTION = 'app:toggleDiffNoiseFilter'
 // The keys setup key k tries for each, in order. Single ctrl+letters stay out: the prompt uses
-// them for editing. ctrl+x is Claude Code's own chord prefix, and these two are free there.
+// them for editing, and a ctrl+x chord never reached these actions when tried.
 const CHORD_WANTS: ChordWant[] = [
-  { action: APPLY_ACTION, keys: ['alt+a', 'ctrl+x a'] },
-  { action: IGNORE_ACTION, keys: ['alt+i', 'ctrl+x i'] },
+  { action: APPLY_ACTION, keys: ['alt+a', 'alt+shift+a'] },
+  { action: IGNORE_ACTION, keys: ['alt+i', 'alt+shift+i'] },
 ]
 
 // The shape tag declines what 0.2.0 stored (fixes without `by`), which outlives a reload.
@@ -224,7 +224,7 @@ async function readText($: EngineInterface, path: string) {
 // the cache folder first. Terminal settings stay as they are.
 async function setUpKeys($: EngineInterface, p: KeysPlace): Promise<KeyLine[]> {
   const before = await readText($, p.keybindingsPath)
-  const edit = addChords(before, p.wants, p.os === 'darwin')
+  const edit = addChords(before, p.wants)
   const out: KeyLine[] = []
   if (edit.text === undefined) {
     out.push({ name: 'keybindings', status: edit.status, note: edit.note })
@@ -249,7 +249,7 @@ async function setUpKeys($: EngineInterface, p: KeysPlace): Promise<KeyLine[]> {
     out.push({ name: w.action === p.wants[0]!.action ? 'apply' : 'ignore', status: keys.length ? 'ok' : 'manual', note: keys.length ? chordLabel(keys, '', p.os) : 'no key' })
   }
   if (p.os === 'darwin') {
-    out.push({ name: 'macOS', status: 'ok', note: 'Option keys work where the terminal sends Option as Alt; ctrl + x ones work everywhere' })
+    out.push({ name: 'macOS', status: 'ok', note: 'Option keys need the terminal to send Option as Alt: Orca and Ghostty can; in Terminal turn on Use Option as Meta key' })
   }
   return out
 }
@@ -567,7 +567,7 @@ export const register: Register = (on) => {
     return {
       harper: harperOk,
       keys: availableRoutes(env).some((r) => r !== 'claude'),
-      chords: addChords(keybindings, CHORD_WANTS, platform.os === 'darwin').status === 'ok',
+      chords: addChords(keybindings, CHORD_WANTS).status === 'ok',
     }
   }
 
@@ -874,8 +874,8 @@ export const register: Register = (on) => {
           steps.chords ? `apply ${applyKeys} \u{b7} ignore ${ignoreKeys}` : 'not bound: the band shows fixes, the keys do nothing',
           [
             `press k: binds apply and ignore in ${keybindingsPath}, alt+a and alt+i first`,
-            'a key another action holds stays with it, and the next one is tried (ctrl+x a, ctrl+x i)',
-            'on macOS ctrl+x a and ctrl+x i come too: Option types \u{e5} unless the terminal sends it as Alt, and bgh leaves terminal settings alone',
+            'a key another action holds stays with it, and the next one is tried (alt+shift+a, alt+shift+i)',
+            'macOS: Option types \u{e5} unless the terminal sends it as Alt; bgh leaves terminal settings to you (Terminal: Use Option as Meta key)',
           ],
         )}
         {step(

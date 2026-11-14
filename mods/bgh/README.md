@@ -33,7 +33,7 @@ The same install works on Linux, macOS and Windows. The mod is plain JavaScript 
 | Harper | `sudo pacman -S harper` | `brew install harper` | `harper-cli-x86_64-pc-windows-msvc.zip` from the releases page, `harper-cli.exe` on PATH |
 | Keys file | `~/.config/bgh/.env` | `~/.config/bgh/.env` | `%APPDATA%\bgh\.env` |
 | Cache | `~/.cache/bgh/` | `~/.cache/bgh/` | `%LOCALAPPDATA%\bgh\` |
-| Keys | `k` in the setup guide binds alt+a, alt+i | `k` adds ctrl+x a, ctrl+x i beside them | `k` binds alt+a, alt+i |
+| Keys | `k` in the setup guide binds alt+a, alt+i | `k` binds Option+a, Option+i; the terminal must send Option as Alt | `k` binds alt+a, alt+i |
 
 Any other Linux (a VPS, Ubuntu, Debian) takes the release build. No Rust needed:
 
@@ -58,9 +58,9 @@ The band's buttons borrow two engine actions that do nothing while you're in the
 "alt+i": "app:toggleDiffNoiseFilter"
 ```
 
-A key another action already holds stays with it, and `k` takes the next one: `ctrl+x a` to apply, `ctrl+x i` to ignore. `ctrl+x` is the prefix Claude Code's own chords use (`ctrl+x ctrl+e` opens the editor), so you press ctrl+x, let go, then the letter. Single ctrl+letters are never taken; the prompt uses them to edit the line.
+A key another action already holds stays with it, and `k` takes the next one: alt+shift+a to apply, alt+shift+i to ignore. Only single strokes are tried. Single ctrl+letters stay out, as the prompt uses them to edit the line, and a ctrl+x chord never reached these two actions when tried.
 
-On a Mac, `k` binds both pairs. Option types `å` unless the terminal is set to send it as Alt, and the mod leaves terminal settings alone, so `ctrl+x a` and `ctrl+x i` are the keys that work in any terminal. Where Option already sends Alt (Ghostty with `macos-option-as-alt`, say), alt+a and alt+i work too. The band's buttons, the help and the setup guide name the keys that are bound, the way the machine calls them: `alt + a` on Linux and Windows, `Option + a` on a Mac.
+On a Mac these are Option keys, and Option types `å` unless the terminal sends it as Alt. The mod leaves terminal settings to you. Orca does it out of the box, Ghostty with `macos-option-as-alt = true`, and Terminal with Settings › Profiles › Keyboard › Use Option as Meta key. The band's buttons, the help and the setup guide name the keys the way the machine calls them: `alt + a` on Linux and Windows, `Option + a` on a Mac.
 
 ## Commands
 
@@ -74,7 +74,7 @@ On a Mac, `k` binds both pairs. Option types `å` unless the terminal is set to 
 | `/bgh status` | opens `bgh debug` |
 | `/bgh on`, `off` | switch checking on or off |
 | `/bgh reload` | read the keys file again |
-| `/bgh keys` | bind apply and ignore: alt+a and alt+i, else ctrl+x a and ctrl+x i, and on a Mac both; same as `k` in the setup guide |
+| `/bgh keys` | bind apply and ignore: alt+a and alt+i, else alt+shift+a and alt+shift+i; same as `k` in the setup guide |
 | `/bgh ignore <word>`, `unignore <word>` | add to or take off the ignore list |
 | `/bgh ignored` | opens `bgh settings`, where the list is |
 | `/bgh clear-cache` | forget the remembered LLM answers |
