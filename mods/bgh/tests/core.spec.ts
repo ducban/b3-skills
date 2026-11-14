@@ -9,9 +9,12 @@ import {
   codePointToUtf16,
   cycle,
   DEFAULT_PREFS,
-  boundActions,
-  addChords,
-  chordLabel,
+  addKeys,
+  creditOf,
+  mergeTally,
+  mergeWords,
+  mergeCache,
+  keyLabel,
   keyName,
   keyLines,
   keysFor,
@@ -298,11 +301,6 @@ describe('setup guide', () => {
     expect(platformOf(undefined, undefined, undefined, true).os).toBe('windows')
     expect(harperInstall(platformOf(undefined, undefined, undefined, true))).toContain('windows-msvc.zip')
   })
-  test('keybindings: which of the two chords are bound', () => {
-    const kb = '{"bindings":[{"context":"Global","bindings":{"alt+a":"app:cycleDiffBase"}}]}'
-    expect(boundActions(kb, ['app:cycleDiffBase', 'app:toggleDiffNoiseFilter'])).toEqual(['app:cycleDiffBase'])
-    expect(boundActions(undefined, ['x'])).toEqual([])
-  })
   test('last trace line', () => {
     const at = new Date(2026, 10, 13, 14, 2).getTime()
     expect(traceLine(undefined, at)).toContain('none sent yet')
@@ -377,49 +375,93 @@ describe('tally', () => {
   })
 })
 
+describe('tally credit', () => {
+  test('a model is credited only for fixes it made; Harper-only fixes go to harper', () => {
+    const h = { start: 0, end: 1, to: 'x', source: 'harper' as const, message: '', by: 'harper' }
+    const l = { start: 2, end: 3, to: 'y', source: 'llm' as const, message: '', by: 'openrouter qwen3 (cached)' }
+    expect(creditOf([h])).toBe('harper')
+    expect(creditOf([h, l])).toBe('openrouter qwen3')
+    expect(creditOf([])).toBe('harper')
+  })
+})
+
+describe('store writes from two sessions', () => {
+  test('tally: what this session counted is added to what the store holds now', () => {
+    const base = { m: { yes: 1, no: 0 } }
+    const local = { m: { yes: 3, no: 1 }, h: { yes: 0, no: 1 } }
+    const fresh = { m: { yes: 5, no: 0 }, o: { yes: 2, no: 2 } }
+    expect(mergeTally(fresh, base, local)).toEqual({ m: { yes: 7, no: 1 }, o: { yes: 2, no: 2 }, h: { yes: 0, no: 1 } })
+  })
+  test("ignored words: another session's words stay, a removed word goes", () => {
+    expect(mergeWords(['a', 'b'], ['c'], ['b'])).toEqual(['a', 'c'])
+    expect(mergeWords(undefined, ['c'], [])).toEqual(['c'])
+  })
+  test("cache: both sessions' answers kept, ours win, oldest dropped past the cap", () => {
+    const fresh: [string, { from: string; to: string }[]][] = [['x', [{ from: 'a', to: 'b' }]], ['y', []]]
+    const ours: [string, { from: string; to: string }[]][] = [['y', [{ from: 'c', to: 'd' }]], ['z', []]]
+    expect(mergeCache(fresh, ours, 10).map(([k]) => k)).toEqual(['x', 'y', 'z'])
+    expect(mergeCache(fresh, ours, 10)[1]![1]).toEqual([{ from: 'c', to: 'd' }])
+    expect(mergeCache(fresh, ours, 2).map(([k]) => k)).toEqual(['y', 'z'])
+  })
+})
+
 describe('setup key k', () => {
   const wants = [
-    { action: 'app:cycleDiffBase', keys: ['alt+a', 'alt+shift+a'] },
-    { action: 'app:toggleDiffNoiseFilter', keys: ['alt+i', 'alt+shift+i'] },
+    { label: 'apply', action: 'app:cycleDiffBase', keys: ['alt+a', 'alt+shift+a'] },
+    { label: 'ignore', action: 'app:toggleDiffNoiseFilter', keys: ['alt+i', 'alt+shift+i'] },
   ]
   const globalOf = (text: string | undefined) => JSON.parse(text!).bindings.find((b: { context: string }) => b.context === 'Global').bindings
 
   test('alt+a and alt+i go in the Global block, the rest kept', () => {
     const kb = JSON.stringify({ bindings: [{ context: 'Global', bindings: { 'ctrl+t': 'app:toggleTodos' } }, { context: 'Chat', bindings: {} }] })
-    const r = addChords(kb, wants)
+    const r = addKeys(kb, wants)
     expect(r.status).toBe('set')
     expect(globalOf(r.text)).toEqual({ 'ctrl+t': 'app:toggleTodos', 'alt+a': 'app:cycleDiffBase', 'alt+i': 'app:toggleDiffNoiseFilter' })
-    expect(addChords(r.text, wants)).toEqual({ status: 'ok', note: 'keys bound already' })
+    expect(addKeys(r.text, wants)).toEqual({ status: 'ok', note: 'keys bound already' })
   })
   test('makes the file and the Global block when missing', () => {
-    expect(globalOf(addChords(undefined, wants).text)).toEqual({ 'alt+a': 'app:cycleDiffBase', 'alt+i': 'app:toggleDiffNoiseFilter' })
-    expect(JSON.parse(addChords('{"bindings":[{"context":"Chat","bindings":{}}]}', wants).text!).bindings[0].context).toBe('Global')
+    expect(globalOf(addKeys(undefined, wants).text)).toEqual({ 'alt+a': 'app:cycleDiffBase', 'alt+i': 'app:toggleDiffNoiseFilter' })
+    expect(JSON.parse(addKeys('{"bindings":[{"context":"Chat","bindings":{}}]}', wants).text!).bindings[0].context).toBe('Global')
   })
   test('a key another action holds stays with it; the next one is taken', () => {
     const kb = JSON.stringify({ bindings: [{ context: 'Chat', bindings: { 'alt+i': 'chat:stash' } }] })
-    const r = addChords(kb, wants)
+    const r = addKeys(kb, wants)
     expect(r.status).toBe('set')
     expect(globalOf(r.text)).toEqual({ 'alt+a': 'app:cycleDiffBase', 'alt+shift+i': 'app:toggleDiffNoiseFilter' })
     expect(r.note).toContain('skipped alt+i runs chat:stash')
   })
   test('an action bound to any key, in any block, counts as done', () => {
     const kb = JSON.stringify({ bindings: [{ context: 'Chat', bindings: { 'meta+a': 'app:cycleDiffBase', 'meta+i': 'app:toggleDiffNoiseFilter' } }] })
-    expect(addChords(kb, wants).status).toBe('ok')
+    expect(addKeys(kb, wants).status).toBe('ok')
   })
   test('nothing free means a hand is needed; broken files are left alone', () => {
     const kb = JSON.stringify({ bindings: [{ context: 'Global', bindings: { 'alt+i': 'chat:stash', 'alt+shift+i': 'chat:undo' } }] })
-    const r = addChords(kb, wants)
+    const r = addKeys(kb, wants)
     expect(r.status).toBe('manual')
     expect(r.note).toContain('no free key left for app:toggleDiffNoiseFilter')
-    expect(addChords('{ not json', wants).status).toBe('manual')
-    expect(addChords('{"bindings":{}}', wants).status).toBe('manual')
+    expect(addKeys('{ not json', wants).status).toBe('manual')
+    expect(addKeys('{"bindings":{}}', wants).status).toBe('manual')
   })
   test('labels name every key bound to an action, the way the OS does', () => {
     const kb = JSON.stringify({ bindings: [{ context: 'Global', bindings: { 'alt+a': 'app:cycleDiffBase', 'alt+shift+a': 'app:cycleDiffBase' } }] })
-    expect(chordLabel(keysFor(kb, 'app:cycleDiffBase'), 'alt+a', 'linux')).toBe('alt + a / alt + shift + a')
-    expect(chordLabel(keysFor(kb, 'app:cycleDiffBase'), 'alt+a', 'darwin')).toBe('Option + a / Option + shift + a')
-    expect(chordLabel(keysFor(undefined, 'app:toggleDiffNoiseFilter'), 'alt+i', 'darwin')).toBe('Option + i')
+    expect(keyLabel(keysFor(kb, 'app:cycleDiffBase'), 'alt+a', 'linux')).toBe('alt + a / alt + shift + a')
+    expect(keyLabel(keysFor(kb, 'app:cycleDiffBase'), 'alt+a', 'darwin')).toBe('Option + a / Option + Shift + a')
+    expect(keyLabel(keysFor(undefined, 'app:toggleDiffNoiseFilter'), 'alt+i', 'darwin')).toBe('Option + i')
     expect(keyName('meta+shift+p', 'linux')).toBe('alt + shift + p')
+  })
+  test('meta, opt and option are alt, and modifier order does not matter', () => {
+    const kb = JSON.stringify({ bindings: [{ context: 'Chat', bindings: { 'meta+a': 'chat:x', 'alt+i': 'chat:stash', 'shift+alt+i': 'chat:undo' } }] })
+    const r = addKeys(kb, wants)
+    expect(r.status).toBe('manual')
+    expect(globalOf(r.text)).toEqual({ 'alt+shift+a': 'app:cycleDiffBase' })
+    expect(r.note).toContain('skipped alt+a runs chat:x')
+    expect(r.note).toContain('no free key left for app:toggleDiffNoiseFilter')
+  })
+  test('a key unbound with null is free', () => {
+    const kb = JSON.stringify({ bindings: [{ context: 'Global', bindings: { 'alt+a': null } }] })
+    const r = addKeys(kb, wants)
+    expect(globalOf(r.text)).toEqual({ 'alt+a': 'app:cycleDiffBase', 'alt+i': 'app:toggleDiffNoiseFilter' })
+    expect(r.note).not.toContain('null')
   })
   test('report lines line up', () => {
     expect(keyLines([{ name: 'apply', status: 'set', note: 'a' }, { name: 'keybindings', status: 'manual', note: 'b' }])).toEqual(['+ apply        a', '! keybindings  b'])

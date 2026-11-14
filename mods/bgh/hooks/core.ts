@@ -24,7 +24,7 @@ const MIN_WORDS = 4
 
 // Letters Vietnamese uses and English never does. A few of them in a draft mean it isn't English.
 const VIETNAMESE =
-  /[ăâđêôơưạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹĂÂĐÊÔƠƯ]/g
+  /[\u0103\u00e2\u0111\u00ea\u00f4\u01a1\u01b0\u1ea1\u1ea3\u1ea5\u1ea7\u1ea9\u1eab\u1ead\u1eaf\u1eb1\u1eb3\u1eb5\u1eb7\u1eb9\u1ebb\u1ebd\u1ebf\u1ec1\u1ec3\u1ec5\u1ec7\u1ec9\u1ecb\u1ecd\u1ecf\u1ed1\u1ed3\u1ed5\u1ed7\u1ed9\u1edb\u1edd\u1edf\u1ee1\u1ee3\u1ee5\u1ee7\u1ee9\u1eeb\u1eed\u1eef\u1ef1\u1ef3\u1ef5\u1ef7\u1ef9\u0102\u00c2\u0110\u00ca\u00d4\u01a0\u01af]/g
 
 export function shouldCheck(text: string): boolean {
   const trimmed = text.trim()
@@ -106,7 +106,7 @@ export function codePointToUtf16(text: string, cp: number): number {
 // What one Harper suggestion string asks for, as the text that goes over the matched span.
 // Shapes seen in harper-cli JSON: `Replace with: “x”`, `Insert “x”`, `Remove error`.
 export function harperReplacement(suggestion: string, matched: string): string | undefined {
-  const quoted = suggestion.match(/[“"](.*)[”"]\s*$/s)?.[1]
+  const quoted = suggestion.match(/[\u201c"](.*)[\u201d"]\s*$/s)?.[1]
   if (/^replace with/i.test(suggestion) && quoted !== undefined) return quoted
   if (/^insert/i.test(suggestion) && quoted !== undefined) return matched + quoted
   if (/^remove/i.test(suggestion)) return ''
@@ -334,6 +334,45 @@ export function addTally(t: Tally, who: string, accepted: boolean): Tally {
   return { ...t, [who]: accepted ? { yes: was.yes + 1, no: was.no } : { yes: was.yes, no: was.no + 1 } }
 }
 
+// Who the tally credits for the fixes shown: the model behind the first LLM fix, else Harper. A
+// hop that answered with no edits gets nothing.
+export function creditOf(issues: Issue[]): string {
+  const llm = issues.find((i) => i.source === 'llm' && i.by)
+  return llm?.by?.replace(/ \(cached\)$/, '') ?? 'harper'
+}
+
+// The store file is per machine, so two sessions write it. Each write re-reads it and adds only
+// what this session changed since it last read or wrote.
+
+// `fresh` (the store now) plus this session's counts since `base`.
+export function mergeTally(fresh: Tally, base: Tally, local: Tally): Tally {
+  const out: Tally = { ...fresh }
+  for (const [who, now] of Object.entries(local)) {
+    const was = base[who] ?? { yes: 0, no: 0 }
+    const there = out[who] ?? { yes: 0, no: 0 }
+    out[who] = { yes: there.yes + now.yes - was.yes, no: there.no + now.no - was.no }
+  }
+  return out
+}
+
+// The stored word list with this session's additions and removals.
+export function mergeWords(fresh: unknown, add: string[], remove: string[]): string[] {
+  const set = new Set(Array.isArray(fresh) ? fresh.filter((w): w is string => typeof w === 'string') : [])
+  for (const w of add) set.add(w)
+  for (const w of remove) set.delete(w)
+  return [...set]
+}
+
+// The stored answers with ours laid over them (ours win, ours count as newest), at most `max`.
+export function mergeCache<T>(fresh: unknown, ours: [string, T][], max: number): [string, T][] {
+  const map = new Map<string, T>(Array.isArray(fresh) ? (fresh as [string, T][]).filter((e) => Array.isArray(e) && typeof e[0] === 'string') : [])
+  for (const [k, v] of ours) {
+    map.delete(k)
+    map.set(k, v)
+  }
+  return [...map.entries()].slice(-max)
+}
+
 // 'qwen3-235b-a22b-2507 72% (40) · haiku 55% (31)', busiest first, at most `max`.
 export function tallyLine(t: Tally, max = 5): string {
   const rows = Object.entries(t)
@@ -341,7 +380,7 @@ export function tallyLine(t: Tally, max = 5): string {
     .filter((r) => r.n > 0)
     .sort((a, b) => b.n - a.n)
   if (!rows.length) return 'nothing yet'
-  return rows.slice(0, max).map((r) => `${r.who} ${r.pct}% (${r.n})`).join(' · ')
+  return rows.slice(0, max).map((r) => `${r.who} ${r.pct}% (${r.n})`).join(' \u{b7} ')
 }
 
 // ---------------------------------------------------------------------------
@@ -509,7 +548,7 @@ export function decorations(issues: Issue[]): Decoration[] {
       out.push({ start: issue.start, end: issue.end, color: 'warning', underline: true, strikethrough: issue.to === '' })
     }
     if (issue.to !== '') {
-      out.push({ start: issue.end, end: issue.end, virtualText: ` →${issue.to}`, dimColor: true })
+      out.push({ start: issue.end, end: issue.end, virtualText: ` \u{2192}${issue.to}`, dimColor: true })
     }
   }
   return out
@@ -654,7 +693,7 @@ FIREWORKS_API_KEY=
 LANGFUSE_PUBLIC_KEY=
 LANGFUSE_SECRET_KEY=
 # Region your keys were made in; blank means EU (https://cloud.langfuse.com). Others:
-# https://us.cloud.langfuse.com · https://jp.cloud.langfuse.com · https://hipaa.cloud.langfuse.com
+# https://us.cloud.langfuse.com \u{b7} https://jp.cloud.langfuse.com \u{b7} https://hipaa.cloud.langfuse.com
 LANGFUSE_BASE_URL=
 `
 
@@ -693,11 +732,6 @@ export function harperInstall(p: Platform): string {
   return `mkdir -p ~/.local/bin && curl -sL ${RELEASE_URL}/harper-cli-${p.arch}-unknown-linux-gnu.tar.gz | tar xz -C ~/.local/bin`
 }
 
-// Which of the band's two chords ~/.claude/keybindings.json already binds.
-export function boundActions(keybindings: string | undefined, actions: string[]): string[] {
-  return actions.filter((a) => keybindings?.includes(`"${a}"`))
-}
-
 // ---------------------------------------------------------------------------
 // Setup key k (and /bgh keys): bind the band's two actions in keybindings.json. No terminal
 // setting is touched. alt+a and alt+i come first; a key another action holds is left to it and the
@@ -706,46 +740,68 @@ export function boundActions(keybindings: string | undefined, actions: string[])
 
 export type FileEdit = { status: 'ok' | 'set' | 'manual'; text?: string; note: string }
 
-// One action and its chords, most wanted first.
-export type ChordWant = { action: string; keys: string[] }
+// One action, the name the report gives it, and its keys, most wanted first.
+export type KeyWant = { label: string; action: string; keys: string[] }
 
 type KeybindingsDoc = { bindings?: unknown } & Record<string, unknown>
 type Block = { context?: unknown; bindings?: Record<string, unknown> }
+
+// Every [key, action] pair in every block, skipping blocks that aren't the expected shape.
+function bindingEntries(blocks: unknown[]): [string, unknown][] {
+  return blocks.flatMap((b) => {
+    const binds = (b as Block | null)?.bindings
+    return b && typeof b === 'object' && binds && typeof binds === 'object' ? Object.entries(binds) : []
+  })
+}
+
+// One spelling per physical key: meta, opt and option are alt; modifiers sorted; lower case.
+export function sameKey(key: string): string {
+  return key
+    .toLowerCase()
+    .split(' ')
+    .filter(Boolean)
+    .map((stroke) => {
+      const parts = stroke.split('+').map((part) => (/^(opt|option|meta)$/.test(part) ? 'alt' : part))
+      const last = parts.pop() ?? ''
+      return [...new Set(parts)].sort().concat(last).join('+')
+    })
+    .join(' ')
+}
 
 // Every key the file binds to `action`, in any context.
 export function keysFor(text: string | undefined, action: string): string[] {
   try {
     const doc = JSON.parse(text ?? '') as KeybindingsDoc
     if (!Array.isArray(doc.bindings)) return []
-    return (doc.bindings as Block[]).flatMap((b) =>
-      b && typeof b === 'object' && b.bindings && typeof b.bindings === 'object'
-        ? Object.entries(b.bindings).filter(([, a]) => a === action).map(([k]) => k)
-        : [],
-    )
+    return bindingEntries(doc.bindings).filter(([, a]) => a === action).map(([k]) => k)
   } catch {
     return []
   }
 }
 
-// A key as the OS names it: `alt + a` on Linux and Windows, `Option + a` on a Mac.
+// A key as the OS names it: `alt + shift + a` on Linux and Windows, `Option + Shift + a` on a Mac.
 export function keyName(key: string, os: string): string {
+  const mac = os === 'darwin'
   return key
     .split(' ')
     .filter(Boolean)
-    .map((stroke) =>
-      stroke
-        .split('+')
-        .map((part) => (/^(alt|opt|option|meta)$/i.test(part) ? (os === 'darwin' ? 'Option' : 'alt') : part))
-        .join(' + '),
-    )
+    .map((stroke) => {
+      const parts = stroke.split('+')
+      const last = parts.pop() ?? ''
+      const mods = parts.map((part) => {
+        if (/^(alt|opt|option|meta)$/i.test(part)) return mac ? 'Option' : 'alt'
+        return mac ? part.charAt(0).toUpperCase() + part.slice(1).toLowerCase() : part.toLowerCase()
+      })
+      return [...mods, last].join(' + ')
+    })
     .join(' ')
 }
 
-// What the band's buttons and the help show: the keys bound to an action, or the default.
-export const chordLabel = (keys: string[], fallback: string, os: string): string =>
+// What the band's buttons, the help and setup show: the keys bound to an action, or the default.
+export const keyLabel = (keys: string[], fallback: string, os: string): string =>
   (keys.length ? keys : [fallback]).map((k) => keyName(k, os)).join(' / ')
 
-export function addChords(text: string | undefined, wants: ChordWant[]): FileEdit {
+export function addKeys(text: string | undefined, wants: KeyWant[]): FileEdit {
   let doc: KeybindingsDoc
   if (text === undefined || !text.trim()) {
     doc = { $schema: 'https://www.schemastore.org/claude-code-keybindings.json', bindings: [] }
@@ -760,22 +816,24 @@ export function addChords(text: string | undefined, wants: ChordWant[]): FileEdi
   if (doc.bindings === undefined) doc.bindings = []
   if (!Array.isArray(doc.bindings)) return { status: 'manual', note: '"bindings" is not a list, left alone' }
   const blocks = doc.bindings as Block[]
+  // A key bound to null is one the person unbound: free to use.
   const held = new Map<string, unknown>()
-  for (const b of blocks) {
-    if (b && typeof b === 'object' && b.bindings && typeof b.bindings === 'object') {
-      for (const [k, a] of Object.entries(b.bindings)) held.set(k.toLowerCase(), a)
-    }
+  const bound = new Set<unknown>()
+  for (const [k, a] of bindingEntries(blocks)) {
+    if (a === null) continue
+    held.set(sameKey(k), a)
+    bound.add(a)
   }
   let global = blocks.find((b) => b?.context === 'Global')
   const added: string[] = []
   const passed: string[] = []
   const missing: string[] = []
   for (const want of wants) {
-    if ([...held.values()].includes(want.action)) continue
-    const free = want.keys.find((k) => !held.has(k.toLowerCase()))
+    if (bound.has(want.action)) continue
+    const free = want.keys.find((k) => !held.has(sameKey(k)))
     for (const k of want.keys) {
       if (k === free) break
-      passed.push(`${k} runs ${String(held.get(k.toLowerCase()))}`)
+      passed.push(`${k} runs ${String(held.get(sameKey(k)))}`)
     }
     if (!free) {
       missing.push(want.action)
@@ -787,7 +845,8 @@ export function addChords(text: string | undefined, wants: ChordWant[]): FileEdi
     }
     if (!global.bindings || typeof global.bindings !== 'object') global.bindings = {}
     global.bindings[free] = want.action
-    held.set(free.toLowerCase(), want.action)
+    held.set(sameKey(free), want.action)
+    bound.add(want.action)
     added.push(free)
   }
   const tail = [passed.length && `skipped ${passed.join(', ')}`, missing.length && `no free key left for ${missing.join(', ')}`].filter(Boolean).join('; ')

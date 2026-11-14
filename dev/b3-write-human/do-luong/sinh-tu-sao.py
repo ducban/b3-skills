@@ -23,17 +23,24 @@ if not rule10 or not cum_rong:
 phrases = [w.strip() for w in rule10.group(1).split("·")]
 phrases += [w.strip() for w in re.findall(r'"([^"]+)"', cum_rong.group(1))]
 
+def lit(s):
+    """Thoát các ký tự đặc biệt của regex Go (Vale), chừa khoảng trắng và chữ có dấu."""
+    return re.sub(r"([.^$*+?()\[\]{}|\\])", r"\\\1", s)
+
 tokens = []
 for p in phrases:
     p = p.replace("...", "…")
-    if "…" in p:                                  # "không chỉ… mà còn" → cho phép tới 80 ký tự giữa hai vế
-        a, b = [s.strip() for s in p.split("…", 1)]
-        p = f"{a}[^.;]{{1,80}}{b}"
     for v in (p, p.replace("hoá", "hóa")):        # chấp nhận cả hai cách bỏ dấu
+        if "…" in v:                              # "không chỉ… mà còn" → cho phép tới 80 ký tự giữa hai vế
+            a, b = [s.strip() for s in v.split("…", 1)]
+            v = f"{lit(a)}[^.;]{{1,80}}{lit(b)}"
+        else:
+            v = lit(v)                      # cụm là chữ thường, không phải regex: . ( ? không được mở rộng
         if v not in tokens:
             tokens.append(v)
 
-body = "\n".join(f"  - '{t}'" for t in tokens)
+# YAML nháy đơn: một ' trong cụm phải viết thành ''.
+body = "\n".join("  - '" + t.replace("'", "''") + "'" for t in tokens)
 text = f"""# SINH TỰ ĐỘNG bởi sinh-tu-sao.py, đừng sửa tay. Nguồn duy nhất: luật 10 trong
 # skills/b3-write-human/tai-lieu-tieng-viet.md và gạch "Cụm rỗng" trong SKILL.md.
 # Sửa ở đó rồi chạy lại script; do.py tự sinh lại trước mỗi lần đo.

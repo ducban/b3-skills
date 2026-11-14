@@ -47,6 +47,21 @@ Git doesn't carry hooks across clones, so a fresh clone starts with none. Check 
 A skill's version is `metadata.version` in its `SKILL.md`. A mod's version is `version` in
 its `.claude-plugin/plugin.json`, plus whatever constant the mod prints, kept equal.
 
+## Build & Test
+
+Nothing here builds; these are the checks a change must pass. Run each from the folder named.
+
+| Part | Folder | Commands |
+|---|---|---|
+| bgh | `mods/bgh` | `bun test tests/` · `claude plugin validate .` · type-check (below) |
+| status-line | `mods/status-line` | `claude plugin test .` · `claude plugin validate .` · type-check (below) |
+| Vale tooling | repo root | `python3 dev/b3-write-human/do-luong/sinh-tu-sao.py --check` |
+| Figures | repo root | `node docs/figures/draw.mjs`, then `git diff --stat docs/figures` shows only the SVGs you meant to change |
+
+Type-check a mod with `bun x -p typescript tsc -p .` from its folder, once the engine has
+written `.claude-plugin/types/` (see "Writing mods"). `ICON_MISSING` is the one expected
+`validate` warning.
+
 ## Figures in the docs
 
 The SVGs under `docs/figures/` come from `docs/figures/draw.mjs`, which imports the repo's

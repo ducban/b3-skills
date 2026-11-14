@@ -17,11 +17,12 @@ import {
   ENV_TEMPLATE,
   HARPER_RELEASES,
   needsTemplate,
-  addChords,
-  chordLabel,
+  addKeys,
+  keyLabel,
+  keyName,
   keyLines,
   keysFor,
-  type ChordWant,
+  type KeyWant,
   type KeyLine,
   LLM_DELAYS,
   MODEL_CHOICES,
@@ -30,6 +31,10 @@ import {
   MODELS_TTL_MS,
   MODELS_URL,
   addTally,
+  creditOf,
+  mergeCache,
+  mergeTally,
+  mergeWords,
   liveModel,
   newerSibling,
   parseModelList,
@@ -74,9 +79,11 @@ import {
   type Usage,
 } from './core'
 
-const RELEASE = '0.10.2'
+const RELEASE = '0.10.3'
 const HARPER_DELAY_MS = 300
 const HOP_TIMEOUT_MS = 6000
+// Model lists, Langfuse scores and traces: none should hold a command or a tab open for long.
+const HTTP_TIMEOUT_MS = 8000
 const CACHE_KEY = 'llm-cache-v1'
 const IGNORE_KEY = 'ignore-v1'
 const PREFS_KEY = 'prefs-v1'
@@ -93,17 +100,18 @@ const PANES = [
   { id: HELP_PANE, title: 'bgh help' },
 ]
 
-const HELP = [
+// Key names follow the OS: alt + a on Linux and Windows, Option + a on a Mac.
+const helpText = (os: string): string => [
   'B3 Grammar Helper (bgh)',
   '  /bgh                 setup guide while something is missing, else settings',
   '  /bgh setup-guide     what this machine still needs (macOS and Linux)',
   '  /bgh settings        grammar, LLM route and model, delay, Langfuse, cache, ignored words',
   '  /bgh debug           versions, keys set, routes, models, accepted %, last trace, last check',
   '  /bgh test            run every route and Langfuse on a sample sentence; refetch model lists',
-  '  /bgh status          one-screen summary as text',
+  '  /bgh status          opens bgh debug; a text summary where no tab fits',
   '  /bgh on | off        switch checking on or off',
   '  /bgh reload          read the keys file again',
-  '  /bgh keys            bind apply and ignore: alt+a and alt+i, else alt+shift+a and alt+shift+i (setup key k)',
+  `  /bgh keys            bind apply and ignore: ${keyName('alt+a', os)} and ${keyName('alt+i', os)}, else ${keyName('alt+shift+a', os)} and ${keyName('alt+shift+i', os)} (setup key k)`,
   '  /bgh ignore <word>   never flag this word; unignore <word> undoes it; ignored lists them',
   '  /bgh clear-cache     forget the remembered LLM answers',
   '  /bgh help            this list',
@@ -138,14 +146,14 @@ type LastRun = {
 const CACHE_MAX = 400
 
 // Engine keybinding actions that have no handler while the chat is up. The band's Buttons take
-// them, so the chords the person binds to them (alt+a, alt+i) press the Buttons from the prompt.
+// them, so the keys the person binds to them (alt+a, alt+i) press the Buttons from the prompt.
 const APPLY_ACTION = 'app:cycleDiffBase'
 const IGNORE_ACTION = 'app:toggleDiffNoiseFilter'
 // The keys setup key k tries for each, in order. Single ctrl+letters stay out: the prompt uses
 // them for editing, and a ctrl+x chord never reached these actions when tried.
-const CHORD_WANTS: ChordWant[] = [
-  { action: APPLY_ACTION, keys: ['alt+a', 'alt+shift+a'] },
-  { action: IGNORE_ACTION, keys: ['alt+i', 'alt+shift+i'] },
+const KEY_WANTS: KeyWant[] = [
+  { label: 'apply', action: APPLY_ACTION, keys: ['alt+a', 'alt+shift+a'] },
+  { label: 'ignore', action: IGNORE_ACTION, keys: ['alt+i', 'alt+shift+i'] },
 ]
 
 // The shape tag declines what 0.2.0 stored (fixes without `by`), which outlives a reload.
@@ -178,6 +186,35 @@ const authHeader = (k: LangfuseKeys) => `Basic ${base64(`${k.publicKey}:${k.secr
 const scoreBody = (traceId: string, value: 0 | 1) =>
   JSON.stringify({ traceId, name: 'accepted', value, dataType: 'NUMERIC' })
 
+// Writes a file of API keys owner-only: an empty file is made and locked first, so the keys never
+// sit in a world-readable file. False when chmod failed where it should work (not on Windows).
+async function writeSecret($: EngineInterface, path: string, text: string, windows: boolean): Promise<boolean> {
+  await $.fs.write(path, '')
+  const locked = await $.process
+    .run(['chmod', '600', path], { timeoutMs: 2000 })
+    .then((r) => r.exitCode === 0)
+    .catch(() => false)
+  await $.fs.write(path, text)
+  return locked || windows
+}
+
+type FetchInit = Parameters<EngineInterface['http']['fetch']>[1]
+
+// $.http.fetch has no timeout of its own; the engine's clock stands in for setTimeout.
+async function fetchWithin($: EngineInterface, url: string, init: FetchInit, ms = HTTP_TIMEOUT_MS) {
+  let timer: Timer | undefined
+  try {
+    return await Promise.race([
+      $.http.fetch(url, init),
+      new Promise<never>((_, reject) => {
+        timer = $.clock.after(ms, () => reject(new Error(`timeout after ${ms}ms`)))
+      }),
+    ])
+  } finally {
+    timer?.cancel()
+  }
+}
+
 // Each provider's model list: OpenRouter always (it needs no key), the others where a key is set.
 // Declared at the top level because it takes `$`.
 async function fetchModels($: EngineInterface, env: Env): Promise<{ lists: Partial<Record<ApiRoute, ListedModel[]>>; errors: Partial<Record<ApiRoute, string>> }> {
@@ -188,7 +225,7 @@ async function fetchModels($: EngineInterface, env: Env): Promise<{ lists: Parti
       const key = env[KEY_NAME[route]]?.trim()
       if (route !== 'openrouter' && !key) return
       try {
-        const res = await $.http.fetch(MODELS_URL[route], { headers: key ? { Authorization: `Bearer ${key}` } : {} })
+        const res = await fetchWithin($, MODELS_URL[route], { headers: key ? { Authorization: `Bearer ${key}` } : {} })
         const parsed = res.ok ? parseModelList(res.text) : undefined
         if (parsed) lists[route] = parsed
         else errors[route] = res.ok ? 'the list was not the JSON expected' : `HTTP ${res.status}`
@@ -200,7 +237,28 @@ async function fetchModels($: EngineInterface, env: Env): Promise<{ lists: Parti
   return { lists, errors }
 }
 
-// ---- setup key k: the band's chords ------------------------------------------------------------
+// ---- store writes that another session may race ------------------------------------------------
+// Declared at the top level because each takes `$`. Each re-reads the store and merges.
+
+async function saveTally($: EngineInterface, base: Tally, local: Tally): Promise<Tally> {
+  const merged = mergeTally(readTally(await $.store.get(TALLY_KEY)), base, local)
+  await $.store.set(TALLY_KEY, merged)
+  return merged
+}
+
+async function saveWords($: EngineInterface, add: string[], remove: string[]): Promise<string[]> {
+  const merged = mergeWords(await $.store.get(IGNORE_KEY), add, remove)
+  await $.store.set(IGNORE_KEY, merged)
+  return merged
+}
+
+async function saveCache($: EngineInterface, ours: [string, CachedEdit[]][]): Promise<[string, CachedEdit[]][]> {
+  const merged = mergeCache<CachedEdit[]>(await $.store.get(CACHE_KEY), ours, CACHE_MAX)
+  await $.store.set(CACHE_KEY, merged)
+  return merged
+}
+
+// ---- setup key k: the band's keys --------------------------------------------------------------
 // Declared at the top level because each takes `$`.
 
 type KeysPlace = {
@@ -209,7 +267,7 @@ type KeysPlace = {
   cache: string
   sep: string
   keybindingsPath: string
-  wants: ChordWant[]
+  wants: KeyWant[]
 }
 
 async function readText($: EngineInterface, path: string) {
@@ -220,11 +278,16 @@ async function readText($: EngineInterface, path: string) {
   }
 }
 
-// What setup key k and /bgh keys do: bind the chords in keybindings.json, the old file copied to
+// What setup key k and /bgh keys do: bind the keys in keybindings.json, the old file copied to
 // the cache folder first. Terminal settings stay as they are.
-async function setUpKeys($: EngineInterface, p: KeysPlace): Promise<KeyLine[]> {
+// Returns the report and the file as it now stands, for the band's labels.
+async function setUpKeys($: EngineInterface, p: KeysPlace): Promise<{ lines: KeyLine[]; text: string | undefined }> {
+  // Empty until session.start has run, which a managed machine's plugin can swallow.
+  if (!p.keybindingsPath || !p.cache) {
+    return { lines: [{ name: 'keybindings', status: 'manual', note: 'bgh has not started in this session yet: send one prompt, then press k again' }], text: undefined }
+  }
   const before = await readText($, p.keybindingsPath)
-  const edit = addChords(before, p.wants)
+  const edit = addKeys(before, p.wants)
   const out: KeyLine[] = []
   if (edit.text === undefined) {
     out.push({ name: 'keybindings', status: edit.status, note: edit.note })
@@ -240,18 +303,18 @@ async function setUpKeys($: EngineInterface, p: KeysPlace): Promise<KeyLine[]> {
       }
       await $.fs.write(p.keybindingsPath, edit.text)
     } catch (err) {
-      return [{ name: 'keybindings', status: 'failed', note: `could not write ${p.keybindingsPath}: ${String(err).slice(0, 80)}` }]
+      return { lines: [{ name: 'keybindings', status: 'failed', note: `could not write ${p.keybindingsPath}: ${String(err).slice(0, 80)}` }], text: before }
     }
   }
   const after = edit.text ?? before
   for (const w of p.wants) {
     const keys = keysFor(after, w.action)
-    out.push({ name: w.action === p.wants[0]!.action ? 'apply' : 'ignore', status: keys.length ? 'ok' : 'manual', note: keys.length ? chordLabel(keys, '', p.os) : 'no key' })
+    out.push({ name: w.label, status: keys.length ? 'ok' : 'manual', note: keys.length ? keyLabel(keys, '', p.os) : 'no key' })
   }
   if (p.os === 'darwin') {
     out.push({ name: 'macOS', status: 'ok', note: 'Option keys need the terminal to send Option as Alt: Orca and Ghostty can; in Terminal turn on Use Option as Meta key' })
   }
-  return out
+  return { lines: out, text: after }
 }
 
 // "Grammar keys: bound" for the toast.
@@ -288,6 +351,7 @@ export const register: Register = (on) => {
   let harperProbedAt = 0
   let prefs: Prefs = readPrefs(undefined)
   let draftPath = ''
+  let paintPath = ''
 
   let gen = 0
   let check: Check | undefined
@@ -303,6 +367,8 @@ export const register: Register = (on) => {
   // Models asked for that the provider no longer lists, as 'route model → stand-in'.
   let goneNotes: string[] = []
   let tally: Tally = {}
+  // The tally as last read from or written to the store; what this session added is the difference.
+  let tallyBase: Tally = {}
 
   const stale = (c: Check) => c.gen !== gen
 
@@ -319,7 +385,7 @@ export const register: Register = (on) => {
     hops = chain(env, prefs).map((h) => {
       if (h.route === 'claude') return h
       const live = liveModel(h.route, h.model, listed[h.route])
-      if (live.gone) goneNotes.push(`${h.route} ${modelName(h.model)} → ${modelName(live.model)}`)
+      if (live.gone) goneNotes.push(`${h.route} ${modelName(h.model)} \u{2192} ${modelName(live.model)}`)
       return { ...h, model: live.model }
     })
     langfuse = prefs.langfuse ? langfuseKeys(env) : undefined
@@ -333,11 +399,18 @@ export const register: Register = (on) => {
     applyEnv(lastEnvFile)
   }
 
-  // Whose fixes a check showed, for the tally.
-  const whoOf = (c: Check): string => c.by ?? c.llm[0]?.by?.replace(/ \(cached\)$/, '') ?? 'harper'
+  // Whose fixes a check showed, for the tally and the trace.
+  const whoOf = (c: Check): string => creditOf(c.issues)
 
   function count(who: string, accepted: boolean) {
     tally = addTally(tally, who, accepted)
+  }
+
+  // After saveTally: keep any count made while the write was in flight, and remember what the
+  // store now holds.
+  function tallySaved(sent: Tally, merged: Tally) {
+    tally = mergeTally(merged, sent, tally)
+    tallyBase = merged
   }
 
   const modelName = (m: string) => m.replace(/^accounts\/fireworks\/models\//, '')
@@ -358,7 +431,7 @@ export const register: Register = (on) => {
           err ? `last fetch failed: ${err}` : '',
           gone.length ? `gone: ${gone.join(', ')}` : '',
           newer ? `newer, same price or less: ${newer}` : '',
-        ].filter(Boolean).join(' · '),
+        ].filter(Boolean).join(' \u{b7} '),
       )
     }
     return out
@@ -371,7 +444,7 @@ export const register: Register = (on) => {
     return [
       `B3 Grammar Helper (bgh) ${RELEASE}  ${prefs.enabled ? 'on' : 'OFF'}`,
       `harper    ${harperOk ? 'on' : `missing: install harper-cli from ${HARPER_RELEASES}`}`,
-      `llm       ${llm.length ? llm.join(' → ') : 'off'}`,
+      `llm       ${llm.length ? llm.join(' \u{2192} ') : 'off'}`,
       `langfuse  ${langfuse ? `on (${langfuse.baseUrl})` : langfuseKeys(env) ? 'off (switched off)' : 'off (no keys)'}`,
       `accepted  ${tallyLine(tally)}`,
       `cache     ${cache.size} sentences`,
@@ -388,6 +461,10 @@ export const register: Register = (on) => {
 
   on('session.start', async ($, e, next) => {
     const started = await next(e)
+    // A /clear keeps this module alive: what the panes call "this session" starts over here.
+    spent = 0
+    lastProbe = undefined
+    lastRun = undefined
     processEnv = {
       HOME: await $.env.get('HOME'),
       XDG_CONFIG_HOME: await $.env.get('XDG_CONFIG_HOME'),
@@ -425,10 +502,9 @@ export const register: Register = (on) => {
       try {
         const old = String(await $.fs.read(legacy))
         if (!needsTemplate(old)) {
-          await $.fs.write(envFile, old)
-          await $.process.run(['chmod', '600', envFile], { timeoutMs: 2000 }).catch(() => undefined)
+          const locked = await writeSecret($, envFile, old, dirs.sep === '\\')
           fileText = old
-          $.ui.toast(`Grammar: keys moved from ${legacy} to ${envFile}`)
+          $.ui.toast(`Grammar: keys moved from ${legacy} to ${envFile}${locked ? '' : '; chmod 600 failed, run it by hand'}`)
         }
       } catch {
         // no old file either
@@ -438,10 +514,10 @@ export const register: Register = (on) => {
     // over a file that already holds a value.
     if (needsTemplate(fileText)) {
       try {
-        await $.fs.write(envFile, ENV_TEMPLATE)
-        // Keys are secrets: owner-only where chmod exists (not on Windows, hence the catch).
-        await $.process.run(['chmod', '600', envFile], { timeoutMs: 2000 }).catch(() => undefined)
-        if (fileText === undefined) $.ui.toast(`Grammar: key template written to ${envFile}`)
+        // Keys are secrets: owner-only where chmod exists (not on Windows).
+        const locked = await writeSecret($, envFile, ENV_TEMPLATE, dirs.sep === '\\')
+        if (!locked) $.ui.toast(`Grammar: ${envFile} could not be made owner-only; run chmod 600 on it`)
+        else if (fileText === undefined) $.ui.toast(`Grammar: key template written to ${envFile}`)
       } catch {
         // read-only home: the environment alone
       }
@@ -452,6 +528,7 @@ export const register: Register = (on) => {
       listedAt = savedModels.at
     }
     tally = readTally(await $.store.get(TALLY_KEY))
+    tallyBase = tally
     lastEnvFile = fileText
     applyEnv(fileText)
     // A model a provider dropped: the hop runs a listed pick instead, said once here.
@@ -471,7 +548,10 @@ export const register: Register = (on) => {
     }
 
     // $.fs.write makes the folder on first write, so no mkdir (which Windows lacks).
-    draftPath = `${dirs.cache}${dirs.sep}draft.md`
+    // One draft file per session: two sessions linting at once would lint each other's text.
+    // The engine has no delete, so each session leaves one small file behind in the cache folder.
+    draftPath = `${dirs.cache}${dirs.sep}draft-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}.md`
+    paintPath = `${dirs.cache}${dirs.sep}last-paint.json`
     try {
       harperProbedAt = Date.now()
       const r = await $.process.run(['harper-cli', '--version'], { timeoutMs: 5000 })
@@ -501,11 +581,8 @@ export const register: Register = (on) => {
     keybindingsPath = `${claudeDir}${dirs.sep}keybindings.json`
     keysCache = dirs.cache
     keysSep = dirs.sep
-    try {
-      learnKeys(String(await $.fs.read(keybindingsPath)))
-    } catch {
-      // no keybindings file yet: the labels keep alt+a and alt+i
-    }
+    // No file yet still names the defaults the way this OS does.
+    learnKeys(await readText($, keybindingsPath))
 
     // The machine's name tags each Langfuse trace. Windows sets COMPUTERNAME; elsewhere the
     // shell keeps HOSTNAME to itself, so ask uname, then hostname.
@@ -552,13 +629,20 @@ export const register: Register = (on) => {
     cache: keysCache,
     sep: keysSep,
     keybindingsPath,
-    wants: CHORD_WANTS,
+    wants: KEY_WANTS,
   })
 
   // Reads which keys run the two actions, for the labels.
   const learnKeys = (keybindings: string | undefined) => {
-    applyKeys = chordLabel(keysFor(keybindings, APPLY_ACTION), 'alt+a', platform.os)
-    ignoreKeys = chordLabel(keysFor(keybindings, IGNORE_ACTION), 'alt+i', platform.os)
+    applyKeys = keyLabel(keysFor(keybindings, APPLY_ACTION), 'alt+a', platform.os)
+    ignoreKeys = keyLabel(keysFor(keybindings, IGNORE_ACTION), 'alt+i', platform.os)
+  }
+
+  // What setup key k and /bgh keys share after binding: the report and the band's labels.
+  const keysBound = (r: { lines: KeyLine[]; text: string | undefined }): string => {
+    keysReport = keyLines(r.lines)
+    learnKeys(r.text)
+    return keysSummary(r.lines)
   }
 
   // Each setup step, true when done. The setup-guide pane draws them; a bare /bgh opens the
@@ -567,7 +651,7 @@ export const register: Register = (on) => {
     return {
       harper: harperOk,
       keys: availableRoutes(env).some((r) => r !== 'claude'),
-      chords: addChords(keybindings, CHORD_WANTS).status === 'ok',
+      bound: KEY_WANTS.every((w) => keysFor(keybindings, w.action).length > 0),
     }
   }
 
@@ -579,7 +663,7 @@ export const register: Register = (on) => {
       await $.store.set(PREFS_KEY, prefs)
       await redraw()
     }
-    // The three panes open together as tabs, as /sl-settings does; the one asked for opens last
+    // The four panes open together as tabs, as /sl-settings does; the one asked for opens last
     // with the focus, which raises it.
     const show = async (id: string) => {
       for (const p of PANES) if (p.id !== id) await $.ui.open({ id: p.id, title: p.title, closeOnEscape: true })
@@ -616,13 +700,13 @@ export const register: Register = (on) => {
         return { text: settings() }
       case 'help':
         if (await show(HELP_PANE)) return { text: 'Help open. Esc closes it.' }
-        return { text: HELP }
+        return { text: helpText(platform.os) }
       case 'on':
       case 'off':
         setPrefs({ enabled: verb.toLowerCase() === 'on' })
         await save()
         if (!prefs.enabled) {
-          void $.prompt.paint({ decorations: [] })
+          void $.prompt.paint({ decorations: [] }).catch(() => undefined)
           await update($, fixesAtom, () => [])
         }
         $.ui.toast(`B3 Grammar Helper is ${prefs.enabled ? 'on' : 'off'}`)
@@ -640,31 +724,22 @@ export const register: Register = (on) => {
       }
       case 'ignore':
         if (!word) return { text: 'Usage: /bgh ignore <word>' }
-        ignore.add(word)
-        await $.store.set(IGNORE_KEY, [...ignore])
+        ignore = new Set(await saveWords($, [word], []))
         await redraw()
-        $.ui.toast(`Grammar: ignoring “${word}”`)
-        return { text: `Ignoring “${word}”. ${ignore.size} word(s) on the list.` }
+        $.ui.toast(`Grammar: ignoring \u{201c}${word}\u{201d}`)
+        return { text: `Ignoring \u{201c}${word}\u{201d}. ${ignore.size} word(s) on the list.` }
       case 'unignore':
         if (!word) return { text: 'Usage: /bgh unignore <word>' }
-        ignore.delete(word)
-        await $.store.set(IGNORE_KEY, [...ignore])
+        ignore = new Set(await saveWords($, [], [word]))
         await redraw()
-        $.ui.toast(`Grammar: “${word}” is checked again`)
-        return { text: `“${word}” is checked again.` }
+        $.ui.toast(`Grammar: \u{201c}${word}\u{201d} is checked again`)
+        return { text: `\u{201c}${word}\u{201d} is checked again.` }
       case 'ignored':
-        if (await show(SETTINGS_PANE)) return { text: 'Ignored words are at the bottom of bgh settings; 1–9 takes one off.' }
+        if (await show(SETTINGS_PANE)) return { text: 'Ignored words are at the bottom of bgh settings; 1\u{2013}9 takes one off.' }
         return { text: ignore.size ? [...ignore].sort().join(', ') : 'Nothing ignored yet.' }
       case 'keys': {
-        const lines = await setUpKeys($, keysPlace())
-        keysReport = keyLines(lines)
-        try {
-          learnKeys(String(await $.fs.read(keybindingsPath)))
-        } catch {
-          // left as they were
-        }
+        $.ui.toast(keysBound(await setUpKeys($, keysPlace())))
         await redraw()
-        $.ui.toast(keysSummary(lines))
         return { text: keysReport.join('\n') }
       }
       case 'clear-cache':
@@ -677,20 +752,22 @@ export const register: Register = (on) => {
         // Every route on a sentence with known mistakes, then Langfuse's auth, so a broken key
         // shows here instead of as silence while typing.
         // The model lists too, beside the routes, so a dropped model shows in the same tab.
-        void fetchModels($, env).then(async (got) => {
-          applyModels(got)
-          await $.store.set(MODELS_KEY, { at: listedAt, lists: listed })
-          await redraw()
-        })
+        void fetchModels($, env)
+          .then(async (got) => {
+            applyModels(got)
+            await $.store.set(MODELS_KEY, { at: listedAt, lists: listed })
+            await redraw()
+          })
+          .catch(() => undefined)
         const sample = 'I has a apple and it are red.'
         const lines: string[] = [`Testing with: ${sample}`]
         const keys = langfuseKeys(env)
         // Every row shows `testing…` first and turns ✓ or ✗ in place, in the debug tab.
         const results: ProbeResult[] = [
-          ...hops.map((h) => ({ name: `${h.route} ${modelName(h.model)}`, ok: false, ms: 0, detail: 'testing…', pending: true })),
+          ...hops.map((h) => ({ name: `${h.route} ${modelName(h.model)}`, ok: false, ms: 0, detail: 'testing\u{2026}', pending: true })),
           ...(hops.length ? [] : [{ name: 'llm', ok: false, ms: 0, detail: 'off (settings l, or B3_GRAMMAR_LLM=off)' }]),
           keys
-            ? { name: 'langfuse', ok: false, ms: 0, detail: 'testing…', pending: true }
+            ? { name: 'langfuse', ok: false, ms: 0, detail: 'testing\u{2026}', pending: true }
             : { name: 'langfuse', ok: false, ms: 0, detail: `no keys in ${envFile} (optional)` },
         ]
         lastProbe = { at: Date.now(), results }
@@ -715,14 +792,7 @@ export const register: Register = (on) => {
               out = r.isAnswered ? { content: r.text } : { error: String(r.reason) }
             } else {
               const req = chatRequest(hop as Hop & { route: ApiRoute }, userPrompt([sample]))
-              let timer: Timer | undefined
-              const res = await Promise.race([
-                $.http.fetch(req.url, { method: 'POST', headers: req.headers, body: req.body }),
-                new Promise<never>((_, reject) => {
-                  timer = $.clock.after(HOP_TIMEOUT_MS, () => reject(new Error(`timeout after ${HOP_TIMEOUT_MS}ms`)))
-                }),
-              ])
-              timer?.cancel()
+              const res = await fetchWithin($, req.url, { method: 'POST', headers: req.headers, body: req.body }, HOP_TIMEOUT_MS)
               out = res.ok ? parseChat(res.text) : { error: `HTTP ${res.status}: ${res.text.slice(0, 120)}` }
             }
           } catch (err) {
@@ -732,7 +802,7 @@ export const register: Register = (on) => {
           const ok = edits !== undefined
           const detail = ok
             ? edits.length
-              ? edits.map((x) => `${x.from}→${x.to}`).join(', ')
+              ? edits.map((x) => `${x.from}\u{2192}${x.to}`).join(', ')
               : 'no edits (the model missed the mistakes)'
             : 'error' in out
               ? out.error
@@ -743,7 +813,7 @@ export const register: Register = (on) => {
         if (keys) {
           const t0 = Date.now()
           try {
-            const res = await $.http.fetch(`${keys.baseUrl}/api/public/projects`, { headers: { Authorization: authHeader(keys) } })
+            const res = await fetchWithin($, `${keys.baseUrl}/api/public/projects`, { headers: { Authorization: authHeader(keys) } })
             let project = ''
             try {
               project = (JSON.parse(res.text) as { data?: { name?: string }[] }).data?.[0]?.name ?? ''
@@ -755,7 +825,7 @@ export const register: Register = (on) => {
               ok: res.ok,
               ms: Date.now() - t0,
               detail: res.ok
-                ? `project ${project || '(unnamed)'} at ${keys.baseUrl}${prefs.langfuse ? '' : ' · tracing is switched off (settings t)'}`
+                ? `project ${project || '(unnamed)'} at ${keys.baseUrl}${prefs.langfuse ? '' : ' \u{b7} tracing is switched off (settings t)'}`
                 : res.status === 401
                   ? langfuse401(keys.baseUrl)
                   : `HTTP ${res.status}`,
@@ -766,13 +836,13 @@ export const register: Register = (on) => {
         }
         if (shown) {
           const good = results.filter((r) => r.ok).length
-          return { text: `Test: ${good} of ${results.length} ✓. Details in the bgh debug tab.` }
+          return { text: `Test: ${good} of ${results.length} \u{2713}. Details in the bgh debug tab.` }
         }
-        for (const r of results) lines.push(`${r.ok ? '✓' : '✗'} ${r.name.padEnd(28)} ${String(r.ms).padStart(5)} ms  ${r.detail}`)
+        for (const r of results) lines.push(`${r.ok ? '\u{2713}' : '\u{2717}'} ${r.name.padEnd(28)} ${String(r.ms).padStart(5)} ms  ${r.detail}`)
         return { text: lines.join('\n') }
       }
       default:
-        return { text: `Unknown: ${verb}\n\n${HELP}` }
+        return { text: `Unknown: ${verb}\n\n${helpText(platform.os)}` }
     }
   })
 
@@ -780,30 +850,30 @@ export const register: Register = (on) => {
   function debugText(): string {
     const set = KNOWN_ENV.map((k) => `${k}${env[k]?.trim() ? '' : ' (unset)'}`)
     return [
-      `B3 Grammar Helper (bgh) ${RELEASE} on ${host} · ${platform.os} ${platform.distro} ${platform.arch}`.trim(),
+      `B3 Grammar Helper (bgh) ${RELEASE} on ${host} \u{b7} ${platform.os} ${platform.distro} ${platform.arch}`.trim(),
       `harper     ${harperOk ? harperVersion || 'found' : 'missing'}`,
       `keys file  ${envFile}`,
       `env        ${set.join(', ')}`,
-      `chain      ${hops.map((h) => `${h.route} ${modelName(h.model)}`).join(' → ') || 'off'}`,
+      `chain      ${hops.map((h) => `${h.route} ${modelName(h.model)}`).join(' \u{2192} ') || 'off'}`,
       ...(goneNotes.length ? [`standing in ${goneNotes.join(', ')}`] : []),
       `accepted   ${tallyLine(tally)}`,
       `models     ${listedLine()}`,
       ...modelLines().map((l) => `  ${l}`),
-      `langfuse   ${langfuse ? langfuse.baseUrl : 'off'} · last trace ${traceLine(lastTrace, Date.now())}`,
+      `langfuse   ${langfuse ? langfuse.baseUrl : 'off'} \u{b7} last trace ${traceLine(lastTrace, Date.now())}`,
       `last error ${lastLangfuseError || 'none'}`,
-      `cache      ${cache.size} sentences · ignored ${ignore.size} · spent $${spent.toFixed(4)}`,
-      `files      ${draftPath} · ${draftPath.replace(/draft\.md$/, 'last-paint.json')}`,
+      `cache      ${cache.size} sentences \u{b7} ignored ${ignore.size} \u{b7} spent $${spent.toFixed(4)}`,
+      `files      ${draftPath} \u{b7} ${paintPath}`,
       `keybinds   ${keybindingsPath}`,
       ...(lastRun
         ? [
-            `last check ${new Date(lastRun.at).toLocaleTimeString()} · harper ${lastRun.harper} · llm ${lastRun.llm} · ${lastRun.route ?? 'no LLM answer'}`,
+            `last check ${new Date(lastRun.at).toLocaleTimeString()} \u{b7} harper ${lastRun.harper} \u{b7} llm ${lastRun.llm} \u{b7} ${lastRun.route ?? 'no LLM answer'}`,
             ...lastRun.spans.map((s) => `  ${s.name.padEnd(16)} ${String(s.ms).padStart(5)} ms ${s.error ?? 'ok'}`),
           ]
         : ['last check none yet']),
     ].join('\n')
   }
 
-  // ---- the three panes ------------------------------------------------------
+  // ---- the four panes -------------------------------------------------------
 
   on('ui.render', { component: 'Pane', requestId: SETUP_PANE }, async ($, e) => {
     await read($, revAtom)
@@ -823,7 +893,7 @@ export const register: Register = (on) => {
     const step = (n: number, done: boolean, name: string, state: string, how: string[]) => (
       <Box key={`setup-${name}`} flexDirection="column" marginTop={1}>
         <Box flexDirection="row" columnGap={1}>
-          <Text color={done ? 'success' : 'warning'}>{done ? ` ✓ ${n}.` : ` ✗ ${n}.`}</Text>
+          <Text color={done ? 'success' : 'warning'}>{done ? ` \u{2713} ${n}.` : ` \u{2717} ${n}.`}</Text>
           <Text bold={!done}>{name.padEnd(12)}</Text>
           <Text dimColor={done} wrap="truncate-end">
             {state}
@@ -845,7 +915,7 @@ export const register: Register = (on) => {
         <Text dimColor wrap="wrap">
           {allDone
             ? 'All set on this machine. /bgh settings to tune it, /bgh test to try every route.'
-            : 'What this machine still needs, in order. Each line turns ✓ by itself once done.'}
+            : 'What this machine still needs, in order. Each line turns \u{2713} by itself once done.'}
         </Text>
         {commentedOnly(lastEnvFile, MUST_BE_LIVE).map((n) => (
           <Text key={`commented-${n}`} color="warning" wrap="wrap">
@@ -853,28 +923,28 @@ export const register: Register = (on) => {
           </Text>
         ))}
         {step(1, steps.harper, 'Harper', steps.harper ? `${harperVersion || 'found'}` : 'missing: only the LLM pass runs', [
-          ...harperInstallAll(platform).map((o) => `${o.here ? '▸' : ' '} ${o.label.padEnd(12)} ${o.cmd}${o.here ? '   ← this machine' : ''}`),
+          ...harperInstallAll(platform).map((o) => `${o.here ? '\u{25b8}' : ' '} ${o.label.padEnd(12)} ${o.cmd}${o.here ? '   \u{2190} this machine' : ''}`),
           'then press h here to look again',
         ])}
         {step(
           2,
           steps.keys,
           'API keys',
-          steps.keys ? `${keyed.join(', ')} · ${envFile}` : 'none: Haiku on your Claude login runs meanwhile',
+          steps.keys ? `${keyed.join(', ')} \u{b7} ${envFile}` : 'none: Haiku on your Claude login runs meanwhile',
           [
             `open ${envFile} and fill in OPENROUTER_API_KEY, OPENAI_API_KEY or FIREWORKS_API_KEY`,
-            'the file sits at ~/.config/bgh/.env on both macOS and Linux (XDG_CONFIG_HOME moves it)',
+            `this machine reads ${envFile} (B3_GRAMMAR_ENV_FILE or XDG_CONFIG_HOME move it)`,
             'then press r here to reload it',
           ],
         )}
         {step(
           3,
-          steps.chords,
+          steps.bound,
           'keys',
-          steps.chords ? `apply ${applyKeys} \u{b7} ignore ${ignoreKeys}` : 'not bound: the band shows fixes, the keys do nothing',
+          steps.bound ? `apply ${applyKeys} \u{b7} ignore ${ignoreKeys}` : 'not bound: the band shows fixes, the keys do nothing',
           [
-            `press k: binds apply and ignore in ${keybindingsPath}, alt+a and alt+i first`,
-            'a key another action holds stays with it, and the next one is tried (alt+shift+a, alt+shift+i)',
+            `press k: binds apply and ignore in ${keybindingsPath}, ${keyName('alt+a', platform.os)} and ${keyName('alt+i', platform.os)} first`,
+            `a key another action holds stays with it, and the next one is tried (${keyName('alt+shift+a', platform.os)}, ${keyName('alt+shift+i', platform.os)})`,
             'macOS: Option types \u{e5} unless the terminal sends it as Alt; bgh leaves terminal settings to you (Terminal: Use Option as Meta key)',
           ],
         )}
@@ -940,17 +1010,14 @@ export const register: Register = (on) => {
             plain
             onPress={() => {
               void setUpKeys($, keysPlace())
-                .then((lines) => {
-                  keysReport = keyLines(lines)
-                  $.ui.toast(keysSummary(lines))
-                })
+                .then((r) => $.ui.toast(keysBound(r)))
                 .catch((err) => {
                   keysReport = [`\u{2717} ${String(err).slice(0, 120)}`]
                 })
                 .finally(redraw)
             }}
           />
-          <Button key="x" label="test every route" hotkey="x" plain onPress={() => void $.command.run({ command: 'bgh', args: 'test' })} />
+          <Button key="x" label="test every route" hotkey="x" plain onPress={() => void $.command.run({ command: 'bgh', args: 'test' }).catch(() => undefined)} />
         </Box>
         {keysReport.map((line, i) => (
           <Text key={`keys-${i}`} dimColor={line.startsWith('\u{2713}')} color={line.startsWith('!') || line.startsWith('\u{2717}') ? 'warning' : undefined} wrap="wrap">
@@ -980,7 +1047,7 @@ export const register: Register = (on) => {
     )
     const redraw = () => void update($, revAtom, (n) => n + 1)
     const save = () => {
-      void $.store.set(PREFS_KEY, prefs)
+      void $.store.set(PREFS_KEY, prefs).catch(() => undefined)
       redraw()
     }
 
@@ -994,7 +1061,7 @@ export const register: Register = (on) => {
     const firstModel = prefs.models[firstRoute] ?? hops.find((h) => h.route === firstRoute)?.model ?? choices[0] ?? ''
     const onOff = (b: boolean) => (b ? 'on' : 'off')
     const words = [...ignore].sort().slice(0, 9)
-    const llmLine = hops.length ? hops.map((h) => `${h.route} ${modelName(h.model)}`).join(' → ') : 'off'
+    const llmLine = hops.length ? hops.map((h) => `${h.route} ${modelName(h.model)}`).join(' \u{2192} ') : 'off'
 
     return (
       <Box flexDirection="column">
@@ -1007,7 +1074,7 @@ export const register: Register = (on) => {
         {row('g', 'grammar', onOff(prefs.enabled), prefs.enabled, 'check the prompt as you type', () => {
           setPrefs({ enabled: !prefs.enabled })
           if (!prefs.enabled) {
-            void $.prompt.paint({ decorations: [] })
+            void $.prompt.paint({ decorations: [] }).catch(() => undefined)
             void update($, fixesAtom, () => [])
           }
           save()
@@ -1016,11 +1083,11 @@ export const register: Register = (on) => {
           setPrefs({ llm: !prefs.llm })
           save()
         })}
-        {row('f', 'first', prefs.first, prefs.first !== 'auto', `route tried first · can run: ${routes.join(', ')}`, () => {
+        {row('f', 'first', prefs.first, prefs.first !== 'auto', `route tried first \u{b7} can run: ${routes.join(', ')}`, () => {
           setPrefs({ first: cycle<Route | 'auto'>(['auto', ...routes], prefs.first) })
           save()
         })}
-        {row('m', 'model', modelName(firstModel), !!prefs.models[firstRoute], `${firstRoute}: ${allChoices.map((m) => `${modelName(m)}${isGone(m) ? ' (gone)' : ''}`).join(', ')}${newer ? ` · newer: ${modelName(newer)}` : ''}`, () => {
+        {row('m', 'model', modelName(firstModel), !!prefs.models[firstRoute], `${firstRoute}: ${allChoices.map((m) => `${modelName(m)}${isGone(m) ? ' (gone)' : ''}`).join(', ')}${newer ? ` \u{b7} newer: ${modelName(newer)}` : ''}`, () => {
           if (!choices.length) return
           setPrefs({ models: { ...prefs.models, [firstRoute]: cycle(choices, firstModel) } })
           save()
@@ -1039,9 +1106,9 @@ export const register: Register = (on) => {
           setPrefs({ langfuse: !prefs.langfuse })
           save()
         })}
-        {row('c', 'cache', `${cache.size} kept`, cache.size > 0, `press to forget the LLM answers · spent ${spent ? `$${spent.toFixed(4)}` : '$0'} this session`, () => {
+        {row('c', 'cache', `${cache.size} kept`, cache.size > 0, `press to forget the LLM answers \u{b7} spent ${spent ? `$${spent.toFixed(4)}` : '$0'} this session`, () => {
           cache.clear()
-          void $.store.set(CACHE_KEY, [])
+          void $.store.set(CACHE_KEY, []).catch(() => undefined)
           redraw()
         })}
         <Box marginTop={1}>
@@ -1057,9 +1124,13 @@ export const register: Register = (on) => {
                 plain
                 onPress={() => {
                   ignore.delete(w)
-                  void $.store.set(IGNORE_KEY, [...ignore])
+                  void saveWords($, [], [w])
+                    .then((words) => {
+                      ignore = new Set(words)
+                    })
+                    .catch(() => undefined)
                   redraw()
-                  $.ui.toast(`Grammar: “${w}” is checked again`)
+                  $.ui.toast(`Grammar: \u{201c}${w}\u{201d} is checked again`)
                 }}
               />
             ))}
@@ -1088,7 +1159,7 @@ export const register: Register = (on) => {
     return (
       <Box flexDirection="column">
         <Text bold>This machine</Text>
-        {kv('version', `${RELEASE} on ${host} · ${platform.os} ${platform.distro} ${platform.arch}`)}
+        {kv('version', `${RELEASE} on ${host} \u{b7} ${platform.os} ${platform.distro} ${platform.arch}`)}
         {kv('harper', harperOk ? harperVersion || 'found' : 'missing', !harperOk)}
         {kv('keys file', envFile)}
         {kv('set', keysSet.length ? keysSet.join(', ') : 'nothing', !keysSet.length)}
@@ -1096,11 +1167,11 @@ export const register: Register = (on) => {
           ? kv('commented', `${commentedOnly(lastEnvFile, MUST_BE_LIVE).join(', ')}: a # in front, not used`, true)
           : null}
         {kv('keybinds', keybindingsPath)}
-        {kv('files', `${draftPath} · last-paint.json beside it`)}
+        {kv('files', `${draftPath} \u{b7} last-paint.json beside it`)}
         <Box marginTop={1}>
           <Text bold>Routes</Text>
         </Box>
-        {kv('chain', hops.map((h) => `${h.route} ${modelName(h.model)}`).join(' → ') || 'off', !hops.length)}
+        {kv('chain', hops.map((h) => `${h.route} ${modelName(h.model)}`).join(' \u{2192} ') || 'off', !hops.length)}
         {goneNotes.length ? kv('standing in', goneNotes.join(', '), true) : null}
         {kv('accepted', tallyLine(tally))}
         {kv('model lists', listedLine())}
@@ -1115,7 +1186,7 @@ export const register: Register = (on) => {
             {lastProbe.results.map((r) => (
               <Box key={`probe-${r.name}`} flexDirection="row" columnGap={1}>
                 <Text color={r.pending ? undefined : r.ok ? 'success' : 'warning'} dimColor={r.pending}>
-                  {r.pending ? '…' : r.ok ? '✓' : '✗'}
+                  {r.pending ? '\u{2026}' : r.ok ? '\u{2713}' : '\u{2717}'}
                 </Text>
                 <Text>{r.name.padEnd(26)}</Text>
                 <Text dimColor>{`${String(r.ms).padStart(5)} ms`}</Text>
@@ -1139,8 +1210,8 @@ export const register: Register = (on) => {
         </Box>
         {lastRun ? (
           <Box flexDirection="column">
-            {kv('at', `${new Date(lastRun.at).toLocaleTimeString()} · “${lastRun.text.slice(0, 60)}${lastRun.text.length > 60 ? '…' : ''}”`)}
-            {kv('found', `harper ${lastRun.harper} · llm ${lastRun.llm} · answered by ${lastRun.route ?? 'cache or nobody'}`)}
+            {kv('at', `${new Date(lastRun.at).toLocaleTimeString()} \u{b7} \u{201c}${lastRun.text.slice(0, 60)}${lastRun.text.length > 60 ? '\u{2026}' : ''}\u{201d}`)}
+            {kv('found', `harper ${lastRun.harper} \u{b7} llm ${lastRun.llm} \u{b7} answered by ${lastRun.route ?? 'cache or nobody'}`)}
             {lastRun.spans.map((s, i) => (
               <Box key={`span-${i}`} flexDirection="row" columnGap={1}>
                 <Text dimColor>{`  ${s.name.padEnd(16)}`}</Text>
@@ -1155,9 +1226,9 @@ export const register: Register = (on) => {
           <Text dimColor>none yet: type an English sentence of four words or more</Text>
         )}
         <Box marginTop={1} />
-        {kv('session', `cache ${cache.size} · ignored ${ignore.size} · spent $${spent.toFixed(4)}`)}
+        {kv('session', `cache ${cache.size} \u{b7} ignored ${ignore.size} \u{b7} spent $${spent.toFixed(4)}`)}
         <Box flexDirection="row" columnGap={2} marginTop={1}>
-          <Button key="x" label="test every route" hotkey="x" plain onPress={() => void $.command.run({ command: 'bgh', args: 'test' })} />
+          <Button key="x" label="test every route" hotkey="x" plain onPress={() => void $.command.run({ command: 'bgh', args: 'test' }).catch(() => undefined)} />
           <Button key="u" label="refresh" hotkey="u" plain onPress={redraw} />
         </Box>
       </Box>
@@ -1198,13 +1269,13 @@ export const register: Register = (on) => {
         <Box marginTop={1}>
           <Text bold>In the tabs</Text>
         </Box>
-        {line('bgh setup', 'h look for harper · r reload keys · x test every route')}
-        {line('bgh settings', 'g grammar · l llm · f first route · m model · d delay · t langfuse · c cache · 1–9 un-ignore')}
-        {line('bgh debug', 'x test every route · u refresh')}
+        {line('bgh setup', 'h look for harper \u{b7} r reload keys \u{b7} x test every route')}
+        {line('bgh settings', 'g grammar \u{b7} l llm \u{b7} f first route \u{b7} m model \u{b7} d delay \u{b7} t langfuse \u{b7} c cache \u{b7} 1\u{2013}9 un-ignore')}
+        {line('bgh debug', 'x test every route \u{b7} u refresh')}
         {line('Tab, Esc', 'Tab walks the buttons; Esc closes the tabs')}
         <Box marginTop={1}>
           <Text dimColor wrap="wrap">
-            {`B3 Grammar Helper ${RELEASE} · keys in ${envFile}`}
+            {`B3 Grammar Helper ${RELEASE} \u{b7} keys in ${envFile}`}
           </Text>
         </Box>
       </Box>
@@ -1224,15 +1295,16 @@ export const register: Register = (on) => {
       if (!check || check.text !== box.text) return
       const fixed = applyIssues(box.text, box.cursor, check.issues)
       count(whoOf(check), true)
-      void $.store.set(TALLY_KEY, tally)
+      const sent = tally
+      void saveTally($, tallyBase, sent)
+        .then((merged) => tallySaved(sent, merged))
+        .catch(() => undefined)
       if (langfuse) {
-        void $.http
-          .fetch(`${langfuse.baseUrl}/api/public/scores`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: authHeader(langfuse) },
-            body: scoreBody(check.traceId, 1),
-          })
-          .catch(() => undefined)
+        void fetchWithin($, `${langfuse.baseUrl}/api/public/scores`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: authHeader(langfuse) },
+          body: scoreBody(check.traceId, 1),
+        }).catch(() => undefined)
       }
       check = undefined
       gen += 1
@@ -1244,23 +1316,22 @@ export const register: Register = (on) => {
 
     async function ignoreFirst() {
       if (!check || !first?.from) return
-      ignore.add(normalizeWord(first.from))
-      await $.store.set(IGNORE_KEY, [...ignore])
+      ignore = new Set(await saveWords($, [normalizeWord(first.from)], []))
       check.issues = dropIgnored(check.text, check.issues, ignore)
       await $.prompt.paint({ text: check.text, decorations: decorations(check.issues) })
       const left = fixesOf(check.text, check.issues)
       await update($, fixesAtom, () => left)
       bandShown = left.length > 0
-      $.ui.toast(`Grammar: ignoring “${normalizeWord(first.from)}” from now on`)
+      $.ui.toast(`Grammar: ignoring \u{201c}${normalizeWord(first.from)}\u{201d} from now on`)
     }
 
     return (
       <Box>
-        <Text dimColor>grammar · {sourcesOf(fixes)} </Text>
-        <Text>{fixes.map((f) => `${f.from || '·'}→${f.to || '∅'}`).join('  ')} </Text>
+        <Text dimColor>grammar {'\u{b7}'} {sourcesOf(fixes)} </Text>
+        <Text>{fixes.map((f) => `${f.from || '\u{b7}'}\u{2192}${f.to || '\u{2205}'}`).join('  ')} </Text>
         <Button key="apply" label={`apply (${applyKeys})`} action={APPLY_ACTION} onPress={apply} />
         {first?.from ? (
-          <Button key="ignore" label={`ignore “${first.from}” (${ignoreKeys})`} action={IGNORE_ACTION} onPress={ignoreFirst} />
+          <Button key="ignore" label={`ignore \u{201c}${first.from}\u{201d} (${ignoreKeys})`} action={IGNORE_ACTION} onPress={ignoreFirst} />
         ) : null}
       </Box>
     )
@@ -1318,7 +1389,7 @@ export const register: Register = (on) => {
       const painted = await $.prompt.paint({ text: c.text, decorations: decos })
       void $.fs
         .write(
-          draftPath.replace(/draft\.md$/, 'last-paint.json'),
+          paintPath,
           JSON.stringify({ at: new Date().toISOString(), text: c.text, issues: c.issues, painted }, null, 2),
         )
         .catch(() => undefined)
@@ -1363,13 +1434,6 @@ export const register: Register = (on) => {
       }
     }
 
-    function timeout(ms: number): Promise<never> {
-      // The module has no setTimeout; the engine's clock stands in.
-      return new Promise((_, reject) => {
-        timers.push($.clock.after(ms, () => reject(new Error(`timeout after ${ms}ms`))))
-      })
-    }
-
     async function callHop(hop: Hop, user: string): Promise<HopResult> {
       if (hop.route === 'claude') {
         const r = await $.model.complete({
@@ -1384,10 +1448,7 @@ export const register: Register = (on) => {
         return { content: r.text, usage: { input: r.usage.input_tokens, output: r.usage.output_tokens } }
       }
       const req = chatRequest(hop as Hop & { route: ApiRoute }, user)
-      const res = await Promise.race([
-        $.http.fetch(req.url, { method: 'POST', headers: req.headers, body: req.body }),
-        timeout(HOP_TIMEOUT_MS),
-      ])
+      const res = await fetchWithin($, req.url, { method: 'POST', headers: req.headers, body: req.body }, HOP_TIMEOUT_MS)
       if (!res.ok) return { error: `HTTP ${res.status}: ${res.text.slice(0, 200)}` }
       return parseChat(res.text)
     }
@@ -1409,7 +1470,7 @@ export const register: Register = (on) => {
         },
       }
       try {
-        const res = await $.http.fetch(`${langfuse.baseUrl}/api/public/otel/v1/traces`, {
+        const res = await fetchWithin($, `${langfuse.baseUrl}/api/public/otel/v1/traces`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -1485,17 +1546,27 @@ export const register: Register = (on) => {
           c.route = hop.route
           const by = `${hop.route} ${shortModel(hop.model)}`
           c.by = by
+          const ours: [string, CachedEdit[]][] = []
           todo.forEach((s, i) => {
             const mine = edits.filter((x) => x.i === i).map(({ from, to }) => ({ from, to, by }))
             cache.set(s.text, mine)
+            ours.push([s.text, mine])
             c.llm.push(...placeEdits(s, mine).map((issue) => ({ ...issue, by })))
           })
           while (cache.size > CACHE_MAX) cache.delete(cache.keys().next().value as string)
-          void $.store.set(CACHE_KEY, [...cache.entries()])
+          void saveCache($, ours)
+            .then((merged) => {
+              cache = new Map(merged)
+            })
+            .catch(() => undefined)
           break
         }
       }
-      await repaint()
+      try {
+        await repaint()
+      } catch {
+        // the prompt moved on or the engine refused the paint: the record and trace still go out
+      }
       // What /bgh debug shows as the last check: counts, who answered, each stage's time and error.
       lastRun = {
         at: Date.now(),
@@ -1509,7 +1580,7 @@ export const register: Register = (on) => {
         }),
       }
       void update($, revAtom, (n) => n + 1)
-      void sendTrace()
+      void sendTrace().catch(() => undefined)
     }
 
     let harperDone: Promise<void> = Promise.resolve()
@@ -1518,7 +1589,7 @@ export const register: Register = (on) => {
         harperDone = runHarper()
       }),
       $.clock.after(prefs.llmDelayMs, () => {
-        void harperDone.then(runLlm)
+        void harperDone.then(runLlm).catch(() => undefined)
       }),
     )
     return box
@@ -1548,16 +1619,17 @@ export const register: Register = (on) => {
     }
     if (passed) {
       count(whoOf(passed), false)
-      void $.store.set(TALLY_KEY, tally)
+      const sent = tally
+      void saveTally($, tallyBase, sent)
+        .then((merged) => tallySaved(sent, merged))
+        .catch(() => undefined)
     }
     if (passed && langfuse) {
-      void $.http
-        .fetch(`${langfuse.baseUrl}/api/public/scores`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: authHeader(langfuse) },
-          body: scoreBody(passed.traceId, 0),
-        })
-        .catch(() => undefined)
+      void fetchWithin($, `${langfuse.baseUrl}/api/public/scores`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: authHeader(langfuse) },
+        body: scoreBody(passed.traceId, 0),
+      }).catch(() => undefined)
     }
     return next(e)
   })
