@@ -173,3 +173,110 @@ No prior entries. All findings below are `New`.
 - `mods/bgh/hooks/register.tsx` (1,428 lines) has no engine tests; only `core.ts` is covered. Untested: `gen`/`stale` with typing during an LLM call, tally attribution, retired-model fallback, keys migration, `/bgh test` with Langfuse down, `parseHarper` against real current `harper-cli` output.
 - status-line: migration from a 0.3.0 marker or a corrupt store, classifier table cases, `git clean` / `git reset --hard <ref>` measurement, `/sl restore`, cold gate after `/clear`, `refreshUsage` `$.store.set` from a `void` timer (`:710`, `:762`), agent list truncated to 30 lines (`:1953`).
 - `archive-reviews.sh` archives every entry including the latest one; the next review has no `Supersedes` target in the active file. Acceptable by design, noted only.
+
+---
+
+## CR-20261114-002
+
+- **Entry ID**: CR-20261114-002
+- **Supersedes**: CR-20261114-001
+- **Scope**: Changes since `d91eb8b` up to `cc8569e`, which are all in `mods/bgh`: 0.10.0 (`1ff253c`, setup key `k` and `/bgh keys`), 0.10.1 (`8e579fb`, OS key names), 0.10.2 (`cc8569e`, ctrl+x chords dropped). The diff was reviewed on two axes, Standards (CLAUDE.md "Writing mods" plus a code-smell baseline) and Spec (Ban's requests for automatic key binding, no override of native Option shortcuts, single-stroke fallbacks, OS-specific key names). Nothing else in the repo changed (`git diff --stat d91eb8b HEAD -- mods/status-line dev skills .gitignore CLAUDE.md` is empty), so findings outside bgh were re-checked only for status. No `CODE-FIXED.md` exists.
+
+### Validation Matrix
+
+| # | Finding (CR-20261114-001) | Status | Current evidence |
+|---|---|---|---|
+| 1 | status-line 0.3.0 marker blocks 0.3.1 migration | Still Open | file unchanged, `mods/status-line/hooks/register.ts:1636-1640` |
+| 2 | bgh shared Harper draft file | Still Open | `mods/bgh/hooks/register.tsx:474` |
+| 3 | bgh tally credits the LLM hop for Harper-only fixes | Still Open | `mods/bgh/hooks/register.tsx:337`, `:1487` |
+| 4 | bgh store read once, overwritten whole | Still Open | loads `:411`, `:454`, `:523`; whole writes `:579`, `:644`, `:651`, `:672` |
+| 5 | bgh unhandled rejections | Still Open | `mods/bgh/hooks/register.tsx:1521` (`void harperDone.then(runLlm)`) |
+| 6 | bgh fetch without timeout | Still Open | `mods/bgh/hooks/register.tsx:191`, `:746`, `:1412` |
+| 7 | raw non-ASCII in mod source | Still Open | 49 non-comment lines across bgh `register.tsx` and `core.ts`; `register.tsx:1263` was rewritten by this diff and kept its raw `“ ”` |
+| 8 | guard: shell variables reported as "delete nothing" | Still Open | file unchanged |
+| 9 | guard: `git reset --hard <ref>` | Still Open | file unchanged |
+| 10 | guard classifier over/under-matches | Still Open | file unchanged |
+| 11 | `do.py` reports 0 alerts when Vale fails | Still Open | file unchanged |
+| 12 | CLAUDE.md lacks Build & Test | Still Open | file unchanged |
+| 13 | status-line migration writes permanent `'none'` | Still Open | file unchanged |
+| 14 | status-line cold gate / effort override edge cases | Still Open | file unchanged |
+| 15 | status-line `cost`/`turn` cells show dollars | Still Open | file unchanged |
+| 16 | bgh key file briefly world-readable | Still Open | `mods/bgh/hooks/register.tsx:429`, `:443` |
+| 17 | docs and help text disagree with code | Still Open | `mods/bgh/hooks/register.tsx:103` vs `:1186`; `:866`; `:582` and `:806` still say "three panes" |
+| 18 | bgh per-session counters never reset | Still Open | `mods/bgh/hooks/register.tsx:275-276`, `:298` |
+| 19 | `sinh-tu-sao.py` unescaped regex | Still Open | file unchanged |
+| 20 | untracked installer files | Still Open | `git status` still shows `.agents/`, `.claude/`, `.crush/`, `skills-lock.json` |
+
+### Findings
+
+#### Medium
+
+**21. bgh: pressing `k` does not refresh the key labels**
+- Evidence: the `k` button at `mods/bgh/hooks/register.tsx:941-950` runs `setUpKeys` and redraws but never calls `learnKeys`. The `/bgh keys` verb at `:658-663` does call it.
+- Impact: When `k` binds the fallback (alt+shift+a/i), the band and help pane keep showing the old label until the setup pane renders again (`:817`). The user is told a key that does nothing.
+- Recommendation: Move the "run setUpKeys, set keysReport, learnKeys, toast, redraw" sequence into one top-level function and call it from both the verb and the button.
+- Status: New
+
+**22. bgh: the "key is taken" check ignores modifier aliases and order**
+- Evidence: `mods/bgh/hooks/core.ts:766` keys the `held` map by `k.toLowerCase()` only; `:775` tests the candidate the same way. `keyName` in the same file treats `alt`, `opt`, `option` and `meta` as one key.
+- Impact: With `"meta+a": "chat:x"` or `"shift+alt+a": …` in keybindings.json, `alt+a` / `alt+shift+a` count as free, and `k` adds a second binding for the same physical key. That overrides a binding the user already has, which is what the spec ruled out ("don't override the native Option shortcuts").
+- Recommendation: Normalise each key before comparing: split on `+`, map `opt`/`option`/`meta` to `alt`, sort the modifiers, join. Add tests for `meta+a` and `shift+alt+a`.
+- Status: New
+
+#### Low
+
+**23. bgh: some key names still ignore the OS**
+- Evidence: HELP text `mods/bgh/hooks/register.tsx:106` and setup hints `:876-877` hardcode `alt+a` / `alt+shift+a`. Default labels `:283-284` stay `alt+a` when no keybindings.json exists (`:505-507` skips `learnKeys`). On darwin `keyName` yields `Option + shift + a`, mixing cases (`mods/bgh/tests/core.spec.ts:420`).
+- Impact: A Mac user sees `alt+a` in help and setup, `Option + a` on the band, which is the inconsistency 0.10.1 set out to remove.
+- Recommendation: Build all of these strings with `chordLabel(…, platform.os)`, set the default labels after `platform` is known, and capitalise modifiers consistently (`Option + Shift + a`).
+- Status: New
+
+**24. bgh: `null` unbinds count as taken keys**
+- Evidence: `mods/bgh/hooks/core.ts:766` stores every entry, including `null`; `:778` then reports `alt+a runs null`.
+- Impact: A key the user deliberately freed is skipped, and the note reads as nonsense.
+- Recommendation: Skip `null` values when building `held`, or report them as "unbound by you" if keeping them taken is intended.
+- Status: New
+
+**25. bgh: `setUpKeys` runs with empty paths when `session.start` did not fire**
+- Evidence: `mods/bgh/hooks/register.tsx:280-281` start `keysCache`/`keybindingsPath` as `''`; `:235` and `:241` use them unguarded. CLAUDE.md notes that `cc-plugin-sec-default@builtin` can swallow `SessionStart` on managed machines.
+- Impact: The result is `could not write : …` with no cause given.
+- Recommendation: Return a `manual` line ("session not started; run /bgh keys after a prompt") when `keybindingsPath` is empty.
+- Status: New
+
+**26. bgh: keys module shape (dead code, leftover names, positional labels)**
+- Evidence: `boundActions` (`mods/bgh/hooks/core.ts:697`) has no caller left outside its test. The chord names survive the chord removal: `ChordWant`, `addChords`, `chordLabel`, `CHORD_WANTS`, `steps.chords`. `setUpKeys` names a row by list position (`register.tsx:249`, `w.action === p.wants[0]!.action ? 'apply' : 'ignore'`). `setupSteps` runs the whole `addChords` edit, `JSON.stringify` included, on every render to get a yes/no (`register.tsx:570`). `keysFor` and `addChords` repeat the same block-walk guard (`core.ts:716`, `:764`).
+- Impact: The interface says "chords" while the module binds single keys, and the caller has to know list order. Both make the next change to this seam easy to get wrong.
+- Recommendation: Delete `boundActions` and its test, rename to `KeyWant`/`addKeys`/`keyLabel`, add a `label` field to each want, use `keysFor(…).length` in `setupSteps`, and share one block iterator.
+- Status: New
+
+**27. bgh: `k` cannot tell whether the terminal sends Option as Alt (Plausible)**
+- Evidence: `mods/bgh/hooks/register.tsx:251-253` adds a fixed darwin note; nothing detects the terminal. Spec request 2 asked `k` to "check all the Terminal apps"; request 3 later ruled out changing terminal settings, but did not drop the check.
+- Impact: In a terminal where Option types `å`, `k` reports the keys as bound and the band shows `Option + a`, which does nothing.
+- Recommendation: Ban decides whether a read-only check is wanted (e.g. `TERM_PROGRAM` plus the known per-terminal setting). If not, record in the README that the check was dropped on purpose.
+- Status: New
+
+**28. bgh: the cache row shows dollars (Plausible)**
+- Evidence: `mods/bgh/hooks/register.tsx:1042` renders `spent $0.0000 this session`. The code predates this diff and was missed by CR-20261114-001.
+- Impact: CLAUDE.md "Ban's standing decisions for mods" says "Tokens, never dollars". The sentence goes on to name status-line, so whether it covers bgh is unclear.
+- Recommendation: Ban confirms the scope. If it covers every mod, show tokens.
+- Status: New
+
+### Verification Notes
+
+| Check | Result |
+|---|---|
+| `bun test tests/` in `mods/bgh` | Pass: 47 pass, 0 fail, 122 expect |
+| `claude plugin validate .` in `mods/bgh` | Pass with warnings (`ICON_MISSING`, as before) |
+| Version check | bgh `plugin.json` 0.10.2 = `RELEASE` (`register.tsx:77`) |
+| `$` passed only to top-level functions in the diff | Pass (`readText`, `setUpKeys`) |
+| New `$.process.run` in the diff | None |
+| `tsc` | Not run for this entry; passed (exit 0) during 0.10.2 development with the engine types |
+| status-line, tooling | Not re-run: no files changed since CR-20261114-001 |
+| Build & Test section in CLAUDE.md | Still absent (#12); commands above were inferred |
+
+### Residual Risks / Testing Gaps
+
+- `setUpKeys` and the `k` button have no engine test. Untested: backup write failure, the label refresh after `k` (#21), an empty `keybindingsPath` (#25).
+- `addChords` tests cover taken keys in Global and Chat, both keys taken, and invalid JSON. Missing: alias forms (#22), `null` unbinds (#24), a `bindings` block whose `bindings` is not an object.
+- Whether the engine resolves `meta+a` and `alt+a` as the same key was not verified against Claude Code; #22 assumes it does, as `keyName` does.
+- Live check of single-stroke `alt+shift+a` in Orca and Ghostty has not been done. Only `alt+a` was confirmed by Ban.
