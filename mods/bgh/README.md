@@ -60,7 +60,7 @@ The band's buttons borrow two engine actions that do nothing while you're in the
 
 A key another action already holds stays with it, and `k` takes the next one: alt+shift+a to apply, alt+shift+i to ignore. `meta`, `opt` and `option` count as alt, and the order of the modifiers doesn't matter, so `meta+a` holds alt+a. A key you unbound with `null` counts as free. Only single strokes are tried. Single ctrl+letters stay out, as the prompt uses them to edit the line, and a ctrl+x chord never reached these two actions when tried.
 
-On a Mac these are Option keys, and Option types `å` unless the terminal sends it as Alt. The mod leaves terminal settings to you. Orca does it out of the box, Ghostty with `macos-option-as-alt = true`, and Terminal with Settings › Profiles › Keyboard › Use Option as Meta key. The band's buttons, the help and the setup guide name the keys the way the machine calls them: `alt + a` on Linux and Windows, `Option + a` on a Mac.
+On a Mac these are Option keys, and Option types `å` unless the terminal sends it as Alt. The mod leaves terminal settings to you, and doesn't try to read them either: each terminal keeps the setting somewhere else (Orca in a database, Terminal in a plist), so a check would guess more than it knows. Orca does it out of the box, Ghostty with `macos-option-as-alt = true`, and Terminal with Settings › Profiles › Keyboard › Use Option as Meta key. The band's buttons, the help and the setup guide name the keys the way the machine calls them: `alt + a` on Linux and Windows, `Option + a` on a Mac.
 
 ## Commands
 

@@ -104,7 +104,9 @@ Learned the hard way on sl-mod/status-line and bgh. Read before touching `mods/`
 
 Ban's standing decisions for mods:
 
-- Tokens, never dollars, and no price table in status-line.
+- Tokens, never dollars, and no price table in status-line. The rule is status-line's: a
+  Claude plan bills by subscription, so dollars there mean nothing. bgh keeps dollars for
+  `spent`, because its API keys bill per call and the figure is the provider's own (14/11/2026).
 - Every borrowed idea gets an ACKNOWLEDGEMENTS.md line (person, project, licence, the
   version that took it). Ideas only, no copied code.
 - A user-visible behaviour change bumps the mod's `plugin.json` version; docs-only
