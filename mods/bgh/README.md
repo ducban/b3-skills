@@ -60,7 +60,7 @@ The band's buttons borrow two engine actions that do nothing while you're in the
 
 A key another action already holds stays with it, and `k` takes the next one: `ctrl+x a` to apply, `ctrl+x i` to ignore. `ctrl+x` is the prefix Claude Code's own chords use (`ctrl+x ctrl+e` opens the editor), so you press ctrl+x, let go, then the letter. Single ctrl+letters are never taken; the prompt uses them to edit the line.
 
-On a Mac, `k` binds both pairs. Option types `å` unless the terminal is set to send it as Alt, and the mod leaves terminal settings alone, so `ctrl+x a` and `ctrl+x i` are the keys that work in any terminal. Where Option already sends Alt (Ghostty with `macos-option-as-alt`, say), alt+a and alt+i work too. The band's buttons name the keys that are bound.
+On a Mac, `k` binds both pairs. Option types `å` unless the terminal is set to send it as Alt, and the mod leaves terminal settings alone, so `ctrl+x a` and `ctrl+x i` are the keys that work in any terminal. Where Option already sends Alt (Ghostty with `macos-option-as-alt`, say), alt+a and alt+i work too. The band's buttons, the help and the setup guide name the keys that are bound, the way the machine calls them: `alt + a` on Linux and Windows, `Option + a` on a Mac.
 
 ## Commands
 

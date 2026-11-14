@@ -74,7 +74,7 @@ import {
   type Usage,
 } from './core'
 
-const RELEASE = '0.10.0'
+const RELEASE = '0.10.1'
 const HARPER_DELAY_MS = 300
 const HOP_TIMEOUT_MS = 6000
 const CACHE_KEY = 'llm-cache-v1'
@@ -246,10 +246,10 @@ async function setUpKeys($: EngineInterface, p: KeysPlace): Promise<KeyLine[]> {
   const after = edit.text ?? before
   for (const w of p.wants) {
     const keys = keysFor(after, w.action)
-    out.push({ name: w.action === p.wants[0]!.action ? 'apply' : 'ignore', status: keys.length ? 'ok' : 'manual', note: keys.length ? keys.join(' / ') : 'no key' })
+    out.push({ name: w.action === p.wants[0]!.action ? 'apply' : 'ignore', status: keys.length ? 'ok' : 'manual', note: keys.length ? chordLabel(keys, '', p.os) : 'no key' })
   }
   if (p.os === 'darwin') {
-    out.push({ name: 'macOS', status: 'ok', note: 'alt+ keys work where the terminal sends Option as Alt; ctrl+x ones work everywhere' })
+    out.push({ name: 'macOS', status: 'ok', note: 'Option keys work where the terminal sends Option as Alt; ctrl + x ones work everywhere' })
   }
   return out
 }
@@ -557,8 +557,8 @@ export const register: Register = (on) => {
 
   // Reads which keys run the two actions, for the labels.
   const learnKeys = (keybindings: string | undefined) => {
-    applyKeys = chordLabel(keysFor(keybindings, APPLY_ACTION), 'alt+a')
-    ignoreKeys = chordLabel(keysFor(keybindings, IGNORE_ACTION), 'alt+i')
+    applyKeys = chordLabel(keysFor(keybindings, APPLY_ACTION), 'alt+a', platform.os)
+    ignoreKeys = chordLabel(keysFor(keybindings, IGNORE_ACTION), 'alt+i', platform.os)
   }
 
   // Each setup step, true when done. The setup-guide pane draws them; a bare /bgh opens the

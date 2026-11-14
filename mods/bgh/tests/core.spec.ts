@@ -12,6 +12,7 @@ import {
   boundActions,
   addChords,
   chordLabel,
+  keyName,
   keyLines,
   keysFor,
   dirsFor,
@@ -420,8 +421,10 @@ describe('setup key k', () => {
   })
   test('labels name every key bound to an action', () => {
     const kb = JSON.stringify({ bindings: [{ context: 'Global', bindings: { 'alt+a': 'app:cycleDiffBase', 'ctrl+x a': 'app:cycleDiffBase' } }] })
-    expect(chordLabel(keysFor(kb, 'app:cycleDiffBase'), 'alt+a')).toBe('alt+a / ctrl+x a')
-    expect(chordLabel(keysFor(undefined, 'app:toggleDiffNoiseFilter'), 'alt+i')).toBe('alt+i')
+    expect(chordLabel(keysFor(kb, 'app:cycleDiffBase'), 'alt+a', 'linux')).toBe('alt + a / ctrl + x a')
+    expect(chordLabel(keysFor(kb, 'app:cycleDiffBase'), 'alt+a', 'darwin')).toBe('Option + a / ctrl + x a')
+    expect(chordLabel(keysFor(undefined, 'app:toggleDiffNoiseFilter'), 'alt+i', 'darwin')).toBe('Option + i')
+    expect(keyName('meta+shift+p', 'linux')).toBe('alt + shift + p')
   })
   test('report lines line up', () => {
     expect(keyLines([{ name: 'apply', status: 'set', note: 'a' }, { name: 'keybindings', status: 'manual', note: 'b' }])).toEqual(['+ apply        a', '! keybindings  b'])

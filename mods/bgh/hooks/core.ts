@@ -729,8 +729,24 @@ export function keysFor(text: string | undefined, action: string): string[] {
   }
 }
 
+// A key as the OS names it: `alt + a` on Linux and Windows, `Option + a` on a Mac. The parts of a
+// chord stay apart: `ctrl + x a`.
+export function keyName(key: string, os: string): string {
+  return key
+    .split(' ')
+    .filter(Boolean)
+    .map((stroke) =>
+      stroke
+        .split('+')
+        .map((part) => (/^(alt|opt|option|meta)$/i.test(part) ? (os === 'darwin' ? 'Option' : 'alt') : part))
+        .join(' + '),
+    )
+    .join(' ')
+}
+
 // What the band's buttons and the help show: the keys bound to an action, or the default.
-export const chordLabel = (keys: string[], fallback: string): string => (keys.length ? keys.join(' / ') : fallback)
+export const chordLabel = (keys: string[], fallback: string, os: string): string =>
+  (keys.length ? keys : [fallback]).map((k) => keyName(k, os)).join(' / ')
 
 export function addChords(text: string | undefined, wants: ChordWant[], mac: boolean): FileEdit {
   let doc: KeybindingsDoc
