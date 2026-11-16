@@ -13,8 +13,8 @@ b3-skills/
 |---|---|
 | `b3-write-human` | Chặn văn AI ngay lúc viết bản nháp đầu. Cấm khoảng 60 từ business, ép nhịp câu lệch, giữ nguyên lệnh và placeholder, bắt tự soi trước khi xuất. Tiếng Việt có năm tệp tra riêng. Bổ trợ cho [`humanizer`](https://github.com/blader/humanizer), vốn chỉ dọn text đã có. |
 | `b3-figure-drawing` | Tám khuôn vẽ hình cho tài liệu bằng `figlib.mjs`: so sánh, quy trình, dãy số, kiến trúc nhiều tầng, đồ thị hai biến, chênh lệch lời khai với số kiểm chứng, mốc thời gian, ma trận kiểu SWOT. SVG thang xám, trục thật, tự đổi theo nền sáng tối. Chữ trong hình theo luật của `b3-write-human`. |
-| `b3-code-review` | Một vòng review chỉ ghi thêm vào `CODE-REVIEW.md`: đọc log review và log sửa cũ, đối chiếu từng lỗi, ghi lỗi mới theo mức nặng kèm `file:line`. Không sửa code. Chuyển từ Procedure CLI sang ngày 13/11/2026, tên cũ `b3awesome-code-review`. |
-| `b3-code-fix` | Sửa các lỗi còn mở trong `CODE-REVIEW.md` rồi ghi thêm vào `CODE-FIXED.md`. Không review. Tên cũ `b3awesome-code-fix`. |
+| `b3-code-review` | Một vòng review chỉ ghi thêm vào `CODE-REVIEW.md`: mặc định chỉ xem phần diff từ commit của lần review trước (`full` thì xem cả repo), chỉ đọc entry cuối chứ không đọc lại cả log, đối chiếu từng lỗi còn mở, ghi lỗi mới theo mức nặng kèm `file:line`. Không sửa code. Chuyển từ Procedure CLI sang ngày 13/11/2026, tên cũ `b3awesome-code-review`. |
+| `b3-code-fix` | Sửa các lỗi còn mở trong `CODE-REVIEW.md` rồi ghi thêm vào `CODE-FIXED.md`. Chọn được một phần: `#1 #8`, `high`, `status-line`. Việc xóa file hay đổi hành vi thì hỏi trước. Không review. Tên cũ `b3awesome-code-fix`. |
 
 | Mod (`mods/`) | Làm gì |
 |---|---|

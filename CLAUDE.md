@@ -55,6 +55,7 @@ Nothing here builds; these are the checks a change must pass. Run each from the 
 |---|---|---|
 | bgh | `mods/bgh` | `bun test tests/` · `claude plugin validate .` · type-check (below) |
 | status-line | `mods/status-line` | `claude plugin test .` · `claude plugin validate .` · type-check (below) |
+| Review skills | repo root | `cmp skills/b3-code-review/scripts/archive-reviews.sh skills/b3-code-fix/scripts/archive-reviews.sh` (the two copies stay identical) |
 | Vale tooling | repo root | `python3 dev/b3-write-human/do-luong/sinh-tu-sao.py --check` |
 | Figures | repo root | `node docs/figures/draw.mjs`, then `git diff --stat docs/figures` shows only the SVGs you meant to change |
 
