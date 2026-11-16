@@ -226,8 +226,8 @@ phần ba và đồng hồ lấy breakdown.
 
 ## Trạng thái
 
-Bản 0.5.1, cài từ marketplace b3-skills ở scope **user**, nên phiên
-nào trên máy cũng có. Một lệnh `/sl` với mười verb. 54 test qua
+Bản 0.5.2, cài từ marketplace b3-skills ở scope **user**, nên phiên
+nào trên máy cũng có. Một lệnh `/sl` với mười verb. 55 test qua
 `claude plugin test`, `tsc -p .` sạch, `claude plugin validate` qua.
 
 Số nào lấy định kỳ đều kèm một ghi chú nói vì sao nó trống, và `/sl debug` in
@@ -382,8 +382,10 @@ bảo vệ được gì. Nên giờ đo xong, mỗi lệnh rơi vào một trong
 | `git clean` mà chạy thử không ra gì | bất cứ thứ gì nó sẽ xoá |
 | force push không làm mất commit nào trên remote, và lần fetch gần nhất chưa quá một ngày | có commit bị mất, máy không có bản sao nhánh remote, hoặc fetch đã quá một ngày |
 
-Không có gì sắp mất: cả toast lẫn báo cáo đều hiện `auto-run in 3s`, số giây
-giảm dần, đếm xong là lệnh chạy. Bấm `1` thì chạy ngay, bấm `2` thì từ chối.
+Không có gì sắp mất: cả toast lẫn báo cáo đều hiện `auto-run in 5s`, số giây
+giảm dần, đếm xong là lệnh chạy. `auto-run (u)` trong `/sl settings` chọn thời
+gian đếm, `5s`, `10s` hay `15s`, hoặc `off` để lần nào cũng hỏi như trước bản
+0.5.0; lựa chọn được lưu như bố cục. Bấm `1` thì chạy ngay, bấm `2` thì từ chối.
 Mười giây sau đó, dải còn ghi `guard: ran … · nothing at risk`, nên lệnh tự chạy
 không bao giờ chạy mà bạn không thấy.
 

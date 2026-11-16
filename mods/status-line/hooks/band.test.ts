@@ -1580,18 +1580,18 @@ const world = (paths: string, status = '') => (argv: readonly string[]) => {
   return ''
 }
 
-test('a delete with nothing at risk runs by itself after three seconds', async ($, on) => {
+test('a delete with nothing at risk runs by itself after five seconds by default', async ($, on) => {
   const { ran, clock, until } = beneath(on, { ...FRESH_STORE, guard: true }, world('P\t/repo/node_modules\n', '!! node_modules/\n'))
   await startGuarded($)
   const ui = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...BAND })
   const call = $.tool.call({ tool: 'Bash', command: 'rm -rf node_modules' })
-  await until(ui, /auto-run in 3s/)
+  await until(ui, /auto-run in 5s/)
   expect(await ui.find({ type: 'Text', text: /nothing at risk/ })).toBeDefined()
   expect(ran).toEqual([])
   // The count moves while it waits.
   for (let i = 0; i < 4; i += 1) await clock.advance(250)
-  expect(await ui.find({ type: 'Text', text: /auto-run in 2s/ })).toBeDefined()
-  await clock.advance(2_250)
+  expect(await ui.find({ type: 'Text', text: /auto-run in 4s/ })).toBeDefined()
+  await clock.advance(4_250)
   await clock.advance(250)
   expect((await call).deny).toBeUndefined()
   expect(ran).toEqual(['rm -rf node_modules'])
@@ -1658,4 +1658,40 @@ test('a gitignored file outside a build folder is a threat: .env', async ($, on)
   await clock.advance(250)
   expect((await call).deny).toMatch(/pressed refuse/)
   await ui.unmount()
+})
+
+test('u in settings moves auto-run on: 10s counts from ten, and off asks every time', async ($, on) => {
+  const { ran, clock, until } = beneath(on, { ...FRESH_STORE, guard: true }, world('P\t/tmp/scratch\n'))
+  await startGuarded($)
+  const pane = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...SETTINGS })
+  expect(await pane.find({ type: 'Text', text: /^5s/ })).toBeDefined()
+  await pane.press({ key: 'item-auto-run' })
+  expect(await pane.find({ type: 'Text', text: /^10s/ })).toBeDefined()
+  await pane.unmount()
+
+  const ui = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...BAND })
+  const first = $.tool.call({ tool: 'Bash', command: 'rm -rf /tmp/scratch' })
+  await until(ui, /auto-run in 10s/)
+  await ui.press({ key: 'guard-refuse' })
+  await clock.advance(250)
+  await first
+  await ui.unmount()
+
+  const again = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...SETTINGS })
+  await again.press({ key: 'item-auto-run' })
+  await again.press({ key: 'item-auto-run' })
+  expect(await again.find({ type: 'Text', text: /^off/ })).toBeDefined()
+  await again.unmount()
+  expect((await runSl($, 'debug')).text).toMatch(/guard: on, auto-run off/)
+
+  const band = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...BAND })
+  const second = $.tool.call({ tool: 'Bash', command: 'rm -rf /tmp/scratch' })
+  await until(band, /auto-run is off/)
+  for (let i = 0; i < 80; i += 1) await clock.advance(250)
+  expect(ran).toEqual([])
+  await band.press({ key: 'guard-run' })
+  await clock.advance(250)
+  expect((await second).deny).toBeUndefined()
+  expect(ran).toEqual(['rm -rf /tmp/scratch'])
+  await band.unmount()
 })

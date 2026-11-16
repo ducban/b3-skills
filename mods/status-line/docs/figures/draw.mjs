@@ -49,7 +49,7 @@ render(`${out}/guard.svg`, flow({
     { title: 'Claude calls Bash with rm -rf, git reset --hard, git clean or a force push', sub: 'the guard reads the command text; it does not parse shell' },
     { title: 'The call is held before it runs', sub: 'a loop of quarter-second sleeps, up to ten minutes, inside a $ call so the hook keeps its time' },
     { title: 'What it would destroy is measured', sub: 'files and size for rm, changed files for reset, git clean -n for clean, the commits a force push drops' },
-    { title: 'Nothing at risk runs by itself after 3 s', sub: 'a build folder, a clean tree, an empty dry run; 1 runs it now, 2 refuses' },
+    { title: 'Nothing at risk runs by itself after a count', sub: 'a build folder, a clean tree, an empty dry run; 1 runs it now, 2 refuses' },
     { title: 'Something at risk waits for you', sub: '1 keeps a copy or a ref, then runs it as written; 2, Esc, silence or an error refuse', tone: 'ink' },
     { title: 'Claude reads the answer', sub: 'a refusal says what it would have destroyed, so the same line is not tried again' },
   ],

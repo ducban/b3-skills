@@ -1065,8 +1065,12 @@ let held: Held | null = null
 const GUARD_HOLD_MS = 10 * 60_000
 const GUARD_POLL = ['sleep', '0.25'] as const
 const GUARD_LIST = 3
-// A command with nothing at risk runs by itself after this long.
-const GUARD_AUTO_MS = 3_000
+// A command with nothing at risk runs by itself after this many seconds; null
+// asks every time. Picked with `u` in /sl settings and kept in $.store.
+const AUTO_RUN_CHOICES = [5, 10, 15, null] as const
+type AutoRun = (typeof AUTO_RUN_CHOICES)[number]
+let autoRunSec: AutoRun = 5
+const autoRunName = (a: AutoRun) => (a === null ? 'off' : `${a}s`)
 // Above this, nothing is kept and the report says so.
 const GUARD_KEEP_MAX_KB = 500 * 1024
 // Kept copies and refs older than this go at session.start.
@@ -1685,6 +1689,12 @@ async function toggleGuard($: EngineInterface) {
   $.ui.invalidate('ui.render')
 }
 
+async function cycleAutoRun($: EngineInterface) {
+  autoRunSec = AUTO_RUN_CHOICES[(AUTO_RUN_CHOICES.indexOf(autoRunSec) + 1) % AUTO_RUN_CHOICES.length] ?? null
+  await $.store.set('guardAutoRun', autoRunName(autoRunSec))
+  $.ui.invalidate('ui.render')
+}
+
 async function toggleColdGate($: EngineInterface) {
   coldGateOn = !coldGateOn
   await $.store.set('coldGate', coldGateOn)
@@ -2003,7 +2013,7 @@ async function debugText($: EngineInterface) {
       `agents: ${agentsRunning()} running, ${agents.filter(a => a.status === 'done').length} done, ${agents.filter(a => a.status === 'failed').length} failed`,
       `settings carried from: ${migratedFrom}`,
       `layout: ${ITEMS.map(i => `${i.name}=${layout[i.key] || 'off'}`).join(' ')}`,
-      `guard: ${guardOn ? 'on' : 'off'}${held === null ? '' : `, holding ${held.risk.label}`}`,
+      `guard: ${guardOn ? 'on' : 'off'}, auto-run ${autoRunName(autoRunSec)}${held === null ? '' : `, holding ${held.risk.label}`}`,
       `  last kept: ${lastUndo === null ? 'none' : `${new Date(lastUndo.at).toISOString()} ${lastUndo.kind === 'files' ? `${lastUndo.pairs.length} path(s) in ${lastUndo.dir}` : lastUndo.text}`}`,
       `  decisions: ${guardLog.length === 0 ? 'none yet' : `${guardLog.length}, newest last (/sl guard log for all)`}`,
       ...guardLog.slice(-5).map(l => `    ${logLine(l)}`),
@@ -2100,6 +2110,8 @@ export const register: Register = on => {
     isHidden = (await $.store.get('isHidden')) === true
     showReset = (await $.store.get('showReset')) !== false
     guardOn = (await $.store.get('guard')) === true
+    const auto = await $.store.get('guardAutoRun')
+    autoRunSec = AUTO_RUN_CHOICES.find(a => autoRunName(a) === auto) ?? (auto === 'off' ? null : 5)
     coldGateOn = (await $.store.get('coldGate')) === true
     const dropped = await $.store.get('coldDropped')
     if (dropped && typeof dropped === 'object' && typeof (dropped as { text?: unknown }).text === 'string') {
@@ -2465,9 +2477,9 @@ export const register: Register = on => {
       // says so wherever the band is; a timer of its own redraws the count, so
       // the seconds move whatever the hold loop is waiting on.
       let ticker: { cancel: () => void } | null = null
-      if (mine.report.threat === false) {
-        mine.autoAt = startedAt + GUARD_AUTO_MS
-        $.ui.toast(`status-line guard: nothing at risk, auto-run in ${GUARD_AUTO_MS / 1000}s ${ICON.dot} 2 refuses`)
+      if (mine.report.threat === false && autoRunSec !== null) {
+        mine.autoAt = startedAt + autoRunSec * 1000
+        $.ui.toast(`status-line guard: nothing at risk, auto-run in ${autoRunSec}s ${ICON.dot} 2 refuses`)
         ticker = $.clock.every(250, () => $.ui.invalidate('ui.render'))
       }
       $.ui.invalidate('ui.render')
@@ -2667,7 +2679,7 @@ export const register: Register = on => {
             children: [
               Button({ key: 'guard-run', label: safe ? 'run now' : 'run', hotkey: '1', plain: true, onPress: decide('run') }),
               Button({ key: 'guard-refuse', label: 'refuse', hotkey: '2', plain: true, autoFocus: true, onPress: decide('refuse') }),
-              Text({ color: MUTED, children: [safe ? `auto-run in ${autoIn}s` : 'Claude is waiting on your answer'] }),
+              Text({ color: MUTED, children: [h.autoAt !== null ? `auto-run in ${autoIn}s` : safe ? 'auto-run is off; Claude is waiting on your answer' : 'Claude is waiting on your answer'] }),
             ],
           }),
         ],
@@ -2758,6 +2770,7 @@ export const register: Register = on => {
         header('Behaviour'),
         row('t', 'item-reset', 'reset', showReset ? 'on' : 'off', showReset, `${ICON.reset} after 5h and 7d: time to the reset; the week also turns to a date`, MUTED, () => void toggleReset($)),
         row('a', 'item-guard', 'guard', guardOn ? 'on' : 'off', guardOn, 'hold rm -rf, git reset --hard, git clean and a force push; 1 runs, 2 refuses', MUTED, () => void toggleGuard($)),
+        row('u', 'item-auto-run', 'auto-run', autoRunName(autoRunSec), autoRunSec !== null, `guard: nothing at risk runs by itself after ${AUTO_RUN_CHOICES.map(autoRunName).join(', ')}; off asks every time`, MUTED, () => void cycleAutoRun($)),
         row('k', 'item-cold-gate', 'cold gate', coldGateOn ? 'on' : 'off', coldGateOn, 'cold cache: drop the next prompt once, with the re-read; enter again sends it', MUTED, () => void toggleColdGate($)),
         row('e', 'item-effort', 'effort', effortOverride ?? 'session', effortOverride !== null, choices, effortOverride === null ? MUTED : BLUE, () => cycleEffort($)),
         Text({

@@ -1,7 +1,7 @@
 {
   "name": "status-line",
   "displayName": "Status Line",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Status Line: a status line in the band above the prompt box. Folder, model and effort, git, and gauges for context, 5h, 7d and per-model quota, up to four rows picked in /sl settings.",
   "author": {
     "name": "ducban",
