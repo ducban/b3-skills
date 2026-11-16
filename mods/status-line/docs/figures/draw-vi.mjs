@@ -49,9 +49,10 @@ render(`${out}/guard.svg`, flow({
     { title: 'Claude gọi Bash có rm -rf, git reset --hard, git clean hay force push', sub: 'guard đọc chuỗi lệnh, không phân tích cú pháp shell' },
     { title: 'Lệnh bị giữ trước khi chạy', sub: 'vòng ngủ từng phần tư giây, tối đa mười phút, nằm trong lời gọi $ nên hook không hết giờ' },
     { title: 'Mod đo lệnh đó sẽ phá gì', sub: 'rm: số file và dung lượng; reset: file đã sửa; clean: git clean -n; force push: commit sẽ mất' },
-    { title: 'Báo cáo chiếm dòng một của dải', sub: 'bấm 1 là chạy; 2, Esc, im lặng, hay guard lỗi là từ chối', tone: 'ink' },
+    { title: 'Không có gì sắp mất thì tự chạy sau 3 giây', sub: 'thư mục build, tree sạch, chạy thử không ra gì; 1 chạy ngay, 2 từ chối' },
+    { title: 'Có thứ sắp mất thì đợi bạn', sub: '1 giữ một bản chép hay một ref rồi chạy đúng như viết; 2, Esc, im lặng, hay guard lỗi là từ chối', tone: 'ink' },
     { title: 'Claude đọc câu trả lời', sub: 'lời từ chối nói lệnh sẽ phá gì, nên Claude không thử lại dòng đó' },
   ],
-  note: 'Mặc định tắt. Bật bằng guard (a) trong /sl settings, lưu như bố cục.',
+  note: 'Mặc định tắt, bật bằng guard (a) trong /sl settings. /sl undo trả lại bản chép.',
 }));
 console.log('drawn vi');

@@ -226,8 +226,8 @@ phần ba và đồng hồ lấy breakdown.
 
 ## Trạng thái
 
-Bản 0.4.1, cài từ marketplace b3-skills ở scope **user**, nên phiên
-nào trên máy cũng có. Một lệnh `/sl` với tám verb. 50 test qua
+Bản 0.5.0, cài từ marketplace b3-skills ở scope **user**, nên phiên
+nào trên máy cũng có. Một lệnh `/sl` với mười verb. 54 test qua
 `claude plugin test`, `tsc -p .` sạch, `claude plugin validate` qua.
 
 Số nào lấy định kỳ đều kèm một ghi chú nói vì sao nó trống, và `/sl debug` in
@@ -310,12 +310,14 @@ rồi bản báo cáo chiếm dòng một của dải:
 
 ```
  ╭─ ⚠ guard · rm -rf ────────────────────────────────────────────────╮
- │ command  rm -rf build                                              │
- │ would    delete 1,204 files · 38 MB                                │
- │   build/index.js                                                   │
- │   build/chunk-1f3a.js                                              │
- │   build/assets/logo.svg                                            │
- │   + 1,201 more                                                     │
+ │ command  rm -rf drafts                                             │
+ │ would    delete 14 files · 2.1 MB                                  │
+ │   drafts/plan.md                                                   │
+ │   drafts/notes.md                                                  │
+ │   drafts/old/spec.md                                               │
+ │   + 11 more                                                        │
+ │ untracked: drafts/plan.md; untracked: drafts/notes.md; 12 more     │
+ │ 1 keeps a copy first, for 7 days; /sl undo puts it back            │
  │ 1: run   2: refuse   Claude is waiting on your answer              │
  ╰────────────────────────────────────────────────────────────────────╯
  ct ▰▰▰▰▱ 66%   5h ▰▱▱▱▱ 9% ↻2h14m   7d ▰▰▱▱▱ 39% ↻3d15h
@@ -328,7 +330,7 @@ lúc shell chạy, hoặc không chạy.*
 
 Bấm `1` thì chạy đúng như viết. Bấm `2`, hoặc Esc ở lượt đó, hoặc im lặng mười
 phút, hoặc chính guard bị lỗi, đều là từ chối. Claude đọc được lý do, *"the user
-pressed refuse. It would have: delete 1,204 files"*, nên không thử lại đúng dòng
+pressed refuse. It would have: delete 14 files"*, nên không thử lại đúng dòng
 đó. `refuse` giữ tiêu điểm, nên Enter cũng là từ chối. Dòng ngân sách vẫn nằm
 dưới báo cáo; dòng danh tính là dòng bạn ít cần nhất lúc đó. Lệnh đang bị giữ
 vẫn hiện kể cả khi bạn đã ẩn dải bằng `/sl off`: đó là một câu hỏi, không trả lời
@@ -366,6 +368,50 @@ Thứ guard không làm: nó đọc chuỗi lệnh, không phân tích cú pháp
 trong, đều lọt. Guard là tấm lưới. Muốn chặn cứng thì dùng luật quyền hạn
 (permission rules). Mặc định **tắt**, bật bằng `guard (a)` trong `/sl settings`,
 lưu như bố cục.
+
+### Chỉ hỏi khi có thứ sắp mất (0.5.0)
+
+Trước bản 0.5.0, lệnh nào khớp cũng bị giữ, mà câu trả lời gần như lúc nào cũng
+là `1`. Câu hỏi lần nào cũng trả lời giống nhau thì chỉ tập ra phản xạ, chẳng
+bảo vệ được gì. Nên giờ đo xong, mỗi lệnh rơi vào một trong hai nhóm:
+
+| Không có gì sắp mất | Có thứ sắp mất |
+|---|---|
+| `rm` không khớp gì; file git đang giữ, chưa sửa; thư mục build (`node_modules`, `dist`, `build`, `.next`, `target`, ...); mọi thứ dưới `/tmp` hay `$TMPDIR` | file untracked, đã sửa, hoặc bị gitignore (`.env` bị gitignore); đường dẫn có `$VAR` hay dấu backtick; `/`, `~` hoặc gốc repo; đường dẫn nằm ngoài git |
+| `git reset --hard` khi tree sạch và không mất commit nào | có thay đổi chưa commit, hoặc có commit rời nhánh |
+| `git clean` mà chạy thử không ra gì | bất cứ thứ gì nó sẽ xoá |
+| force push không làm mất commit nào trên remote, và lần fetch gần nhất chưa quá một ngày | có commit bị mất, máy không có bản sao nhánh remote, hoặc fetch đã quá một ngày |
+
+Không có gì sắp mất: báo cáo hiện `auto-run in 3s`, đếm xong là lệnh chạy. Bấm
+`1` thì chạy ngay, bấm `2` thì từ chối.
+
+Có thứ sắp mất: lệnh đợi bạn như cũ, Enter là từ chối. Bấm `1` thì mod giữ lại
+thứ lệnh sắp phá trước, rồi mới chạy lệnh đúng như viết:
+
+- `rm` và `git clean`: chép các target vào thùng rác riêng của status-line, trên
+  macOS là `~/Library/Caches/status-line/trash/<time>/`, trên Linux là
+  `~/.cache/status-line/trash/<time>/`, kèm file `manifest.tsv` ghi mỗi thứ từ
+  đâu ra. Mod chép chứ không chuyển, để lệnh vẫn thấy đúng thứ nó chờ: `rm -r`
+  mà target đã biến mất thì báo lỗi.
+- `git reset --hard`: giữ HEAD và `git stash create` ở
+  `refs/status-line/guard/<time>/`.
+- Force push: giữ head cũ của remote ở `refs/status-line/pushed-over/<time>`.
+- Quá 500 MB, hoặc không có gì để giữ, thì báo cáo ghi *won't be kept* ngay từ
+  trước khi bạn bấm.
+- Chép không được thì lệnh không chạy, và Claude được báo lý do.
+
+Mười phút sau đó, dải hiện `undo: /sl undo · 10m`. `/sl undo` chuyển các bản
+chép về chỗ cũ, chỗ nào đã có thứ khác nằm lại thì để yên, hoặc in ra lệnh git
+để khôi phục ref. Bản chép và ref quá 7 ngày bị xoá lúc mở phiên; ref thì chỉ
+dọn trong repo mà phiên đó mở.
+
+`/sl guard log` in 50 quyết định gần nhất (`auto`, `run`, `refuse`, `timeout`,
+`interrupted`, `error`), kèm lệnh, kết quả đo và chỗ cất bản chép. `/sl debug`
+in năm cái mới nhất.
+
+Guard gọi `bash`, `cp`, `du`, `find` và `git`, nên chỉ dành cho macOS và Linux.
+Trên Windows mà PATH không có Git Bash thì bước đo hỏng, lệnh bị tính là có thứ
+sắp mất, và không giữ được gì.
 
 Ý tưởng và hình dạng phần giữ lấy từ Blast Radius, do Claude Code DevRel tại
 Anthropic viết, trong
@@ -658,6 +704,8 @@ có gì theo sau thì là `/sl settings`.
 | `/sl agents` | các tác tử con (subagent) phiên này đã chạy: đang chạy, đã trả lời, thất bại |
 | `/sl effort <level>` | đặt thẳng một mức, hoặc `off` để thôi ghi đè |
 | `/sl restore` | đưa prompt mà cold gate đã chặn về lại ô gõ, nếu bạn lỡ bấm Esc |
+| `/sl undo` | trả lại thứ guard đã giữ trước lệnh gần nhất nó cho chạy |
+| `/sl guard log` | 50 quyết định gần nhất của guard |
 | `/sl debug` | in những gì engine báo, kèm ghi chú |
 | `/sl on`, `/sl off` | hiện hay ẩn dải |
 

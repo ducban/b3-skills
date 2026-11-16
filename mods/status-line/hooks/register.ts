@@ -552,7 +552,7 @@ const tk = (n: number) =>
 const LEGEND = 'sl-help'
 const SETTINGS = 'sl-settings'
 const AGENTS = 'sl-agents'
-const VERB_HINT = 'settings | help | agents | effort <level> | restore | debug | on | off'
+const VERB_HINT = 'settings | help | agents | effort <level> | restore | undo | guard log | debug | on | off'
 
 // The engine draws no title for a lone pane and a tab strip the moment a second
 // one is open -- "one shown, the rest tabs" (PaneOpenArgs.title). So the tabs
@@ -1041,14 +1041,50 @@ type Risk =
   | { kind: 'git-reset'; label: string; ref: string | null; dir: string | null }
   | { kind: 'git-clean'; label: string; args: string[]; dir: string | null }
   | { kind: 'git-push-force'; label: string; args: string[]; dir: string | null }
-type Report = { summary: string; lines: string[]; more: number; note: string }
-type Decision = 'run' | 'refuse' | 'interrupted' | 'timeout' | 'error'
-type Held = { command: string; risk: Risk; report: Report | null; decision: Decision | null }
+// What `1` keeps before a threatening command runs: copies of the paths, the
+// work tree and HEAD as refs, or the remote head a force push would replace.
+type Keep =
+  | { kind: 'files'; paths: string[] }
+  | { kind: 'git-reset' }
+  | { kind: 'push'; ref: string; remote: string; branch: string }
+// `threat` is false only when the measure found nothing a person would miss;
+// a report that leaves it out, a failed measure included, is a threat.
+type Report = {
+  summary: string
+  lines: string[]
+  more: number
+  note: string
+  threat?: boolean
+  keep?: Keep | null
+  keepNote?: string
+}
+type Decision = 'run' | 'auto' | 'refuse' | 'interrupted' | 'timeout' | 'error'
+type Held = { command: string; risk: Risk; report: Report | null; decision: Decision | null; autoAt: number | null; cwd: string | null }
 // The call being held, or null. One at a time: a second risky call waits.
 let held: Held | null = null
 const GUARD_HOLD_MS = 10 * 60_000
 const GUARD_POLL = ['sleep', '0.25'] as const
 const GUARD_LIST = 3
+// A command with nothing at risk runs by itself after this long.
+const GUARD_AUTO_MS = 3_000
+// Above this, nothing is kept and the report says so.
+const GUARD_KEEP_MAX_KB = 500 * 1024
+// Kept copies and refs older than this go at session.start.
+const GUARD_KEEP_DAYS = 7
+// How long the band offers `/sl undo` after a kept run.
+const GUARD_UNDO_SHOW_MS = 10 * 60_000
+const GUARD_LOG_MAX = 50
+// A force push measured against a fetch older than this cannot say what the
+// remote holds now.
+const GUARD_FETCH_STALE_MS = 24 * 60 * 60_000
+// Folders a build or an install makes again. Inside one, deleting is safe even
+// when git ignores it; anything else gitignored (`.env`) is a threat.
+const BUILD_DIRS = new Set([
+  'node_modules', 'dist', 'build', 'out', '.next', '.nuxt', '.svelte-kit', '.turbo', '.parcel-cache',
+  '.cache', 'target', 'coverage', '__pycache__', '.pytest_cache', '.mypy_cache', '.ruff_cache', '.venv',
+  '.gradle', 'DerivedData', '.build', 'vendor', '.dart_tool', 'zig-cache', 'zig-out',
+])
+const inBuildDir = (path: string) => path.split('/').some(part => BUILD_DIRS.has(part))
 
 // Words the shell would see, quotes honoured. Enough to read flags and paths.
 const shellWords = (text: string): string[] => {
@@ -1242,6 +1278,66 @@ const RM_SCRIPT = [
   `find "\${found[@]}" -type f -o -type l 2>/dev/null | head -n ${GUARD_LIST}`,
 ].join('\n')
 
+// Each found path made absolute, with the home folder and the temp folder
+// first, so the threat test compares like with like (macOS's /tmp is
+// /private/tmp). Same expansion rules as RM_SCRIPT.
+const RM_PATHS_SCRIPT = [
+  'shopt -s nullglob dotglob',
+  'printf "H\\t%s\\n" "$(cd ~ 2>/dev/null && pwd -P)"',
+  'printf "T\\t%s\\n" "$(cd "${TMPDIR:-/tmp}" 2>/dev/null && pwd -P)"',
+  'for p in "$@"; do',
+  '  case "$p" in "~") p="$HOME";; "~/"*) p="$HOME/${p#\\~/}";; esac',
+  '  matches=()',
+  '  case "$p" in *[\\*\\?\\[]*) for m in $p; do matches+=("$m"); done;; *) if [ -e "$p" ] || [ -L "$p" ]; then matches+=("$p"); fi;; esac',
+  '  for m in "${matches[@]}"; do',
+  '    b=$(basename -- "$m")',
+  '    case "$b" in .|..|/) a=$(cd -- "$m" 2>/dev/null && pwd -P) && printf "P\\t%s\\n" "$a"; continue;; esac',
+  '    a=$(cd -- "$(dirname -- "$m")" 2>/dev/null && pwd -P) || continue',
+  '    printf "P\\t%s/%s\\n" "${a%/}" "$b"',
+  '  done',
+  'done',
+].join('\n')
+
+// Copies the paths into status-line's own trash before the command runs, so
+// the command itself runs exactly as written: an `rm -r` that found its target
+// gone would fail. The trash is a folder of this mod's, the same on macOS and
+// Linux, so /sl undo knows where everything went. Prints `from<TAB>copy` a path,
+// then `DIR<TAB>folder`. Exit 3: over the size cap.
+const KEEP_FILES_SCRIPT = [
+  'case "$(uname -s)" in Darwin) base="$HOME/Library/Caches";; *) base="${XDG_CACHE_HOME:-$HOME/.cache}";; esac',
+  'dir="$base/status-line/trash/$1"; max="$2"; shift 2',
+  'kb=$(du -skc -- "$@" 2>/dev/null | tail -n 1 | cut -f1)',
+  'if [ "${kb:-0}" -gt "$max" ]; then echo "over the size cap: $(( ${kb:-0} / 1024 )) MB"; exit 3; fi',
+  'mkdir -p -- "$dir" || exit 4',
+  'i=0',
+  'for p in "$@"; do',
+  '  i=$((i + 1))',
+  '  mkdir -p -- "$dir/$i" || exit 4',
+  '  cp -RPp -- "$p" "$dir/$i/" || exit 5',
+  '  printf "%s\\t%s\\n" "$p" "$dir/$i/$(basename -- "$p")" | tee -a "$dir/manifest.tsv"',
+  'done',
+  'printf "DIR\\t%s\\n" "$dir"',
+].join('\n')
+
+// Moves kept copies back where they came from; a path that exists again is
+// left alone and said. Arguments are pairs: original, copy.
+const UNDO_FILES_SCRIPT = [
+  'while [ "$#" -ge 2 ]; do',
+  '  from="$1"; copy="$2"; shift 2',
+  '  if [ -e "$from" ] || [ -L "$from" ]; then printf "skipped\\t%s\\n" "$from"; continue; fi',
+  '  if [ ! -e "$copy" ] && [ ! -L "$copy" ]; then printf "missing\\t%s\\n" "$from"; continue; fi',
+  '  mkdir -p -- "$(dirname -- "$from")" && mv -- "$copy" "$from" && printf "restored\\t%s\\n" "$from" || printf "failed\\t%s\\n" "$from"',
+  'done',
+].join('\n')
+
+// Trash folders past their days, by modification time.
+const EXPIRE_TRASH_SCRIPT = [
+  'case "$(uname -s)" in Darwin) base="$HOME/Library/Caches";; *) base="${XDG_CACHE_HOME:-$HOME/.cache}";; esac',
+  'dir="$base/status-line/trash"',
+  '[ -d "$dir" ] || exit 0',
+  'find "$dir" -mindepth 1 -maxdepth 1 -type d -mtime "+$1" -exec rm -rf -- {} +',
+].join('\n')
+
 const bytes = (n: number) => {
   if (!Number.isFinite(n) || n < 1024) return `${n || 0} B`
   const units = ['KB', 'MB', 'GB', 'TB']
@@ -1262,7 +1358,7 @@ const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`
 async function measureRisk($: EngineInterface, risk: Risk, cwd: string): Promise<Report> {
   try {
     if (risk.kind === 'rm') {
-      if (risk.targets.length === 0) return { summary: 'rm with no paths', lines: [], more: 0, note: 'nothing to expand' }
+      if (risk.targets.length === 0) return { summary: 'rm with no paths', lines: [], more: 0, note: 'nothing to expand', threat: false }
       // A variable or a command substitution is filled in by the shell when the
       // command runs; measured as written it matches nothing and would read as harmless.
       const expands = risk.targets.filter(t => /[$`]/.test(t))
@@ -1277,14 +1373,21 @@ async function measureRisk($: EngineInterface, risk: Risk, cwd: string): Promise
       const run = await $.process.run(['bash', '-c', RM_SCRIPT, 'status-line-guard', ...risk.targets], { cwd, timeoutMs: 15000 })
       const [head = '0 0 0', ...names] = run.stdout.split('\n').filter(l => l !== '')
       const [files = 0, size = 0, found = 0] = head.split(' ').map(Number)
-      if (found === 0) return { summary: `delete nothing: no file matches ${risk.targets.join(' ')}`, lines: [], more: 0, note: 'the paths are not there' }
-      if (files === 0) return { summary: `delete ${plural(found, 'empty path')}`, lines: [], more: 0, note: risk.targets.join(' ') }
+      if (found === 0) return { summary: `delete nothing: no file matches ${risk.targets.join(' ')}`, lines: [], more: 0, note: 'the paths are not there', threat: false }
+      if (files === 0) return { summary: `delete ${plural(found, 'empty path')}`, lines: [], more: 0, note: risk.targets.join(' '), threat: false }
+      const summary = `delete ${plural(files, 'file')} ${ICON.dot} ${bytes(size)}`
+      const shown = names.map(n => n.replace(/^\.\//, ''))
+      const judged = await judgeDeletes($, risk.targets, cwd)
+      const tooBig = size > GUARD_KEEP_MAX_KB * 1024
 
       return {
-        summary: `delete ${plural(files, 'file')} ${ICON.dot} ${bytes(size)}`,
-        lines: names.map(n => n.replace(/^\.\//, '')),
+        summary,
+        lines: shown,
         more: Math.max(0, files - names.length),
-        note: '',
+        note: judged.threat ? judged.reasons.join('; ') : judged.reasons.join('; ') || 'nothing here that git or a rebuild cannot bring back',
+        threat: judged.threat,
+        keep: judged.threat && !tooBig && judged.paths.length > 0 ? { kind: 'files', paths: judged.paths } : null,
+        keepNote: tooBig ? `won't be kept: ${bytes(size)} is over the ${GUARD_KEEP_MAX_KB / 1024} MB cap` : judged.paths.length === 0 ? "won't be kept: the paths could not be resolved" : '',
       }
     }
 
@@ -1314,11 +1417,17 @@ async function measureRisk($: EngineInterface, risk: Risk, cwd: string): Promise
       if (run.exitCode !== 0) return { summary: 'git clean (could not dry-run it)', lines: [], more: 0, note: run.stderr.trim().slice(0, 160) }
       const gone = run.stdout.split('\n').filter(l => l.startsWith('Would remove ')).map(l => l.slice('Would remove '.length))
 
+      if (gone.length === 0) return { summary: 'remove nothing: no untracked file matches', lines: [], more: 0, note: '', threat: false }
+      const kept = gone.map(g => `${cwd.replace(/\/+$/, '')}/${g.replace(/\/+$/, '')}`)
+
       return {
-        summary: gone.length === 0 ? 'remove nothing: no untracked file matches' : `remove ${plural(gone.length, 'untracked path')}`,
+        summary: `remove ${plural(gone.length, 'untracked path')}`,
         lines: gone.slice(0, GUARD_LIST),
         more: Math.max(0, gone.length - GUARD_LIST),
-        note: gone.length === 0 ? '' : 'untracked files are not in git and cannot be recovered',
+        note: 'untracked files are not in git and cannot be recovered',
+        threat: true,
+        keep: { kind: 'files', paths: kept },
+        keepNote: '',
       }
     }
 
@@ -1337,16 +1446,31 @@ async function measureRisk($: EngineInterface, risk: Risk, cwd: string): Promise
       const ref = `${remote}/${branch}`
       const known = await $.process.run(['git', 'rev-parse', '--verify', '--quiet', ref], { cwd, timeoutMs: 10000 })
       if (known.exitCode !== 0) {
-        return { summary: `force-push to ${ref}`, lines: [], more: 0, note: `no local copy of ${ref}, so the dropped commits cannot be listed; git fetch first` }
+        return {
+          summary: `force-push to ${ref}`,
+          lines: [],
+          more: 0,
+          note: `no local copy of ${ref}, so the dropped commits cannot be listed; git fetch first`,
+          threat: true,
+          keep: null,
+          keepNote: `won't be kept: there is no local copy of ${ref} to keep`,
+        }
       }
       const log = await $.process.run(['git', 'log', '--oneline', '--no-decorate', `${source}..${ref}`], { cwd, timeoutMs: 15000 })
       const dropped = log.stdout.split('\n').filter(l => l !== '')
+
+      const fetchAge = await lastFetchAge($, cwd)
+      const stale = fetchAge === null || fetchAge > GUARD_FETCH_STALE_MS
+      const staleNote = fetchAge === null ? 'never fetched here, so the remote may hold commits this cannot see' : `last fetch ${elapsed(fetchAge)} ago, so the remote may hold commits this cannot see`
 
       return {
         summary: dropped.length === 0 ? `force-push to ${ref}: drops no commits` : `force-push to ${ref}: drops ${plural(dropped.length, 'commit')}`,
         lines: dropped.slice(0, GUARD_LIST),
         more: Math.max(0, dropped.length - GUARD_LIST),
-        note: dropped.length === 0 ? '' : `on ${ref} and not on ${source}, as of the last fetch`,
+        note: [dropped.length === 0 ? '' : `on ${ref} and not on ${source}, as of the last fetch`, stale ? staleNote : ''].filter(n => n !== '').join('; '),
+        threat: dropped.length > 0 || stale,
+        keep: { kind: 'push', ref, remote, branch },
+        keepNote: '',
       }
     }
 
@@ -1382,9 +1506,169 @@ async function measureRisk($: EngineInterface, risk: Risk, cwd: string): Promise
       lines: shown.slice(0, GUARD_LIST),
       more: Math.max(0, shown.length - GUARD_LIST),
       note: notes.join('; '),
+      threat: parts.length > 0 || refNote !== '',
+      keep: { kind: 'git-reset' },
+      keepNote: '',
     }
   } catch (error) {
     return { summary: `${risk.label} (could not measure it)`, lines: [], more: 0, note: String((error as Error)?.message ?? error).slice(0, 160) }
+  }
+}
+
+// Whether deleting these targets loses anything: a threat is the home folder,
+// the root or the repo root; a file git does not hold clean (untracked,
+// changed, or gitignored, since `.env` is gitignored); or a path outside git
+// altogether. Safe: temp folders, build folders, and files git holds unchanged.
+async function judgeDeletes($: EngineInterface, targets: string[], cwd: string): Promise<{ threat: boolean; reasons: string[]; paths: string[] }> {
+  const run = await $.process.run(['bash', '-c', RM_PATHS_SCRIPT, 'status-line-guard', ...targets], { cwd, timeoutMs: 15000 })
+  const rows = run.stdout.split('\n').filter(l => l !== '')
+  const home = rows.find(r => r.startsWith('H\t'))?.slice(2) ?? ''
+  const tmp = rows.find(r => r.startsWith('T\t'))?.slice(2) ?? ''
+  const paths = rows.filter(r => r.startsWith('P\t')).map(r => r.slice(2))
+  const reasons: string[] = []
+  const top = await $.process.run(['git', 'rev-parse', '--show-toplevel'], { cwd, timeoutMs: 10000 })
+  const root = top.exitCode === 0 ? top.stdout.trim() : ''
+  const tmpRoots = ['/tmp', '/private/tmp', '/var/tmp', tmp].filter(t => t !== '' && t !== '/')
+  const underTmp = (path: string) => tmpRoots.some(t => path === t || path.startsWith(`${t}/`))
+
+  const inGit: string[] = []
+  for (const path of paths) {
+    if (path === '/' || path === home) reasons.push(`deletes ${path === '/' ? 'the root' : 'your home folder'}`)
+    else if (root !== '' && path === root) reasons.push('deletes the whole repository')
+    else if (underTmp(path) || inBuildDir(path)) continue
+    else if (root !== '' && path.startsWith(`${root}/`)) inGit.push(path)
+    else reasons.push(`${path} is not in git`)
+  }
+  if (inGit.length > 0) {
+    const status = await $.process.run(
+      ['git', '-c', 'core.quotePath=false', 'status', '--porcelain', '--ignored', '--untracked-files=all', '--', ...inGit],
+      { cwd: root, timeoutMs: 15000 },
+    )
+    if (status.exitCode !== 0) reasons.push('git could not say what is tracked')
+    for (const line of status.stdout.split('\n')) {
+      if (line.length < 4) continue
+      const code = line.slice(0, 2)
+      const file = line.slice(3)
+      if (inBuildDir(file)) continue
+      reasons.push(code === '!!' ? `gitignored: ${file}` : code === '??' ? `untracked: ${file}` : `uncommitted changes: ${file}`)
+    }
+  }
+  if (paths.length === 0) reasons.push('the paths could not be resolved')
+  const shown = reasons.slice(0, 3)
+  if (reasons.length > 3) shown.push(`${reasons.length - 3} more`)
+
+  return { threat: reasons.length > 0, reasons: shown, paths }
+}
+
+// How long ago this repo last fetched, from FETCH_HEAD's time, or null.
+async function lastFetchAge($: EngineInterface, cwd: string): Promise<number | null> {
+  try {
+    const common = await $.process.run(['git', 'rev-parse', '--path-format=absolute', '--git-common-dir'], { cwd, timeoutMs: 10000 })
+    if (common.exitCode !== 0) return null
+    const entry = (await $.fs.list(common.stdout.trim())).find(f => f.name === 'FETCH_HEAD')
+    if (entry === undefined) return null
+
+    return Math.max(0, (await $.clock.now()) - entry.mtimeMs)
+  } catch {
+    return null
+  }
+}
+
+// A sortable stamp that is also a valid ref and folder name.
+const keepStamp = (at: number) => new Date(at).toISOString().replace(/[-:]/g, '').replace(/\..*$/, '')
+
+// What /sl undo puts back: copies to move home, or git commands to print.
+type Undo =
+  | { at: number; kind: 'files'; dir: string; pairs: [string, string][] }
+  | { at: number; kind: 'git'; text: string }
+let lastUndo: Undo | null = null
+
+// Keeps what a threatening command would destroy, before it runs. Never throws.
+async function keepBeforeRun($: EngineInterface, keep: Keep, cwd: string, at: number): Promise<{ undo: Undo } | { error: string }> {
+  const stamp = keepStamp(at)
+  try {
+    if (keep.kind === 'files') {
+      const run = await $.process.run(['bash', '-c', KEEP_FILES_SCRIPT, 'status-line-guard', stamp, String(GUARD_KEEP_MAX_KB), ...keep.paths], { cwd, timeoutMs: 120000 })
+      if (run.exitCode !== 0) return { error: run.stdout.trim() || run.stderr.trim().slice(0, 160) || `copy failed (exit ${run.exitCode})` }
+      const rows = run.stdout.split('\n').filter(l => l !== '')
+      const dir = rows.find(r => r.startsWith('DIR\t'))?.slice(4) ?? ''
+      const pairs = rows.filter(r => !r.startsWith('DIR\t')).map(r => r.split('\t') as [string, string])
+
+      return { undo: { at, kind: 'files', dir, pairs } }
+    }
+    const git = (args: string[]) => $.process.run(['git', ...args], { cwd, timeoutMs: 15000 })
+    if (keep.kind === 'git-reset') {
+      const head = (await git(['rev-parse', 'HEAD'])).stdout.trim()
+      const stash = (await git(['stash', 'create'])).stdout.trim()
+      if (head === '') return { error: 'no HEAD to keep' }
+      const base = `refs/status-line/guard/${stamp}`
+      if ((await git(['update-ref', `${base}/head`, head])).exitCode !== 0) return { error: 'git update-ref failed' }
+      if (stash !== '' && (await git(['update-ref', `${base}/stash`, stash])).exitCode !== 0) return { error: 'git update-ref failed' }
+      const text = [`git reset --hard ${base}/head`, ...(stash === '' ? [] : [`git stash apply ${base}/stash`])].join(' && ')
+
+      return { undo: { at, kind: 'git', text } }
+    }
+    const sha = (await git(['rev-parse', '--verify', '--quiet', keep.ref])).stdout.trim()
+    if (sha === '') return { error: `no local copy of ${keep.ref}` }
+    const name = `refs/status-line/pushed-over/${stamp}`
+    if ((await git(['update-ref', name, sha])).exitCode !== 0) return { error: 'git update-ref failed' }
+
+    return { undo: { at, kind: 'git', text: `git push --force-with-lease ${keep.remote} ${name}:refs/heads/${keep.branch}` } }
+  } catch (error) {
+    return { error: String((error as Error)?.message ?? error).slice(0, 160) }
+  }
+}
+
+// The last decisions, kept across sessions for /sl debug and /sl guard log.
+type GuardLogEntry = { at: number; decision: Decision; command: string; measure: string; kept?: string }
+async function logDecision($: EngineInterface, entry: GuardLogEntry) {
+  try {
+    const was = await $.store.get('guardLog')
+    const list = Array.isArray(was) ? (was as GuardLogEntry[]) : []
+    await $.store.set('guardLog', [...list, { ...entry, command: entry.command.slice(0, 300) }].slice(-GUARD_LOG_MAX))
+  } catch {
+    // a log that cannot be written is not worth a refused command
+  }
+}
+
+async function readLog($: EngineInterface): Promise<GuardLogEntry[]> {
+  const was = await $.store.get('guardLog')
+
+  return Array.isArray(was) ? (was as GuardLogEntry[]) : []
+}
+
+const logLine = (l: GuardLogEntry) =>
+  `${new Date(l.at).toISOString().replace('T', ' ').replace(/\..*$/, '')} ${l.decision.padEnd(11)} ${l.command.replace(/\s+/g, ' ').slice(0, 80)} -- ${l.measure}${l.kept ? ` -- kept: ${l.kept}` : ''}`
+
+async function undoLast($: EngineInterface): Promise<{ text: string }> {
+  const undo = lastUndo ?? ((await $.store.get('guardUndo')) as Undo | undefined) ?? null
+  if (undo === null) return { text: 'Nothing to undo: the guard has kept nothing.' }
+  if (undo.kind === 'git') return { text: `The guard kept a ref. To put it back, run:\n  ${undo.text}` }
+  const run = await $.process.run(['bash', '-c', UNDO_FILES_SCRIPT, 'status-line-guard', ...undo.pairs.flat()], { timeoutMs: 120000 })
+  const rows = run.stdout.split('\n').filter(l => l !== '').map(l => l.split('\t'))
+  lastUndo = null
+  await $.store.set('guardUndo', null)
+  $.ui.invalidate('ui.render')
+  const said = rows.map(([what, path]) =>
+    what === 'restored' ? `restored ${path}` : what === 'skipped' ? `left ${path}: something is there again` : what === 'missing' ? `lost ${path}: the copy is gone` : `could not restore ${path}`,
+  )
+
+  return { text: said.length > 0 ? said.join('\n') : 'Nothing was restored.' }
+}
+
+// Kept copies and refs past their days go when a session starts. Refs live in
+// each repo, so only the one this session opens in is swept.
+async function expireKept($: EngineInterface, cwd: string) {
+  try {
+    await $.process.run(['bash', '-c', EXPIRE_TRASH_SCRIPT, 'status-line-guard', String(GUARD_KEEP_DAYS)], { timeoutMs: 30000 })
+    const refs = await $.process.run(['git', 'for-each-ref', '--format=%(refname)', 'refs/status-line/'], { cwd, timeoutMs: 10000 })
+    const cutoff = keepStamp((await $.clock.now()) - GUARD_KEEP_DAYS * 24 * 60 * 60_000)
+    for (const ref of refs.stdout.split('\n')) {
+      const stamp = /refs\/status-line\/[^/]+\/(\d{8}T\d{6})/.exec(ref)?.[1]
+      if (stamp !== undefined && stamp < cutoff) await $.process.run(['git', 'update-ref', '-d', ref], { cwd, timeoutMs: 10000 })
+    }
+  } catch {
+    // nothing to sweep, or not a repo
   }
 }
 
@@ -1693,6 +1977,7 @@ async function debugText($: EngineInterface) {
     $.clock.now(),
   ])
   const age = contextAt === null ? '' : `, ${Math.round((now - contextAt) / 1000)}s ago`
+  const guardLog = await readLog($).catch(() => [] as GuardLogEntry[])
 
   return {
     text: [
@@ -1715,6 +2000,9 @@ async function debugText($: EngineInterface) {
       `settings carried from: ${migratedFrom}`,
       `layout: ${ITEMS.map(i => `${i.name}=${layout[i.key] || 'off'}`).join(' ')}`,
       `guard: ${guardOn ? 'on' : 'off'}${held === null ? '' : `, holding ${held.risk.label}`}`,
+      `  last kept: ${lastUndo === null ? 'none' : `${new Date(lastUndo.at).toISOString()} ${lastUndo.kind === 'files' ? `${lastUndo.pairs.length} path(s) in ${lastUndo.dir}` : lastUndo.text}`}`,
+      `  decisions: ${guardLog.length === 0 ? 'none yet' : `${guardLog.length}, newest last (/sl guard log for all)`}`,
+      ...guardLog.slice(-5).map(l => `    ${logLine(l)}`),
       `cold gate: ${coldGateOn ? 'on' : 'off'}${coldAskedAt === null ? '' : `, asked at ${new Date(coldAskedAt).toISOString()}`}`,
       `  dropped prompt: ${coldDropped === null ? 'none' : `${coldDropped.text.length} chars at ${new Date(coldDropped.at).toISOString()}, /sl restore puts it back`}`,
       `usage endpoint: ${reading.windows.length} window(s)`,
@@ -1796,7 +2084,7 @@ export const register: Register = on => {
     // and the band switch mid-turn.
     await $.command.register({
       name: 'sl',
-      description: 'The status line band: settings, help, agents, effort, restore, debug, on, off',
+      description: 'The status line band: settings, help, agents, effort, restore, undo, guard log, debug, on, off',
       argumentHint: VERB_HINT,
       immediate: true,
     })
@@ -1813,6 +2101,10 @@ export const register: Register = on => {
     if (dropped && typeof dropped === 'object' && typeof (dropped as { text?: unknown }).text === 'string') {
       coldDropped = dropped as { at: number; text: string }
     }
+    const undo = await $.store.get('guardUndo')
+    if (undo && typeof undo === 'object' && typeof (undo as { at?: unknown }).at === 'number') lastUndo = undo as Undo
+    // Kept copies and refs past their days, off the start path.
+    void expireKept($, e.cwd).catch(() => undefined)
     const saved = await $.store.get('layout')
     if (saved && typeof saved === 'object') {
       // Merged over the defaults, never used as-is: a layout stored before an
@@ -2119,6 +2411,14 @@ export const register: Register = on => {
         return setEffort($, rest[0] ?? '')
       case 'restore':
         return restoreDropped($)
+      case 'undo':
+        return undoLast($)
+      case 'guard': {
+        if ((rest[0] ?? '').toLowerCase() !== 'log') return { text: '/sl guard log prints the guard\'s last decisions. The guard is switched in /sl settings.' }
+        const log = await readLog($)
+
+        return { text: log.length === 0 ? 'The guard has decided nothing yet.' : log.map(logLine).join('\n') }
+      }
       case 'debug':
         return debugText($)
       default:
@@ -2142,26 +2442,36 @@ export const register: Register = on => {
       if (next.signal.aborted) return { deny: guardRefusal(risk.label, risk.label, 'the turn was interrupted') }
       await $.process.run([...GUARD_POLL], { timeoutMs: 5000 })
     }
-    const mine: Held = { command: String(e.command), risk, report: null, decision: null }
+    const mine: Held = { command: String(e.command), risk, report: null, decision: null, autoAt: null, cwd: null }
     held = mine
 
     try {
       const from = await $.session.cwd()
       const expandsDir = risk.dir !== null && /[$`]/.test(risk.dir)
       const cwd = risk.dir === null ? from : expandsDir ? null : await resolveDir($, from, risk.dir)
+      mine.cwd = cwd
       mine.report =
         expandsDir
           ? { summary: `can't measure: ${risk.label} in ${risk.dir}`, lines: [], more: 0, note: 'the folder expands at run time; check what it holds before you press 1' }
           : cwd === null
           ? { summary: `${risk.label} in ${risk.dir}`, lines: [], more: 0, note: `the folder ${risk.dir} is not there, so this could not be measured` }
           : await measureRisk($, risk, cwd)
+      const startedAt = await $.clock.now()
+      // Nothing at risk: it runs by itself unless 2 refuses it first.
+      if (mine.report.threat === false) mine.autoAt = startedAt + GUARD_AUTO_MS
       $.ui.invalidate('ui.render')
 
-      const startedAt = await $.clock.now()
       while (mine.decision === null) {
         if (next.signal.aborted) {
           mine.decision = 'interrupted'
           break
+        }
+        if (mine.autoAt !== null) {
+          if ((await $.clock.now()) >= mine.autoAt) {
+            mine.decision = 'auto'
+            break
+          }
+          $.ui.invalidate('ui.render')
         }
         if ((await $.clock.now()) - startedAt > GUARD_HOLD_MS) {
           mine.decision = 'timeout'
@@ -2176,12 +2486,36 @@ export const register: Register = on => {
       $.ui.invalidate('ui.render')
     }
 
-    if (mine.decision === 'run') {
-      $.ui.toast('status-line guard: running it')
+    const at = await $.clock.now()
+    const measure = mine.report?.summary ?? risk.label
+    if (mine.decision === 'auto') {
+      await logDecision($, { at, decision: 'auto', command: mine.command, measure })
 
       return next(e)
     }
-    const why: Record<Exclude<Decision, 'run'>, string> = {
+    if (mine.decision === 'run') {
+      const keep = mine.report?.threat !== false ? (mine.report?.keep ?? null) : null
+      if (keep !== null && mine.cwd !== null) {
+        const kept = await keepBeforeRun($, keep, mine.cwd, at)
+        if ('error' in kept) {
+          await logDecision($, { at, decision: 'error', command: mine.command, measure: `${measure}; could not keep a copy: ${kept.error}` })
+
+          return { deny: guardRefusal(risk.label, measure, `the guard could not keep a copy first (${kept.error}), so it did not run it`) }
+        }
+        lastUndo = kept.undo
+        await $.store.set('guardUndo', kept.undo)
+        const where = kept.undo.kind === 'files' ? kept.undo.dir : kept.undo.text
+        await logDecision($, { at, decision: 'run', command: mine.command, measure, kept: where })
+        $.ui.toast('status-line guard: kept a copy, running it. /sl undo puts it back')
+      } else {
+        await logDecision($, { at, decision: 'run', command: mine.command, measure })
+        $.ui.toast('status-line guard: running it')
+      }
+
+      return next(e)
+    }
+    await logDecision($, { at, decision: mine.decision ?? 'error', command: mine.command, measure })
+    const why: Record<Exclude<Decision, 'run' | 'auto'>, string> = {
       refuse: 'the user pressed refuse',
       interrupted: 'the turn was interrupted',
       timeout: 'no answer within ten minutes',
@@ -2243,6 +2577,7 @@ export const register: Register = on => {
     const cwd = await $.session.cwd()
     const model = await $.session.model()
     const now = await $.clock.now()
+    const undoLeft = lastUndo === null ? 0 : lastUndo.at + GUARD_UNDO_SHOW_MS - now
 
     // While Claude works the spinner is what matters, so the row steps back.
     const dim = e.props.isWorking
@@ -2252,7 +2587,7 @@ export const register: Register = on => {
     // rows stay, the identity row is the one you need least just then.
     if (holding !== null && isHidden) lines.length = 0
     else if (holding !== null && lines.length > 0 && lineFor(1, ctxOf(cwd, model, now)).length > 0) lines.shift()
-    if (lines.length === 0 && holding === null) return next(e)
+    if (lines.length === 0 && holding === null && undoLeft <= 0) return next(e)
 
     // One powerline row. Each cell takes the next cell's background as its
     // separator's foreground, so the two melt into one another; the last
@@ -2292,25 +2627,35 @@ export const register: Register = on => {
           children: [Text({ color: MUTED, children: [left.padEnd(8)] }), Text({ color, bold: true, wrap: 'truncate-end', children: [right] })],
         })
 
+      const safe = h.report.threat === false
+      const autoIn = h.autoAt === null ? 0 : Math.max(0, Math.ceil((h.autoAt - now) / 1000))
+      const keeps = !safe && h.report.keep !== null && h.report.keep !== undefined
+      const keepLine = safe
+        ? ''
+        : keeps
+          ? '1 keeps a copy first, for 7 days; /sl undo puts it back'
+          : h.report.keepNote || "won't be kept"
+
       return Box({
         flexDirection: 'column',
         borderStyle: 'round',
-        borderColor: AMBER,
+        borderColor: safe ? MUTED : AMBER,
         paddingX: 1,
         children: [
-          Text({ color: AMBER, bold: true, children: [`${ICON.warn} guard ${ICON.dot} ${h.risk.label}`] }),
+          Text({ color: safe ? MUTED : AMBER, bold: true, children: [`${safe ? '' : `${ICON.warn} `}guard ${ICON.dot} ${h.risk.label}${safe ? ` ${ICON.dot} nothing at risk` : ''}`] }),
           label('command', h.command, FG),
-          label('would', h.report.summary, RED),
+          label('would', h.report.summary, safe ? FG : RED),
           ...h.report.lines.map(l => Text({ color: FG, wrap: 'truncate-end', children: [`  ${l}`] })),
           ...(h.report.more > 0 ? [Text({ color: MUTED, children: [`  + ${h.report.more} more`] })] : []),
           ...(h.report.note !== '' ? [Text({ color: MUTED, italic: true, wrap: 'wrap', children: [h.report.note] })] : []),
+          ...(keepLine !== '' ? [Text({ color: keeps ? FG : RED, wrap: 'wrap', children: [keepLine] })] : []),
           Box({
             flexDirection: 'row',
             columnGap: 2,
             children: [
-              Button({ key: 'guard-run', label: 'run', hotkey: '1', plain: true, onPress: decide('run') }),
+              Button({ key: 'guard-run', label: safe ? 'run now' : 'run', hotkey: '1', plain: true, onPress: decide('run') }),
               Button({ key: 'guard-refuse', label: 'refuse', hotkey: '2', plain: true, autoFocus: true, onPress: decide('refuse') }),
-              Text({ color: MUTED, children: ['Claude is waiting on your answer'] }),
+              Text({ color: MUTED, children: [safe ? `auto-run in ${autoIn}s` : 'Claude is waiting on your answer'] }),
             ],
           }),
         ],
@@ -2321,6 +2666,9 @@ export const register: Register = on => {
       flexDirection: 'column',
       children: [
         ...(holding !== null ? [guard(holding as Held & { report: Report })] : []),
+        ...(holding === null && undoLeft > 0
+          ? [Text({ color: MUTED, children: [`undo: /sl undo ${ICON.dot} ${Math.ceil(undoLeft / 60_000)}m`] })]
+          : []),
         ...lines.map(line => Box({ flexDirection: 'row', children: row(line) })),
       ],
     })
@@ -2553,6 +2901,8 @@ export const register: Register = on => {
         line('guard (a)', 'in /sl settings: hold a risky shell command in the band until 1 runs it or 2 refuses it'),
         line('cold gate (k)', 'in /sl settings: after a cold hour, the next prompt is dropped once with the re-read in tokens; enter again sends it'),
         line('/sl restore', 'put the prompt the cold gate dropped back in the box, if Esc emptied it'),
+        line('/sl undo', 'put back what the guard kept before the last command it ran'),
+        line('/sl guard log', "the guard's last 50 decisions"),
         line('/sl agents', 'the subagents this session has run, one row each'),
         line('/sl on, /sl off', 'show or hide the band; bare /sl opens settings'),
         line('/sl settings', 'choose what shows, and on which line'),

@@ -939,7 +939,9 @@ const beneath = (on: On, store: Readonly<Record<string, unknown>>, answer: (argv
   })
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   const clock = stand(on, undefined, undefined, true, undefined, store, async (argv, init) => {
-    if (argv[1] !== 'status') processes.push({ argv, cwd: init?.cwd })
+    // The sweep of old kept copies at session.start is not the guard's either.
+    const sweep = (argv[0] === 'bash' && String(argv[2]).includes('-mtime')) || argv[1] === 'for-each-ref'
+    if (argv[1] !== 'status' && !sweep) processes.push({ argv, cwd: init?.cwd })
     if (argv[0] === 'sleep') {
       await clock.sleep(250)
 
@@ -1359,7 +1361,7 @@ test('/sl on, off and effort act without a pane, and an unknown verb lists the v
   expect(await run('effort off')).toEqual({ text: 'Effort override cleared; the session decides again.' })
   expect((await run('effort loud')).text).toMatch(/^Effort is one of /)
 
-  expect((await run('frobnicate')).text).toBe('/sl takes one of: settings | help | agents | effort <level> | restore | debug | on | off')
+  expect((await run('frobnicate')).text).toBe('/sl takes one of: settings | help | agents | effort <level> | restore | undo | guard log | debug | on | off')
   expect(opens).toEqual([])
 
   await ui.unmount()
@@ -1551,5 +1553,102 @@ test('git reset --hard with a ref lists the commits that leave the branch', asyn
   await ui.press({ key: 'guard-refuse' })
   await clock.advance(250)
   await call
+  await ui.unmount()
+})
+
+// --- 0.5.0: ask only on a threat, keep a copy before running ----------------------
+// The measure's scripts, told apart by what they print.
+const script = (argv: readonly string[]) => {
+  const src = String(argv[2] ?? '')
+  if (argv[0] !== 'bash') return ''
+  if (src.includes('manifest.tsv')) return 'keep'
+  if (src.includes('restored')) return 'undo'
+  if (src.includes('printf "H')) return 'paths'
+
+  return 'count'
+}
+
+const world = (paths: string, status = '') => (argv: readonly string[]) => {
+  const kind = script(argv)
+  if (kind === 'count') return '1 2048 1\nx\n'
+  if (kind === 'paths') return `H\t/home/u\nT\t/tmp\n${paths}`
+  if (kind === 'keep') return 'P_FROM\t/home/u/.cache/status-line/trash/s/1/notes.txt\nDIR\t/home/u/.cache/status-line/trash/s\n'.replace('P_FROM', '/repo/notes.txt')
+  if (kind === 'undo') return 'restored\t/repo/notes.txt\n'
+  if (argv[1] === 'rev-parse' && argv[2] === '--show-toplevel') return '/repo\n'
+  if (argv.includes('--ignored')) return status
+
+  return ''
+}
+
+test('a delete with nothing at risk runs by itself after three seconds', async ($, on) => {
+  const { ran, clock, until } = beneath(on, { ...FRESH_STORE, guard: true }, world('P\t/repo/node_modules\n', '!! node_modules/\n'))
+  await startGuarded($)
+  const ui = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...BAND })
+  const call = $.tool.call({ tool: 'Bash', command: 'rm -rf node_modules' })
+  await until(ui, /auto-run in \ds/)
+  expect(await ui.find({ type: 'Text', text: /nothing at risk/ })).toBeDefined()
+  expect(ran).toEqual([])
+  await clock.advance(3_250)
+  await clock.advance(250)
+  expect((await call).deny).toBeUndefined()
+  expect(ran).toEqual(['rm -rf node_modules'])
+  expect((await runSl($, 'guard log')).text).toMatch(/auto\s+rm -rf node_modules/)
+  await ui.unmount()
+})
+
+test('2 during the count refuses a command with nothing at risk', async ($, on) => {
+  const { ran, clock, until } = beneath(on, { ...FRESH_STORE, guard: true }, world('P\t/tmp/scratch\n'))
+  await startGuarded($)
+  const ui = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...BAND })
+  const call = $.tool.call({ tool: 'Bash', command: 'rm -rf /tmp/scratch' })
+  await until(ui, /auto-run in/)
+  await ui.press({ key: 'guard-refuse' })
+  await clock.advance(250)
+  expect((await call).deny).toMatch(/pressed refuse/)
+  expect(ran).toEqual([])
+  await ui.unmount()
+})
+
+test('a threat still holds; 1 keeps a copy, runs it, and /sl undo puts it back', async ($, on) => {
+  const { ran, processes, clock, until } = beneath(on, { ...FRESH_STORE, guard: true }, world('P\t/repo/notes.txt\n', '?? notes.txt\n'))
+  await startGuarded($)
+  const ui = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...BAND })
+  const call = $.tool.call({ tool: 'Bash', command: 'rm -rf notes.txt' })
+  await until(ui, /untracked: notes\.txt/)
+  expect(await ui.find({ type: 'Text', text: /1 keeps a copy first/ })).toBeDefined()
+  // No count on a threat: four seconds on, it is still waiting.
+  for (let i = 0; i < 16; i += 1) await clock.advance(250)
+  expect(ran).toEqual([])
+  expect(await ui.find({ type: 'Text', text: /Claude is waiting on your answer/ })).toBeDefined()
+
+  await ui.press({ key: 'guard-run' })
+  await clock.advance(250)
+  expect((await call).deny).toBeUndefined()
+  expect(ran).toEqual(['rm -rf notes.txt'])
+  const keep = processes.find(p => script(p.argv) === 'keep')
+  expect(keep?.argv.at(-1)).toBe('/repo/notes.txt')
+  expect(await ui.find({ type: 'Text', text: /undo: \/sl undo/ })).toBeDefined()
+
+  const log = (await runSl($, 'guard log')).text
+  expect(log).toMatch(/run\s+rm -rf notes\.txt .* kept: \/home\/u\/\.cache\/status-line\/trash\/s/)
+  expect((await runSl($, 'debug')).text).toMatch(/last kept: .* 1 path\(s\) in \/home\/u\/\.cache\/status-line\/trash\/s/)
+
+  expect((await runSl($, 'undo')).text).toMatch(/restored \/repo\/notes\.txt/)
+  const undo = processes.find(p => script(p.argv) === 'undo')
+  expect(undo?.argv.slice(-2)).toEqual(['/repo/notes.txt', '/home/u/.cache/status-line/trash/s/1/notes.txt'])
+  expect((await runSl($, 'undo')).text).toMatch(/Nothing to undo/)
+  await ui.unmount()
+})
+
+test('a gitignored file outside a build folder is a threat: .env', async ($, on) => {
+  const { clock, until } = beneath(on, { ...FRESH_STORE, guard: true }, world('P\t/repo/.env\n', '!! .env\n'))
+  await startGuarded($)
+  const ui = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...BAND })
+  const call = $.tool.call({ tool: 'Bash', command: 'rm -rf .env' })
+  await until(ui, /gitignored: \.env/)
+  expect(await ui.find({ type: 'Text', text: /auto-run/ })).toBeUndefined()
+  await ui.press({ key: 'guard-refuse' })
+  await clock.advance(250)
+  expect((await call).deny).toMatch(/pressed refuse/)
   await ui.unmount()
 })

@@ -228,9 +228,9 @@ one, then the main loop's falling to a third and the gauge taking the breakdown.
 
 ## State
 
-Version 0.4.1, installed from the b3-skills marketplace at scope **user**, so
-it draws in every session on this box. One command, `/sl`, with eight verbs.
-Fifty tests pass under `claude plugin test`, `tsc -p .` is clean and
+Version 0.5.0, installed from the b3-skills marketplace at scope **user**, so
+it draws in every session on this box. One command, `/sl`, with ten verbs.
+Fifty-four tests pass under `claude plugin test`, `tsc -p .` is clean and
 `claude plugin validate` passes.
 
 Every polled figure carries a note saying why it has nothing, and `/sl debug`
@@ -314,12 +314,14 @@ destroy is measured, and the report takes row one's place in the band:
 
 ```
  ╭─ ⚠ guard · rm -rf ────────────────────────────────────────────────╮
- │ command  rm -rf build                                              │
- │ would    delete 1,204 files · 38 MB                                │
- │   build/index.js                                                   │
- │   build/chunk-1f3a.js                                              │
- │   build/assets/logo.svg                                            │
- │   + 1,201 more                                                     │
+ │ command  rm -rf drafts                                             │
+ │ would    delete 14 files · 2.1 MB                                  │
+ │   drafts/plan.md                                                   │
+ │   drafts/notes.md                                                  │
+ │   drafts/old/spec.md                                               │
+ │   + 11 more                                                        │
+ │ untracked: drafts/plan.md; untracked: drafts/notes.md; 12 more     │
+ │ 1 keeps a copy first, for 7 days; /sl undo puts it back            │
  │ 1: run   2: refuse   Claude is waiting on your answer              │
  ╰────────────────────────────────────────────────────────────────────╯
  ct ▰▰▰▰▱ 66%   5h ▰▱▱▱▱ 9% ↻2h14m   7d ▰▰▱▱▱ 39% ↻3d15h
@@ -332,7 +334,7 @@ shell running it, or not.*
 
 `1` runs it as written. `2`, Esc on the turn, ten minutes of silence, or an
 error in the guard itself all refuse it, and Claude reads why, *"the user
-pressed refuse. It would have: delete 1,204 files"*, so it does not try the
+pressed refuse. It would have: delete 14 files"*, so it does not try the
 same line again. `refuse` holds the focus, so Enter refuses. The budget row
 stays under the report; the identity row is the one you need least just then.
 A held command is drawn even while the band is hidden with `/sl off`: it is a
@@ -370,6 +372,51 @@ What it does not do: it reads the command text and does not parse shell.
 call `rm` are not caught. It is a net. A hard block belongs in the permission
 rules. It is **off** by default and switched on with `guard (a)` in
 `/sl settings`, stored like the layout.
+
+### Asking only when something is at risk (0.5.0)
+
+Before 0.5.0 every match was held, and the answer was nearly always `1`. A
+question you always answer the same way trains a reflex and protects nothing.
+So the measure now sorts each command one of two ways:
+
+| Nothing at risk | At risk |
+|---|---|
+| `rm` that matches nothing; files git holds unchanged; a build folder (`node_modules`, `dist`, `build`, `.next`, `target`, ...); anything under `/tmp` or `$TMPDIR` | untracked, changed or gitignored files (`.env` is gitignored); a path with `$VAR` or a backtick; `/`, `~` or the repo root; a path outside git |
+| `git reset --hard` on a clean tree that drops no commit | uncommitted changes, or commits that leave the branch |
+| `git clean` whose dry run lists nothing | anything it would remove |
+| a force push that drops no remote commit, after a fetch in the last day | dropped commits, no local copy of the remote branch, or a fetch older than a day |
+
+Nothing at risk: the report shows `auto-run in 3s`, and the command runs when
+the count ends. `1` runs it now, `2` refuses it.
+
+At risk: it waits for you as before, and Enter refuses. `1` first keeps what the
+command would destroy, then runs it as written:
+
+- `rm` and `git clean` copy their targets to status-line's own trash,
+  `~/Library/Caches/status-line/trash/<time>/` on macOS and
+  `~/.cache/status-line/trash/<time>/` on Linux, with a `manifest.tsv` saying
+  where each came from. It's a copy, not a move, so the command still finds what
+  it expects: an `rm -r` whose target had already gone would fail.
+- `git reset --hard` keeps HEAD and `git stash create` under
+  `refs/status-line/guard/<time>/`.
+- A force push keeps the remote's old head under
+  `refs/status-line/pushed-over/<time>`.
+- Over 500 MB, or with nothing to keep, the report says *won't be kept* before
+  you press anything.
+- If the copy fails, the command doesn't run, and Claude is told why.
+
+For ten minutes after, the band shows `undo: /sl undo · 10m`. `/sl undo` moves
+the copies back, leaving alone any path that exists again, or prints the git
+command that restores the ref. Copies and refs older than 7 days go when a
+session starts; refs only in the repo that session opens in.
+
+`/sl guard log` prints the last 50 decisions (`auto`, `run`, `refuse`,
+`timeout`, `interrupted`, `error`) with the command, the measure and where a
+copy went. `/sl debug` shows the newest five.
+
+The guard runs `bash`, `cp`, `du`, `find` and `git`, so it's for macOS and
+Linux. On Windows without Git Bash on the PATH the measure fails, the command
+counts as at risk, and nothing can be kept.
 
 The idea, and the shape of the hold, are Blast Radius's, by Claude Code DevRel
 at Anthropic, in
@@ -673,6 +720,8 @@ One command; the typeahead shows the verbs dim after it. Bare `/sl` is
 | `/sl agents` | the subagents this session has run: running, answered, failed |
 | `/sl effort <level>` | set it outright, or `off` to stop overriding |
 | `/sl restore` | put the prompt the cold gate dropped back in the box, if Esc emptied it |
+| `/sl undo` | put back what the guard kept before the last command it ran |
+| `/sl guard log` | the guard's last 50 decisions |
 | `/sl debug` | print what the engine reports, notes included |
 | `/sl on`, `/sl off` | show or hide the band |
 
