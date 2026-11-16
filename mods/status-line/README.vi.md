@@ -226,7 +226,7 @@ phần ba và đồng hồ lấy breakdown.
 
 ## Trạng thái
 
-Bản 0.5.0, cài từ marketplace b3-skills ở scope **user**, nên phiên
+Bản 0.5.1, cài từ marketplace b3-skills ở scope **user**, nên phiên
 nào trên máy cũng có. Một lệnh `/sl` với mười verb. 54 test qua
 `claude plugin test`, `tsc -p .` sạch, `claude plugin validate` qua.
 
@@ -382,8 +382,10 @@ bảo vệ được gì. Nên giờ đo xong, mỗi lệnh rơi vào một trong
 | `git clean` mà chạy thử không ra gì | bất cứ thứ gì nó sẽ xoá |
 | force push không làm mất commit nào trên remote, và lần fetch gần nhất chưa quá một ngày | có commit bị mất, máy không có bản sao nhánh remote, hoặc fetch đã quá một ngày |
 
-Không có gì sắp mất: báo cáo hiện `auto-run in 3s`, đếm xong là lệnh chạy. Bấm
-`1` thì chạy ngay, bấm `2` thì từ chối.
+Không có gì sắp mất: cả toast lẫn báo cáo đều hiện `auto-run in 3s`, số giây
+giảm dần, đếm xong là lệnh chạy. Bấm `1` thì chạy ngay, bấm `2` thì từ chối.
+Mười giây sau đó, dải còn ghi `guard: ran … · nothing at risk`, nên lệnh tự chạy
+không bao giờ chạy mà bạn không thấy.
 
 Có thứ sắp mất: lệnh đợi bạn như cũ, Enter là từ chối. Bấm `1` thì mod giữ lại
 thứ lệnh sắp phá trước, rồi mới chạy lệnh đúng như viết:

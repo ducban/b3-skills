@@ -228,7 +228,7 @@ one, then the main loop's falling to a third and the gauge taking the breakdown.
 
 ## State
 
-Version 0.5.0, installed from the b3-skills marketplace at scope **user**, so
+Version 0.5.1, installed from the b3-skills marketplace at scope **user**, so
 it draws in every session on this box. One command, `/sl`, with ten verbs.
 Fifty-four tests pass under `claude plugin test`, `tsc -p .` is clean and
 `claude plugin validate` passes.
@@ -386,8 +386,10 @@ So the measure now sorts each command one of two ways:
 | `git clean` whose dry run lists nothing | anything it would remove |
 | a force push that drops no remote commit, after a fetch in the last day | dropped commits, no local copy of the remote branch, or a fetch older than a day |
 
-Nothing at risk: the report shows `auto-run in 3s`, and the command runs when
-the count ends. `1` runs it now, `2` refuses it.
+Nothing at risk: a toast and the report both say `auto-run in 3s`, the count
+goes down each second, and the command runs when it ends. `1` runs it now, `2`
+refuses it. For ten seconds after, the band says `guard: ran …  · nothing at
+risk`, so a command that ran by itself never runs unseen.
 
 At risk: it waits for you as before, and Enter refuses. `1` first keeps what the
 command would destroy, then runs it as written:

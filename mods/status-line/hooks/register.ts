@@ -1582,6 +1582,10 @@ type Undo =
   | { at: number; kind: 'files'; dir: string; pairs: [string, string][] }
   | { at: number; kind: 'git'; text: string }
 let lastUndo: Undo | null = null
+// The last command that ran by itself, shown on the band for a while after so
+// an auto-run is never silent.
+let lastAuto: { at: number; label: string; summary: string } | null = null
+const GUARD_AUTO_SHOW_MS = 10_000
 
 // Keeps what a threatening command would destroy, before it runs. Never throws.
 async function keepBeforeRun($: EngineInterface, keep: Keep, cwd: string, at: number): Promise<{ undo: Undo } | { error: string }> {
@@ -2457,8 +2461,15 @@ export const register: Register = on => {
           ? { summary: `${risk.label} in ${risk.dir}`, lines: [], more: 0, note: `the folder ${risk.dir} is not there, so this could not be measured` }
           : await measureRisk($, risk, cwd)
       const startedAt = await $.clock.now()
-      // Nothing at risk: it runs by itself unless 2 refuses it first.
-      if (mine.report.threat === false) mine.autoAt = startedAt + GUARD_AUTO_MS
+      // Nothing at risk: it runs by itself unless 2 refuses it first. The toast
+      // says so wherever the band is; a timer of its own redraws the count, so
+      // the seconds move whatever the hold loop is waiting on.
+      let ticker: { cancel: () => void } | null = null
+      if (mine.report.threat === false) {
+        mine.autoAt = startedAt + GUARD_AUTO_MS
+        $.ui.toast(`status-line guard: nothing at risk, auto-run in ${GUARD_AUTO_MS / 1000}s ${ICON.dot} 2 refuses`)
+        ticker = $.clock.every(250, () => $.ui.invalidate('ui.render'))
+      }
       $.ui.invalidate('ui.render')
 
       while (mine.decision === null) {
@@ -2466,12 +2477,9 @@ export const register: Register = on => {
           mine.decision = 'interrupted'
           break
         }
-        if (mine.autoAt !== null) {
-          if ((await $.clock.now()) >= mine.autoAt) {
-            mine.decision = 'auto'
-            break
-          }
-          $.ui.invalidate('ui.render')
+        if (mine.autoAt !== null && (await $.clock.now()) >= mine.autoAt) {
+          mine.decision = 'auto'
+          break
         }
         if ((await $.clock.now()) - startedAt > GUARD_HOLD_MS) {
           mine.decision = 'timeout'
@@ -2479,6 +2487,7 @@ export const register: Register = on => {
         }
         await $.process.run([...GUARD_POLL], { timeoutMs: 5000 })
       }
+      ticker?.cancel()
     } catch {
       mine.decision = 'error'
     } finally {
@@ -2490,6 +2499,8 @@ export const register: Register = on => {
     const measure = mine.report?.summary ?? risk.label
     if (mine.decision === 'auto') {
       await logDecision($, { at, decision: 'auto', command: mine.command, measure })
+      lastAuto = { at, label: risk.label, summary: measure }
+      $.clock.after(GUARD_AUTO_SHOW_MS + 100, () => $.ui.invalidate('ui.render'))
 
       return next(e)
     }
@@ -2578,6 +2589,7 @@ export const register: Register = on => {
     const model = await $.session.model()
     const now = await $.clock.now()
     const undoLeft = lastUndo === null ? 0 : lastUndo.at + GUARD_UNDO_SHOW_MS - now
+    const autoShown = lastAuto !== null && now - lastAuto.at < GUARD_AUTO_SHOW_MS ? lastAuto : null
 
     // While Claude works the spinner is what matters, so the row steps back.
     const dim = e.props.isWorking
@@ -2587,7 +2599,7 @@ export const register: Register = on => {
     // rows stay, the identity row is the one you need least just then.
     if (holding !== null && isHidden) lines.length = 0
     else if (holding !== null && lines.length > 0 && lineFor(1, ctxOf(cwd, model, now)).length > 0) lines.shift()
-    if (lines.length === 0 && holding === null && undoLeft <= 0) return next(e)
+    if (lines.length === 0 && holding === null && undoLeft <= 0 && autoShown === null) return next(e)
 
     // One powerline row. Each cell takes the next cell's background as its
     // separator's foreground, so the two melt into one another; the last
@@ -2666,6 +2678,9 @@ export const register: Register = on => {
       flexDirection: 'column',
       children: [
         ...(holding !== null ? [guard(holding as Held & { report: Report })] : []),
+        ...(holding === null && autoShown !== null
+          ? [Text({ color: MUTED, wrap: 'truncate-end', children: [`guard: ran ${autoShown.label} ${ICON.dot} nothing at risk ${ICON.dot} ${autoShown.summary}`] })]
+          : []),
         ...(holding === null && undoLeft > 0
           ? [Text({ color: MUTED, children: [`undo: /sl undo ${ICON.dot} ${Math.ceil(undoLeft / 60_000)}m`] })]
           : []),
