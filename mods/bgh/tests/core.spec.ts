@@ -2,6 +2,12 @@
 import { describe, expect, test } from 'bun:test'
 
 import {
+  AMD_BASE_URL,
+  MODEL_CHOICES,
+  baseUrlOf,
+  keyNamesAppendix,
+  missingKeyNames,
+  modelsUrl,
   applyIssues,
   base64,
   chain,
@@ -114,7 +120,7 @@ describe('chain', () => {
   })
   test('forced provider goes first and takes B3_GRAMMAR_MODEL', () => {
     const hops = chain({ OPENROUTER_API_KEY: 'r', OPENAI_API_KEY: 'o', B3_GRAMMAR_PROVIDER: 'openai', B3_GRAMMAR_MODEL: 'gpt-5-nano' })
-    expect(hops[0]).toEqual({ route: 'openai', model: 'gpt-5-nano', apiKey: 'o' })
+    expect(hops[0]).toEqual({ route: 'openai', model: 'gpt-5-nano', apiKey: 'o', baseUrl: 'https://api.openai.com/v1' })
     expect(hops[1]?.route).toBe('openrouter')
   })
   test('blank keys count as none', () => {
@@ -465,5 +471,65 @@ describe('setup key k', () => {
   })
   test('report lines line up', () => {
     expect(keyLines([{ name: 'apply', status: 'set', note: 'a' }, { name: 'keybindings', status: 'manual', note: 'b' }])).toEqual(['+ apply        a', '! keybindings  b'])
+  })
+})
+
+describe('AMD Token Lab route', () => {
+  test('AMD_API_KEY adds amd after Fireworks, before Haiku, on DeepSeek-V4-Flash', () => {
+    const hops = chain({ AMD_API_KEY: 'a', OPENAI_API_KEY: 'o' })
+    expect(hops.map((h) => h.route)).toEqual(['openai', 'amd', 'claude'])
+    expect(hops[1]).toEqual({ route: 'amd', model: 'DeepSeek-V4-Flash', apiKey: 'a', baseUrl: AMD_BASE_URL })
+  })
+  test('the base URL: blank means Token Lab, set wins, a trailing slash is trimmed', () => {
+    expect(baseUrlOf('amd', {})).toBe('https://api.tokenlab.amd.com/v1')
+    expect(baseUrlOf('amd', { AMD_BASE_URL: '  ' })).toBe('https://api.tokenlab.amd.com/v1')
+    expect(baseUrlOf('amd', { AMD_BASE_URL: 'https://x.example/v2/' })).toBe('https://x.example/v2')
+    expect(baseUrlOf('openai', { AMD_BASE_URL: 'https://x.example/v2' })).toBe('https://api.openai.com/v1')
+  })
+  test('chat and model-list URLs sit under the base', () => {
+    const [hop] = chain({ AMD_API_KEY: 'a', AMD_BASE_URL: 'https://x.example/v2' })
+    const req = chatRequest(hop as Parameters<typeof chatRequest>[0], 'u')
+    expect(req.url).toBe('https://x.example/v2/chat/completions')
+    expect(req.headers.Authorization).toBe('Bearer a')
+    expect(JSON.parse(req.body).model).toBe('DeepSeek-V4-Flash')
+    expect(modelsUrl('amd', {})).toBe('https://api.tokenlab.amd.com/v1/models')
+    expect(chatRequest({ route: 'amd', model: 'm', apiKey: 'k' }, 'u').url).toBe('https://api.tokenlab.amd.com/v1/chat/completions')
+  })
+  test('reasoning is off, or MiniCPM5-2B spends the whole cap thinking', () => {
+    expect(JSON.parse(chatRequest({ route: 'amd', model: 'MiniCPM5-2B', apiKey: 'k' }, 'u').body).reasoning_effort).toBe('none')
+    expect(JSON.parse(chatRequest({ route: 'fireworks', model: 'm', apiKey: 'k' }, 'u').body).reasoning_effort).toBeUndefined()
+  })
+  test('both models are on the pick list, DeepSeek first', () => {
+    expect(MODEL_CHOICES.amd).toEqual(['DeepSeek-V4-Flash', 'MiniCPM5-2B'])
+  })
+  test('the template carries both AMD names, blank', () => {
+    expect(ENV_TEMPLATE).toMatch(/^AMD_API_KEY=$/m)
+    expect(ENV_TEMPLATE).toMatch(/^AMD_BASE_URL=$/m)
+  })
+})
+
+describe('key names added to an older keys file', () => {
+  const old = 'OPENROUTER_API_KEY=r\nOPENAI_API_KEY=\n#FIREWORKS_API_KEY=f\n'
+  test('a name set, blank or commented counts as there; only absent ones come back', () => {
+    const missing = missingKeyNames(old)
+    expect(missing).toContain('AMD_API_KEY')
+    expect(missing).toContain('AMD_BASE_URL')
+    expect(missing).not.toContain('OPENROUTER_API_KEY')
+    expect(missing).not.toContain('OPENAI_API_KEY')
+    expect(missing).not.toContain('FIREWORKS_API_KEY')
+  })
+  test('the appendix is commented, keeps what was there, and a second run adds nothing', () => {
+    const names = ['AMD_API_KEY', 'AMD_BASE_URL']
+    const after = old + keyNamesAppendix(old, names, '9.9.9')
+    expect(after.startsWith(old)).toBe(true)
+    expect(after.slice(old.length)).toBe('\n# Added by bgh 9.9.9\n#AMD_API_KEY=\n#AMD_BASE_URL=\n')
+    expect(missingKeyNames(ENV_TEMPLATE)).toEqual([])
+    expect(missingKeyNames(old + keyNamesAppendix(old, missingKeyNames(old), '9.9.9'))).toEqual([])
+  })
+  test('a file with no final newline gets one first', () => {
+    expect(keyNamesAppendix('A=1', ['B'], '1')).toBe('\n\n# Added by bgh 1\n#B=\n')
+  })
+  test('commented AMD names add no route', () => {
+    expect(chain(parseDotenv(old + keyNamesAppendix(old, ['AMD_API_KEY'], '1'))).map((h) => h.route)).not.toContain('amd')
   })
 })

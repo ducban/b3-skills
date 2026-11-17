@@ -141,7 +141,7 @@ export function parseHarper(stdout: string, text: string): Issue[] {
 // ---------------------------------------------------------------------------
 // LLM routes, the way b3-dict picks them
 
-export const ROUTES = ['openrouter', 'openai', 'fireworks'] as const
+export const ROUTES = ['openrouter', 'openai', 'fireworks', 'amd'] as const
 export type ApiRoute = (typeof ROUTES)[number]
 export type Route = ApiRoute | 'claude'
 
@@ -149,6 +149,7 @@ export const DEFAULT_MODEL: Record<Route, string> = {
   openrouter: 'qwen/qwen3-235b-a22b-2507',
   openai: 'gpt-5-mini',
   fireworks: 'accounts/fireworks/models/minimax-m3',
+  amd: 'DeepSeek-V4-Flash',
   claude: 'haiku',
 }
 
@@ -156,11 +157,25 @@ export const KEY_NAME: Record<ApiRoute, string> = {
   openrouter: 'OPENROUTER_API_KEY',
   openai: 'OPENAI_API_KEY',
   fireworks: 'FIREWORKS_API_KEY',
+  amd: 'AMD_API_KEY',
 }
 
-export type Hop = { route: Route; model: string; apiKey?: string }
+// `baseUrl` is set on API hops; chatRequest falls back to the route's own when it is missing.
+export type Hop = { route: Route; model: string; apiKey?: string; baseUrl?: string }
 
 const read = (env: Env, name: string): string | undefined => env[name]?.trim() || undefined
+
+// Each API route's OpenAI-compatible base; `/models` and `/chat/completions` sit below it.
+// AMD Token Lab's comes from AMD_BASE_URL, so a moved endpoint needs no release.
+export const AMD_BASE_URL = 'https://api.tokenlab.amd.com/v1'
+const BASE_URL: Record<ApiRoute, string> = {
+  openrouter: 'https://openrouter.ai/api/v1',
+  openai: 'https://api.openai.com/v1',
+  fireworks: 'https://api.fireworks.ai/inference/v1',
+  amd: AMD_BASE_URL,
+}
+export const baseUrlOf = (route: ApiRoute, env: Env = {}): string =>
+  ((route === 'amd' ? read(env, 'AMD_BASE_URL') : undefined) ?? BASE_URL[route]).replace(/\/+$/, '')
 
 // What the settings pane keeps in `$.store`. Keys stay in the .env file, never here.
 export type Prefs = {
@@ -209,6 +224,7 @@ export const MODEL_CHOICES: Record<Route, string[]> = {
   openrouter: ['qwen/qwen3-235b-a22b-2507', 'openai/gpt-5-mini', 'google/gemini-2.5-flash-lite'],
   openai: ['gpt-5-mini', 'gpt-5-nano'],
   fireworks: ['accounts/fireworks/models/minimax-m3'],
+  amd: ['DeepSeek-V4-Flash', 'MiniCPM5-2B'],
   claude: ['haiku', 'sonnet'],
 }
 export const LLM_DELAYS = [800, 1500, 3000]
@@ -220,7 +236,7 @@ export function cycle<T>(list: readonly T[], current: T): T {
 }
 
 // The chain the LLM stage walks: the first route (the pane's pick, else B3_GRAMMAR_PROVIDER), then
-// every route with a key (OpenRouter, OpenAI, Fireworks), then Haiku through the session. Each hop
+// every route with a key (OpenRouter, OpenAI, Fireworks, AMD), then Haiku through the session. Each hop
 // runs the pane's model for its route, else B3_GRAMMAR_MODEL on the first hop, else the default.
 export function chain(env: Env, prefs: Prefs = DEFAULT_PREFS): Hop[] {
   if (read(env, 'B3_GRAMMAR_LLM') === 'off' || !prefs.llm) return []
@@ -234,7 +250,7 @@ export function chain(env: Env, prefs: Prefs = DEFAULT_PREFS): Hop[] {
       continue
     }
     const apiKey = read(env, KEY_NAME[route])
-    if (apiKey) hops.push({ route, model: DEFAULT_MODEL[route], apiKey })
+    if (apiKey) hops.push({ route, model: DEFAULT_MODEL[route], apiKey, baseUrl: baseUrlOf(route, env) })
   }
   const model = read(env, 'B3_GRAMMAR_MODEL')
   if (model && hops[0]) hops[0] = { ...hops[0], model }
@@ -251,11 +267,7 @@ export const availableRoutes = (env: Env): Route[] => [
 // Which models the providers still serve
 
 // Each provider's model list. OpenRouter's needs no key and carries dates and prices.
-export const MODELS_URL: Record<ApiRoute, string> = {
-  openrouter: 'https://openrouter.ai/api/v1/models',
-  openai: 'https://api.openai.com/v1/models',
-  fireworks: 'https://api.fireworks.ai/inference/v1/models',
-}
+export const modelsUrl = (route: ApiRoute, env: Env = {}): string => `${baseUrlOf(route, env)}/models`
 // A list younger than this is reused from `$.store` instead of fetched again.
 export const MODELS_TTL_MS = 12 * 60 * 60 * 1000
 
@@ -416,12 +428,6 @@ export const userPrompt = (batch: string[]): string => batch.map((s, i) => `${i}
 
 export type HttpRequest = { url: string; headers: Record<string, string>; body: string }
 
-const ENDPOINT: Record<ApiRoute, string> = {
-  openrouter: 'https://openrouter.ai/api/v1/chat/completions',
-  openai: 'https://api.openai.com/v1/chat/completions',
-  fireworks: 'https://api.fireworks.ai/inference/v1/chat/completions',
-}
-
 export function chatRequest(hop: Hop & { route: ApiRoute }, user: string): HttpRequest {
   const messages = [
     { role: 'system', content: SYSTEM_PROMPT },
@@ -438,13 +444,16 @@ export function chatRequest(hop: Hop & { route: ApiRoute }, user: string): HttpR
     if (!hop.model.startsWith('openai/')) body.reasoning = { enabled: false }
   } else {
     body = { model: hop.model, messages, max_tokens: 400, temperature: 0 }
+    // AMD Token Lab's MiniCPM5-2B reasons by default, spends the 400 tokens on it and answers
+    // null; `reasoning_effort` is the knob it takes (it refuses `reasoning.enabled`).
+    if (hop.route === 'amd') body.reasoning_effort = 'none'
   }
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     Authorization: `Bearer ${hop.apiKey}`,
   }
   if (hop.route === 'openrouter') headers['X-Title'] = 'B3 Grammar Helper'
-  return { url: ENDPOINT[hop.route], headers, body: JSON.stringify(body) }
+  return { url: `${(hop.baseUrl ?? baseUrlOf(hop.route)).replace(/\/+$/, '')}/chat/completions`, headers, body: JSON.stringify(body) }
 }
 
 export type Usage = { input: number; output: number; cost?: number }
@@ -681,8 +690,11 @@ export const ENV_TEMPLATE = `# B3 Grammar Helper (bgh) keys. Fill in what you ha
 OPENROUTER_API_KEY=
 OPENAI_API_KEY=
 FIREWORKS_API_KEY=
+AMD_API_KEY=
+# AMD Token Lab endpoint; blank means https://api.tokenlab.amd.com/v1
+AMD_BASE_URL=
 
-# Optional: put one route first (openrouter | openai | fireworks | claude) and pick its model.
+# Optional: put one route first (openrouter | openai | fireworks | amd | claude) and pick its model.
 # The settings pane (/bgh, keys f and m) does the same and wins over these.
 #B3_GRAMMAR_PROVIDER=
 #B3_GRAMMAR_MODEL=
@@ -696,6 +708,24 @@ LANGFUSE_SECRET_KEY=
 # https://us.cloud.langfuse.com \u{b7} https://jp.cloud.langfuse.com \u{b7} https://hipaa.cloud.langfuse.com
 LANGFUSE_BASE_URL=
 `
+
+// Names the template has and the file never mentions, set, blank or commented. A file made from an
+// older template gets these appended, commented, so a new route's keys show up without anything
+// already there being touched.
+const NAME_LINE = /^\s*#?\s*([A-Z][A-Z0-9_]*)\s*=/
+export function missingKeyNames(fileText: string, template: string = ENV_TEMPLATE): string[] {
+  const has = new Set(fileText.split(/\r?\n/).map((l) => NAME_LINE.exec(l)?.[1]).filter(Boolean))
+  const out: string[] = []
+  for (const line of template.split('\n')) {
+    const name = NAME_LINE.exec(line)?.[1]
+    if (name && !has.has(name) && !out.includes(name)) out.push(name)
+  }
+  return out
+}
+
+// The lines appended for `missingKeyNames`: a dated-by-version comment, then `#NAME=` each.
+export const keyNamesAppendix = (fileText: string, names: string[], release: string): string =>
+  `${fileText.endsWith('\n') || fileText === '' ? '' : '\n'}\n# Added by bgh ${release}\n${names.map((n) => `#${n}=`).join('\n')}\n`
 
 // A file that holds nothing but blanks and comments needs the template; one with a value doesn't.
 export const needsTemplate = (text: string | undefined): boolean =>

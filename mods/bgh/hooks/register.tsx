@@ -29,7 +29,9 @@ import {
   KEY_NAME,
   ROUTES,
   MODELS_TTL_MS,
-  MODELS_URL,
+  modelsUrl,
+  missingKeyNames,
+  keyNamesAppendix,
   addTally,
   creditOf,
   mergeCache,
@@ -79,7 +81,7 @@ import {
   type Usage,
 } from './core'
 
-const RELEASE = '0.10.4'
+const RELEASE = '0.11.0'
 const HARPER_DELAY_MS = 300
 const HOP_TIMEOUT_MS = 6000
 // Model lists, Langfuse scores and traces: none should hold a command or a tab open for long.
@@ -122,6 +124,8 @@ const KNOWN_ENV = [
   'OPENROUTER_API_KEY',
   'OPENAI_API_KEY',
   'FIREWORKS_API_KEY',
+  'AMD_API_KEY',
+  'AMD_BASE_URL',
   'LANGFUSE_PUBLIC_KEY',
   'LANGFUSE_SECRET_KEY',
   'LANGFUSE_BASE_URL',
@@ -188,6 +192,20 @@ const scoreBody = (traceId: string, value: 0 | 1) =>
 
 // Writes a file of API keys owner-only: an empty file is made and locked first, so the keys never
 // sit in a world-readable file. False when chmod failed where it should work (not on Windows).
+// Appends the key names a newer template added to a file that already has values. Writes the whole
+// text in one go (no empty-file window, unlike writeSecret) and keeps it owner-only. Never throws.
+async function addKeyNames($: EngineInterface, path: string, fileText: string, windows: boolean): Promise<string[]> {
+  const names = missingKeyNames(fileText)
+  if (!names.length) return []
+  try {
+    await $.fs.write(path, fileText + keyNamesAppendix(fileText, names, RELEASE))
+    if (!windows) await $.process.run(['chmod', '600', path], { timeoutMs: 2000 }).catch(() => undefined)
+    return names
+  } catch {
+    return []
+  }
+}
+
 async function writeSecret($: EngineInterface, path: string, text: string, windows: boolean): Promise<boolean> {
   await $.fs.write(path, '')
   const locked = await $.process
@@ -225,7 +243,7 @@ async function fetchModels($: EngineInterface, env: Env): Promise<{ lists: Parti
       const key = env[KEY_NAME[route]]?.trim()
       if (route !== 'openrouter' && !key) return
       try {
-        const res = await fetchWithin($, MODELS_URL[route], { headers: key ? { Authorization: `Bearer ${key}` } : {} })
+        const res = await fetchWithin($, modelsUrl(route, env), { headers: key ? { Authorization: `Bearer ${key}` } : {} })
         const parsed = res.ok ? parseModelList(res.text) : undefined
         if (parsed) lists[route] = parsed
         else errors[route] = res.ok ? 'the list was not the JSON expected' : `HTTP ${res.status}`
@@ -481,6 +499,8 @@ export const register: Register = (on) => {
       OPENROUTER_API_KEY: await $.env.get('OPENROUTER_API_KEY'),
       OPENAI_API_KEY: await $.env.get('OPENAI_API_KEY'),
       FIREWORKS_API_KEY: await $.env.get('FIREWORKS_API_KEY'),
+      AMD_API_KEY: await $.env.get('AMD_API_KEY'),
+      AMD_BASE_URL: await $.env.get('AMD_BASE_URL'),
       LANGFUSE_PUBLIC_KEY: await $.env.get('LANGFUSE_PUBLIC_KEY'),
       LANGFUSE_SECRET_KEY: await $.env.get('LANGFUSE_SECRET_KEY'),
       LANGFUSE_BASE_URL: await $.env.get('LANGFUSE_BASE_URL'),
@@ -520,6 +540,13 @@ export const register: Register = (on) => {
         else if (fileText === undefined) $.ui.toast(`Grammar: key template written to ${envFile}`)
       } catch {
         // read-only home: the environment alone
+      }
+    } else if (fileText !== undefined && !processEnv.B3_GRAMMAR_ENV_FILE) {
+      // A file made from an older template: the names a newer release added, appended commented.
+      const added = await addKeyNames($, envFile, fileText, dirs.sep === '\\')
+      if (added.length) {
+        fileText = String(await $.fs.read(envFile).catch(() => fileText))
+        $.ui.toast(`Grammar: added ${added.length} key name${added.length === 1 ? '' : 's'} to ${envFile} (${added.join(', ')})`)
       }
     }
     const savedModels = (await $.store.get(MODELS_KEY)) as { at?: unknown; lists?: unknown } | undefined
@@ -932,7 +959,7 @@ export const register: Register = (on) => {
           'API keys',
           steps.keys ? `${keyed.join(', ')} \u{b7} ${envFile}` : 'none: Haiku on your Claude login runs meanwhile',
           [
-            `open ${envFile} and fill in OPENROUTER_API_KEY, OPENAI_API_KEY or FIREWORKS_API_KEY`,
+            `open ${envFile} and fill in OPENROUTER_API_KEY, OPENAI_API_KEY, FIREWORKS_API_KEY or AMD_API_KEY`,
             `this machine reads ${envFile} (B3_GRAMMAR_ENV_FILE or XDG_CONFIG_HOME move it)`,
             'then press r here to reload it',
           ],

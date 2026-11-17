@@ -5,7 +5,7 @@ Grammar ghost text in the Claude Code prompt box. A wrong word gets a yellow und
 ```
 pause 0.3 s ─► harper-cli (offline)              ─► underline + ghost text
 pause 1.5 s ─► LLM chain, sentences not cached    ─► word choice, phrasing (wins a clash)
-               OpenRouter → OpenAI → Fireworks → Haiku (session)
+               OpenRouter → OpenAI → Fireworks → AMD → Haiku (session)
 every check ─► Langfuse trace (OTLP) · alt+a = score accepted 1 · send unfixed = 0
 session start ─► model lists (12 h) · a dropped model gives way · tally per model
 ```
@@ -112,7 +112,7 @@ Choices are saved in the mod's own store and carry over to the next session; eac
 
 ### Models that disappear, and which one you keep
 
-The pick lists are written into the mod, and providers retire models. So at session start, at most every 12 hours, the mod fetches each provider's model list: OpenRouter's always (it needs no key), OpenAI's and Fireworks' when their key is set. `/bgh test` fetches them again.
+The pick lists are written into the mod, and providers retire models. So at session start, at most every 12 hours, the mod fetches each provider's model list: OpenRouter's always (it needs no key), OpenAI's, Fireworks' and AMD's when their key is set. `/bgh test` fetches them again.
 
 - A model the provider no longer lists is marked `(gone)` in the `m` row and skipped when you cycle. The route runs the first listed pick instead, and a toast names the swap once. Your choice stays saved, so it comes back if the model does.
 - On OpenRouter, a newer model of the same vendor, family and kind that costs the same or less shows as `newer: …`. It's a hint. Nothing switches by itself.
@@ -124,11 +124,12 @@ Keys only work in the region they were made in. Leave `LANGFUSE_BASE_URL` blank 
 
 ## Keys
 
-API keys never go in the pane. Put them in the environment or in the keys file from the table above. On first start the mod writes that file with every key name and blank values, owner-only on Linux and macOS; fill in what you have and run `/bgh reload`. It never writes over a file that already holds a value. Point `B3_GRAMMAR_ENV_FILE` at b3-dict's `.env` to share it. The environment wins over the file.
+API keys never go in the pane. Put them in the environment or in the keys file from the table above. On first start the mod writes that file with every key name and blank values, owner-only on Linux and macOS; fill in what you have and run `/bgh reload`. It never writes over a file that already holds a value. When a release adds a key name, a file that already has values gets the new names appended at the end, commented out (`#AMD_API_KEY=`), under a `# Added by bgh <version>` line; nothing above is changed. Point `B3_GRAMMAR_ENV_FILE` at b3-dict's `.env` to share it. The environment wins over the file.
 
 | Variable | Does |
 |---|---|
-| `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, `FIREWORKS_API_KEY` | Each key adds its route to the chain, in that order |
+| `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, `FIREWORKS_API_KEY`, `AMD_API_KEY` | Each key adds its route to the chain, in that order |
+| `AMD_BASE_URL` | AMD Token Lab's OpenAI-compatible endpoint; blank means `https://api.tokenlab.amd.com/v1`. Models: `DeepSeek-V4-Flash` (default), `MiniCPM5-2B` |
 | `B3_GRAMMAR_PROVIDER` | Route to put first when the pane says `auto` |
 | `B3_GRAMMAR_MODEL` | Model of the first route when the pane hasn't picked one |
 | `B3_GRAMMAR_LLM=off` | Harper only, whatever the pane says |
