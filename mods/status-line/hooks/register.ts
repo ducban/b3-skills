@@ -1382,7 +1382,8 @@ async function measureRisk($: EngineInterface, risk: Risk, cwd: string): Promise
       const summary = `delete ${plural(files, 'file')} ${ICON.dot} ${bytes(size)}`
       const shown = names.map(n => n.replace(/^\.\//, ''))
       const judged = await judgeDeletes($, risk.targets, cwd)
-      const tooBig = size > GUARD_KEEP_MAX_KB * 1024
+      const keepSize = judged.threat ? await sizeOf($, judged.keep, cwd) : 0
+      const tooBig = keepSize > GUARD_KEEP_MAX_KB * 1024
 
       return {
         summary,
@@ -1390,8 +1391,8 @@ async function measureRisk($: EngineInterface, risk: Risk, cwd: string): Promise
         more: Math.max(0, files - names.length),
         note: judged.threat ? judged.reasons.join('; ') : judged.reasons.join('; ') || 'nothing here that git or a rebuild cannot bring back',
         threat: judged.threat,
-        keep: judged.threat && !tooBig && judged.paths.length > 0 ? { kind: 'files', paths: judged.paths } : null,
-        keepNote: tooBig ? `won't be kept: ${bytes(size)} is over the ${GUARD_KEEP_MAX_KB / 1024} MB cap` : judged.paths.length === 0 ? "won't be kept: the paths could not be resolved" : '',
+        keep: judged.threat && !tooBig && judged.keep.length > 0 ? { kind: 'files', paths: judged.keep } : null,
+        keepNote: tooBig ? overCap(keepSize) : judged.keep.length === 0 ? "won't be kept: the paths could not be resolved" : '',
       }
     }
 
@@ -1423,6 +1424,8 @@ async function measureRisk($: EngineInterface, risk: Risk, cwd: string): Promise
 
       if (gone.length === 0) return { summary: 'remove nothing: no untracked file matches', lines: [], more: 0, note: '', threat: false }
       const kept = gone.map(g => `${cwd.replace(/\/+$/, '')}/${g.replace(/\/+$/, '')}`)
+      const keepSize = await sizeOf($, kept, cwd)
+      const tooBig = keepSize > GUARD_KEEP_MAX_KB * 1024
 
       return {
         summary: `remove ${plural(gone.length, 'untracked path')}`,
@@ -1430,8 +1433,8 @@ async function measureRisk($: EngineInterface, risk: Risk, cwd: string): Promise
         more: Math.max(0, gone.length - GUARD_LIST),
         note: 'untracked files are not in git and cannot be recovered',
         threat: true,
-        keep: { kind: 'files', paths: kept },
-        keepNote: '',
+        keep: tooBig ? null : { kind: 'files', paths: kept },
+        keepNote: tooBig ? overCap(keepSize) : '',
       }
     }
 
@@ -1522,8 +1525,12 @@ async function measureRisk($: EngineInterface, risk: Risk, cwd: string): Promise
 // Whether deleting these targets loses anything: a threat is the home folder,
 // the root or the repo root; a file git does not hold clean (untracked,
 // changed, or gitignored, since `.env` is gitignored); or a path outside git
-// altogether. Safe: temp folders, build folders, and files git holds unchanged.
-async function judgeDeletes($: EngineInterface, targets: string[], cwd: string): Promise<{ threat: boolean; reasons: string[]; paths: string[] }> {
+// altogether. Safe: temp folders, gitignored build output below the repo root,
+// and files git holds unchanged. A folder name only counts below the repo
+// root and only for what git ignores, so a repo under ~/build/ or a changed
+// file in a committed vendor/ is judged like anything else. `keep` is the
+// targets that make it a threat, the only ones worth a copy.
+async function judgeDeletes($: EngineInterface, targets: string[], cwd: string): Promise<{ threat: boolean; reasons: string[]; paths: string[]; keep: string[] }> {
   const run = await $.process.run(['bash', '-c', RM_PATHS_SCRIPT, 'status-line-guard', ...targets], { cwd, timeoutMs: 15000 })
   const rows = run.stdout.split('\n').filter(l => l !== '')
   const home = rows.find(r => r.startsWith('H\t'))?.slice(2) ?? ''
@@ -1536,12 +1543,17 @@ async function judgeDeletes($: EngineInterface, targets: string[], cwd: string):
   const underTmp = (path: string) => tmpRoots.some(t => path === t || path.startsWith(`${t}/`))
 
   const inGit: string[] = []
+  const keep = new Set<string>()
+  const threat = (path: string, reason: string) => {
+    reasons.push(reason)
+    keep.add(path)
+  }
   for (const path of paths) {
-    if (path === '/' || path === home) reasons.push(`deletes ${path === '/' ? 'the root' : 'your home folder'}`)
-    else if (root !== '' && path === root) reasons.push('deletes the whole repository')
-    else if (underTmp(path) || inBuildDir(path)) continue
+    if (path === '/' || path === home) threat(path, `deletes ${path === '/' ? 'the root' : 'your home folder'}`)
+    else if (root !== '' && path === root) threat(path, 'deletes the whole repository')
+    else if (underTmp(path)) continue
     else if (root !== '' && path.startsWith(`${root}/`)) inGit.push(path)
-    else reasons.push(`${path} is not in git`)
+    else threat(path, `${path} is not in git`)
   }
   if (inGit.length > 0) {
     const status = await $.process.run(
@@ -1549,20 +1561,35 @@ async function judgeDeletes($: EngineInterface, targets: string[], cwd: string):
       { cwd: root, timeoutMs: 15000 },
     )
     if (status.exitCode !== 0) reasons.push('git could not say what is tracked')
+    if (status.exitCode !== 0) inGit.forEach(path => keep.add(path))
     for (const line of status.stdout.split('\n')) {
       if (line.length < 4) continue
       const code = line.slice(0, 2)
       const file = line.slice(3)
-      if (inBuildDir(file)) continue
-      reasons.push(code === '!!' ? `gitignored: ${file}` : code === '??' ? `untracked: ${file}` : `uncommitted changes: ${file}`)
+      if (code === '!!' && inBuildDir(file)) continue
+      // The target this status line falls under; a folder target covers its files.
+      const abs = `${root}/${file.replace(/\/+$/, '')}`
+      const target = inGit.find(t => abs === t || abs.startsWith(`${t}/`) || t.startsWith(`${abs}/`)) ?? abs
+      threat(target, code === '!!' ? `gitignored: ${file}` : code === '??' ? `untracked: ${file}` : `uncommitted changes: ${file}`)
     }
   }
   if (paths.length === 0) reasons.push('the paths could not be resolved')
   const shown = reasons.slice(0, 3)
   if (reasons.length > 3) shown.push(`${reasons.length - 3} more`)
 
-  return { threat: reasons.length > 0, reasons: shown, paths }
+  return { threat: reasons.length > 0, reasons: shown, paths, keep: [...keep] }
 }
+
+// Bytes on disk under these paths, measured as RM_SCRIPT measures a delete.
+async function sizeOf($: EngineInterface, paths: string[], cwd: string): Promise<number> {
+  if (paths.length === 0) return 0
+  const run = await $.process.run(['bash', '-c', RM_SCRIPT, 'status-line-guard', ...paths], { cwd, timeoutMs: 15000 })
+  const [, size = 0] = (run.stdout.split('\n')[0] ?? '').split(' ').map(Number)
+
+  return Number.isFinite(size) ? size : 0
+}
+
+const overCap = (size: number) => `won't be kept: ${bytes(size)} is over the ${GUARD_KEEP_MAX_KB / 1024} MB cap`
 
 // How long ago this repo last fetched, from FETCH_HEAD's time, or null.
 async function lastFetchAge($: EngineInterface, cwd: string): Promise<number | null> {
@@ -2905,7 +2932,7 @@ export const register: Register = on => {
         ),
         line('reset (t)', `${ICON.reset}2h14m after 5h, ${ICON.reset}3d15h or ${ICON.reset}Oct 6 11:00pm after 7d, turn by turn`),
         line('reset colour', 'cyan when the reset is close, blue midway, plain further out -- never the gauge colours'),
-        line('narrow', 'a line the terminal has no room for drops its bars: `5h 8%` for `5h ▰▱▱▱▱ 8%`'),
+        line('narrow', 'a line the terminal has no room for drops its bars: `5h 8%` for `5h \u{25b0}\u{25b1}\u{25b1}\u{25b1}\u{25b1} 8%`'),
         line('theme', 'Tokyo Night Moon on a dark theme, Day on a light one; follows /config'),
         gap,
         Text({ color: BLUE, bold: true, children: ['Reading a gauge'] }),

@@ -2,7 +2,7 @@
 name: b3-code-fix
 description: Fix the open findings in CODE-REVIEW.md and append a CF- entry to CODE-FIXED.md saying what changed, what was deferred, and what the checks printed. Use when the user asks to fix review findings, fix "#N", fix the high ones, or types /b3-code-fix. Takes an optional selection - finding numbers (`#1 #8`), a severity (`high`), or a part of the repo (`status-line`).
 metadata:
-  version: "1.1.0"
+  version: "1.1.1"
 ---
 
 # b3 Code Fix
@@ -89,7 +89,7 @@ If a companion skill is unavailable, continue with the inline procedure. The log
 ## Archive Trigger
 
 If `CODE-REVIEW.md` or `CODE-FIXED.md` exceeds **500 lines**:
-- Suggest running `scripts/archive-reviews.sh` from the project root. It keeps the last CR entry, copies the full text of every finding still open into `## Carried Findings`, keeps the CF entries for the last CR entry, and appends everything else to the `.archive.md` files. `--dry-run` shows what it would move. The script ships next to this SKILL.md; when the project has no copy of its own, run that bundled one.
+- Suggest running `scripts/archive-reviews.sh` from the project root. It keeps the last CR entry, copies the full text of every finding still open into `## Carried Findings`, keeps the CF entries for the last CR entry, and appends everything else to the `.archive.md` files. `--dry-run` shows what it would move. Run the copy that ships next to this SKILL.md, never one inside the project: an installer may have left an older version there, and the 1.0.0 script archives the last entry too.
 - Do NOT run the script automatically. Wait for the user's confirmation.
 
 ## File Generation
@@ -106,7 +106,7 @@ If `CODE-FIXED.md` does not exist in the project root, create it with this heade
 - Each finding is referenced as `Finding #N (Severity)` matching the review's numbering.
 - Fixed findings must include `file:line` for every change made.
 - Accepted findings record the user's reason; deferred findings record the rationale and a revisit trigger.
-- Verification section must confirm the project's typecheck + build commands (see Build & Test in `CLAUDE.md`) pass after fixes.
+- Verification section must confirm the project's Build & Test commands (see `CLAUDE.md`) pass for the parts the fix touched.
 - Language: English only. Tone: Technical, concise, action-focused.
 
 ### Entry ID Convention

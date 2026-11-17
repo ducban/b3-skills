@@ -1695,3 +1695,116 @@ test('u in settings moves auto-run on: 10s counts from ten, and off asks every t
   expect(ran).toEqual(['rm -rf /tmp/scratch'])
   await band.unmount()
 })
+
+// --- CR-20261117-001 #29-#31: what counts as safe, and what is kept -----------------
+// A world whose repo root, paths, status and sizes the test picks. `big` names
+// the paths whose measure comes out over the 500 MB cap.
+const place = (o: { root: string | null; paths: string; status?: string; big?: string[]; clean?: string }) => (argv: readonly string[]) => {
+  const kind = script(argv)
+  if (kind === 'paths') return `H\t/home/u\nT\t/tmp\n${o.paths}`
+  if (kind === 'count') {
+    const huge = (o.big ?? []).some(b => argv.slice(4).some(a => a.endsWith(b)))
+
+    return huge ? '9 999999999999 1\nx\n' : '1 2048 1\nx\n'
+  }
+  if (kind === 'keep') return 'DIR\t/home/u/.cache/status-line/trash/s\n'
+  if (argv[1] === 'rev-parse' && argv[2] === '--show-toplevel') return o.root === null ? null : `${o.root}\n`
+  if (argv.includes('--ignored')) return o.status ?? ''
+  if (argv[1] === 'clean') return o.clean ?? ''
+
+  return ''
+}
+
+test('#29: a repo inside a folder named build is judged like any other repo', async ($, on) => {
+  const { ran, clock, until } = beneath(on, { ...FRESH_STORE, guard: true }, place({ root: '/home/u/build/app', paths: 'P\t/home/u/build/app/notes.txt\n', status: '?? notes.txt\n' }))
+  await startGuarded($)
+  const ui = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...BAND })
+  const call = $.tool.call({ tool: 'Bash', command: 'rm -rf notes.txt' })
+  await until(ui, /untracked: notes\.txt/)
+  expect(await ui.find({ type: 'Text', text: /auto-run in/ })).toBeUndefined()
+  for (let i = 0; i < 40; i += 1) await clock.advance(250)
+  expect(ran).toEqual([])
+  await ui.press({ key: 'guard-refuse' })
+  await clock.advance(250)
+  expect((await call).deny).toMatch(/pressed refuse/)
+  await ui.unmount()
+})
+
+test('#29: uncommitted changes under vendor/ are a threat; only gitignored build output is safe', async ($, on) => {
+  const { clock, until } = beneath(on, { ...FRESH_STORE, guard: true }, place({ root: '/repo', paths: 'P\t/repo/vendor/lib.go\n', status: ' M vendor/lib.go\n' }))
+  await startGuarded($)
+  const ui = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...BAND })
+  const call = $.tool.call({ tool: 'Bash', command: 'rm -rf vendor/lib.go' })
+  await until(ui, /uncommitted changes: vendor\/lib\.go/)
+  expect(await ui.find({ type: 'Text', text: /auto-run in/ })).toBeUndefined()
+  await ui.press({ key: 'guard-refuse' })
+  await clock.advance(250)
+  await call
+  await ui.unmount()
+})
+
+test('#29: outside git, a folder named out is not safe', async ($, on) => {
+  const { clock, until } = beneath(on, { ...FRESH_STORE, guard: true }, place({ root: null, paths: 'P\t/srv/out/photos\n' }))
+  await startGuarded($)
+  const ui = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...BAND })
+  const call = $.tool.call({ tool: 'Bash', command: 'rm -rf /srv/out/photos' })
+  await until(ui, /\/srv\/out\/photos is not in git/)
+  expect(await ui.find({ type: 'Text', text: /auto-run in/ })).toBeUndefined()
+  await ui.press({ key: 'guard-refuse' })
+  await clock.advance(250)
+  await call
+  await ui.unmount()
+})
+
+test('#31: only the path at risk is kept and measured, not the build folder beside it', async ($, on) => {
+  const { ran, processes, clock, until } = beneath(on, { ...FRESH_STORE, guard: true }, place({
+    root: '/repo',
+    paths: 'P\t/repo/node_modules\nP\t/repo/.env\n',
+    status: '!! .env\n!! node_modules/\n',
+    big: ['node_modules'],
+  }))
+  await startGuarded($)
+  const ui = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...BAND })
+  const call = $.tool.call({ tool: 'Bash', command: 'rm -rf node_modules .env' })
+  await until(ui, /gitignored: \.env/)
+  expect(await ui.find({ type: 'Text', text: /1 keeps a copy first/ })).toBeDefined()
+  await ui.press({ key: 'guard-run' })
+  await clock.advance(250)
+  expect((await call).deny).toBeUndefined()
+  expect(ran).toEqual(['rm -rf node_modules .env'])
+  const keep = processes.find(p => script(p.argv) === 'keep')
+  expect(keep?.argv.slice(6)).toEqual(['/repo/.env'])
+  await ui.unmount()
+})
+
+test('#30: a git clean over the cap says it won\'t be kept, and 1 runs it anyway', async ($, on) => {
+  const { ran, processes, clock, until } = beneath(on, { ...FRESH_STORE, guard: true }, place({
+    root: '/repo',
+    paths: '',
+    clean: 'Would remove big/\n',
+    big: ['big'],
+  }))
+  await startGuarded($)
+  const ui = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...BAND })
+  const call = $.tool.call({ tool: 'Bash', command: 'git clean -fd' })
+  await until(ui, /won't be kept: .* over the 500 MB cap/)
+  await ui.press({ key: 'guard-run' })
+  await clock.advance(250)
+  expect((await call).deny).toBeUndefined()
+  expect(ran).toEqual(['git clean -fd'])
+  expect(processes.find(p => script(p.argv) === 'keep')).toBeUndefined()
+  await ui.unmount()
+})
+
+test('1 during the count runs a command with nothing at risk at once', async ($, on) => {
+  const { ran, clock, until } = beneath(on, { ...FRESH_STORE, guard: true }, world('P\t/tmp/scratch\n'))
+  await startGuarded($)
+  const ui = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...BAND })
+  const call = $.tool.call({ tool: 'Bash', command: 'rm -rf /tmp/scratch' })
+  await until(ui, /auto-run in 5s/)
+  await ui.press({ key: 'guard-run' })
+  await clock.advance(250)
+  expect((await call).deny).toBeUndefined()
+  expect(ran).toEqual(['rm -rf /tmp/scratch'])
+  await ui.unmount()
+})

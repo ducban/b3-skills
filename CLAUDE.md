@@ -50,14 +50,15 @@ its `.claude-plugin/plugin.json`, plus whatever constant the mod prints, kept eq
 ## Build & Test
 
 Nothing here builds; these are the checks a change must pass. Run each from the folder named.
+Owner is the machine that changes the part (POLICY.md rule 9); "any" means either machine.
 
-| Part | Folder | Commands |
-|---|---|---|
-| bgh | `mods/bgh` | `bun test tests/` · `claude plugin validate .` · type-check (below) |
-| status-line | `mods/status-line` | `claude plugin test .` · `claude plugin validate .` · type-check (below) |
-| Review skills | repo root | `cmp skills/b3-code-review/scripts/archive-reviews.sh skills/b3-code-fix/scripts/archive-reviews.sh` (the two copies stay identical) |
-| Vale tooling | repo root | `python3 dev/b3-write-human/do-luong/sinh-tu-sao.py --check` |
-| Figures | repo root | `node docs/figures/draw.mjs`, then `git diff --stat docs/figures` shows only the SVGs you meant to change |
+| Part | Owner | Folder | Commands |
+|---|---|---|---|
+| bgh | Mac | `mods/bgh` | `bun test tests/` · `claude plugin validate .` · type-check (below) |
+| status-line | Arch | `mods/status-line` | `claude plugin test .` · `claude plugin validate .` · type-check (below) |
+| Review skills | any | repo root | `cmp skills/b3-code-review/scripts/archive-reviews.sh skills/b3-code-fix/scripts/archive-reviews.sh` (the two copies stay identical) |
+| Vale tooling | any | repo root | `python3 dev/b3-write-human/do-luong/sinh-tu-sao.py --check` |
+| Figures | any | repo root | `node docs/figures/draw.mjs`, then `git diff --stat docs/figures` shows only the SVGs you meant to change |
 
 Type-check a mod with `bun x -p typescript tsc -p .` from its folder, once the engine has
 written `.claude-plugin/types/` (see "Writing mods"). `ICON_MISSING` is the one expected

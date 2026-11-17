@@ -10,7 +10,7 @@ set -euo pipefail
 # CF entries whose Source Review is the last CR entry. Everything else is
 # appended to CODE-REVIEW.archive.md and CODE-FIXED.archive.md.
 #
-# Usage: archive-reviews.sh [--dry-run]
+# Version 1.1.1. Usage: archive-reviews.sh [--dry-run]
 # Run from the project root. Works with bash 3.2 and POSIX awk.
 
 REVIEW_FILE="CODE-REVIEW.md"
@@ -34,7 +34,8 @@ cleanup() {
 }
 trap cleanup EXIT
 
-header_end() { grep -n '^---$' "$1" | head -1 | cut -d: -f1; }
+# grep finds nothing -> empty, not an exit under set -e.
+header_end() { grep -n '^---$' "$1" | head -1 | cut -d: -f1 || true; }
 
 # Append lines from stdin to an archive, under a dated heading, dropping
 # leading blank lines.
@@ -54,7 +55,7 @@ archive_review() {
   local hend latest total
   hend=$(header_end "$src")
   if [[ -z "$hend" ]]; then echo "skip: no --- separator in $src"; return; fi
-  latest=$(grep -n '^## CR-' "$src" | tail -1 | cut -d: -f1)
+  latest=$(grep -n '^## CR-' "$src" | tail -1 | cut -d: -f1 || true)
   if [[ -z "$latest" ]]; then echo "skip: no CR entry in $src"; return; fi
   LATEST_ID=$(sed -n "${latest}p" "$src" | sed 's/^## //; s/[[:space:]].*//')
   total=$(wc -l < "$src" | tr -d ' ')

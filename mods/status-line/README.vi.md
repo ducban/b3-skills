@@ -226,8 +226,8 @@ phần ba và đồng hồ lấy breakdown.
 
 ## Trạng thái
 
-Bản 0.5.2, cài từ marketplace b3-skills ở scope **user**, nên phiên
-nào trên máy cũng có. Một lệnh `/sl` với mười verb. 55 test qua
+Bản 0.5.3, cài từ marketplace b3-skills ở scope **user**, nên phiên
+nào trên máy cũng có. Một lệnh `/sl` với mười verb. 61 test qua
 `claude plugin test`, `tsc -p .` sạch, `claude plugin validate` qua.
 
 Số nào lấy định kỳ đều kèm một ghi chú nói vì sao nó trống, và `/sl debug` in
@@ -377,7 +377,7 @@ bảo vệ được gì. Nên giờ đo xong, mỗi lệnh rơi vào một trong
 
 | Không có gì sắp mất | Có thứ sắp mất |
 |---|---|
-| `rm` không khớp gì; file git đang giữ, chưa sửa; thư mục build (`node_modules`, `dist`, `build`, `.next`, `target`, ...); mọi thứ dưới `/tmp` hay `$TMPDIR` | file untracked, đã sửa, hoặc bị gitignore (`.env` bị gitignore); đường dẫn có `$VAR` hay dấu backtick; `/`, `~` hoặc gốc repo; đường dẫn nằm ngoài git |
+| `rm` không khớp gì; file git đang giữ, chưa sửa; thư mục build trong repo mà git bỏ qua (`node_modules`, `dist`, `build`, `.next`, `target`, ...); mọi thứ dưới `/tmp` hay `$TMPDIR` | file untracked, đã sửa, hoặc bị gitignore (`.env` bị gitignore), kể cả khi nằm trong thư mục tên `build` hay `vendor`; đường dẫn có `$VAR` hay dấu backtick; `/`, `~` hoặc gốc repo; đường dẫn nằm ngoài git |
 | `git reset --hard` khi tree sạch và không mất commit nào | có thay đổi chưa commit, hoặc có commit rời nhánh |
 | `git clean` mà chạy thử không ra gì | bất cứ thứ gì nó sẽ xoá |
 | force push không làm mất commit nào trên remote, và lần fetch gần nhất chưa quá một ngày | có commit bị mất, máy không có bản sao nhánh remote, hoặc fetch đã quá một ngày |
@@ -400,8 +400,10 @@ thứ lệnh sắp phá trước, rồi mới chạy lệnh đúng như viết:
 - `git reset --hard`: giữ HEAD và `git stash create` ở
   `refs/status-line/guard/<time>/`.
 - Force push: giữ head cũ của remote ở `refs/status-line/pushed-over/<time>`.
+- Chỉ giữ, và chỉ tính vào giới hạn, những đường dẫn có rủi ro: `rm -rf
+  node_modules .env` thì chỉ giữ `.env`.
 - Quá 500 MB, hoặc không có gì để giữ, thì báo cáo ghi *won't be kept* ngay từ
-  trước khi bạn bấm.
+  trước khi bạn bấm, và bấm 1 thì lệnh chạy mà không có bản copy.
 - Chép không được thì lệnh không chạy, và Claude được báo lý do.
 
 Mười phút sau đó, dải hiện `undo: /sl undo · 10m`. `/sl undo` chuyển các bản

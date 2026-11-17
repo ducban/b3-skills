@@ -175,3 +175,63 @@ Docs: README.md and README.vi.md updated for the version (0.4.0), the test count
 | bgh, Vale tooling | Not run: no file changed |
 | #14 | No new test. The `/clear` reset and the effort guard were checked by reading the code only |
 | Live check in Claude Code | Not done: 0.4.0 is not installed until it is pushed and updated. During the fix, the installed 0.3.1 guard held a scratch command whose quoted text contained an `rm -rf`, which is the #10 false positive |
+
+---
+
+## CF-20261117-001
+
+- **Entry ID**: CF-20261117-001
+- **Source Review**: CR-20261117-001
+- **Selection**: all open
+- **Commit**: 9cb978f
+- **Machine**: Arch Linux. Changed status-line (Arch owns it), the review skills and `CLAUDE.md` (either machine). bgh findings are deferred to the Mac.
+- **Version**: status-line 0.5.2 → 0.5.3 (`mods/status-line/.claude-plugin/plugin.json:4`); b3-code-review and b3-code-fix 1.1.0 → 1.1.1 (`SKILL.md:5` in each)
+
+### Fixes Applied
+
+**Finding #29 (High)**: Fixed. `judgeDeletes` no longer tests folder names on absolute paths. A target is safe only under a temp folder (`mods/status-line/hooks/register.ts:1554`), or when its `git status` line is `!!` and the repo-relative path is in a build folder (`:1569`). Each reason is now tied to the target it came from (`:1547`, `:1572`). Tests: a repo under `build/` (`mods/status-line/hooks/band.test.ts:1718`), a changed tracked file under `vendor/` (`:1733`), a non-git `/srv/out/photos` (`:1746`).
+
+**Finding #30 (Medium)**: Fixed. The git-clean measure sizes the paths it would keep (`mods/status-line/hooks/register.ts:1427`). Over the cap it sets `keep: null` and the "won't be kept" note (`:1436`), so 1 runs the command without a copy instead of refusing. Test: `mods/status-line/hooks/band.test.ts:1780`.
+
+**Finding #31 (Medium)**: Fixed. `judgeDeletes` returns `keep`, the targets that make the command a threat (`mods/status-line/hooks/register.ts:1533`). The rm branch keeps only those and measures the cap on them (`:1385`, `:1394`). The new top-level `sizeOf` (`:1584`) and `overCap` (`:1592`) are shared with git clean. Test: `rm -rf node_modules .env` with an oversized `node_modules` keeps `/repo/.env` alone (`mods/status-line/hooks/band.test.ts:1759`).
+
+**Finding #32 (Medium)**: Fixed. Both skills now say to run the bundled script, never a copy inside the project (`skills/b3-code-review/SKILL.md:108`, `skills/b3-code-fix/SKILL.md:92`). The script prints its version in its header comment. Ban approved deleting `.codex/`, `.opencode/` and `scripts/` (untracked Procedure CLI output, 5 files) on 2026-11-17. They were removed.
+
+**Finding #33 (Low)**: Fixed. `|| true` on the `grep` pipelines (`skills/b3-code-review/scripts/archive-reviews.sh:38`, `:58`; same lines in the `b3-code-fix` copy). A file with no `---` now prints `skip: no --- separator` and exits 0. A file with no CR entry prints `skip: no CR entry` and exits 0.
+
+**Finding #34 (Low)**: Fixed. The template line now limits verification to the parts the fix touched (`skills/b3-code-fix/SKILL.md:109`).
+
+**Finding #38 (Low)**: Fixed. The Build & Test table has an Owner column (status-line Arch, bgh Mac, the rest any), with a line pointing at POLICY.md rule 9 (`CLAUDE.md:53-61`). Ban gave these owners on 2026-11-17.
+
+**Finding #7 (Medium)**, status-line part: Fixed. The raw bar glyphs in the help line are `\u{25b0}`/`\u{25b1}` escapes (`mods/status-line/hooks/register.ts:2935`). No non-comment raw non-ASCII is left in the file.
+
+Docs: `mods/status-line/README.md` and `README.vi.md` updated for the version (0.5.3), the test count (61), the guard table (a build folder counts only inside the repo and only when gitignored), and the cap paragraph (only paths at risk are kept; over the cap, 1 runs without a copy).
+
+Also added: a test that `1` during the count runs at once (`mods/status-line/hooks/band.test.ts:1799`), the gap CR-20261117-001 listed under Residual Risks. It passed before any change.
+
+### Deferred
+
+**Finding #35 (Low)**, **Finding #36 (Low)**: bgh is owned by the Mac (`CLAUDE.md:57`, Ban 2026-11-17). Trigger: the next bgh session on the Mac.
+
+**Finding #37 (Low)**: Ban chose to defer it. #29-#31 were fixed without the move. Trigger: a separate change that moves the guard into `hooks/guard.ts`, with the 61 tests as the net.
+
+**Finding #4 (Medium)**, prefs part: unchanged from CF-20261114-001. Trigger: a report of a lost setting. bgh, Mac.
+
+**Finding #27 (Low)**: still waits on Ban's product decision. bgh, Mac.
+
+### Residual notes
+
+- The installed global copies in `~/.agents/skills/` stay at 1.1.0 until this is pushed and `npx skills update -g` runs.
+- `sizeOf` reuses `RM_SCRIPT`, which also counts files and lists names. That adds one extra `find` per threat over the old flow.
+
+### Verification Notes
+
+| Command | Folder | Result |
+|---|---|---|
+| `claude plugin test .` | `mods/status-line` | Pass: 61 pass, 0 fail (55 before; 5 new tests failed before the fix, 1 passed) |
+| `claude plugin validate .` | `mods/status-line` | Pass |
+| `bun x tsc -p . --noEmit` | `mods/status-line` | Pass: no errors |
+| `cmp` of the two `archive-reviews.sh` copies | repo root | Identical |
+| `archive-reviews.sh` on edge files (scratch) | scratch dir | Exit 0 with a `skip:` line for no `---` and for no CR entry |
+| `archive-reviews.sh --dry-run` on a copy of the real logs | scratch dir | Keeps CR-20261117-001, carries #4, #7, #27 |
+| bgh, Vale tooling, figures | | Not run: no file changed |

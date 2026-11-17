@@ -2,7 +2,7 @@
 name: b3-code-review
 description: Run a structured, append-only code review cycle that appends a CR- entry to CODE-REVIEW.md, carrying every open finding forward. Use when the user asks to review the code, a branch, a mod or the changes since the last review, or types /b3-code-review. Takes an optional scope - `full` for the whole repo, or a git ref to review the diff since it.
 metadata:
-  version: "1.1.0"
+  version: "1.1.1"
 ---
 
 # b3 Code Review
@@ -105,7 +105,7 @@ Validation Matrix rules:
 ## Archive Trigger
 
 If `CODE-REVIEW.md` or `CODE-FIXED.md` exceeds **500 lines**:
-- Suggest running `scripts/archive-reviews.sh` from the project root. It keeps the last CR entry, copies the full text of every finding still open into `## Carried Findings`, keeps the CF entries for the last CR entry, and appends everything else to the `.archive.md` files. `--dry-run` shows what it would move. The script ships next to this SKILL.md; when the project has no copy of its own, run that bundled one.
+- Suggest running `scripts/archive-reviews.sh` from the project root. It keeps the last CR entry, copies the full text of every finding still open into `## Carried Findings`, keeps the CF entries for the last CR entry, and appends everything else to the `.archive.md` files. `--dry-run` shows what it would move. Run the copy that ships next to this SKILL.md, never one inside the project: an installer may have left an older version there, and the 1.0.0 script archives the last entry too.
 - Do NOT run the script automatically. Wait for the user's confirmation.
 
 ## File Generation

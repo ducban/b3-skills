@@ -228,9 +228,9 @@ one, then the main loop's falling to a third and the gauge taking the breakdown.
 
 ## State
 
-Version 0.5.2, installed from the b3-skills marketplace at scope **user**, so
+Version 0.5.3, installed from the b3-skills marketplace at scope **user**, so
 it draws in every session on this box. One command, `/sl`, with ten verbs.
-Fifty-five tests pass under `claude plugin test`, `tsc -p .` is clean and
+Sixty-one tests pass under `claude plugin test`, `tsc -p .` is clean and
 `claude plugin validate` passes.
 
 Every polled figure carries a note saying why it has nothing, and `/sl debug`
@@ -381,7 +381,7 @@ So the measure now sorts each command one of two ways:
 
 | Nothing at risk | At risk |
 |---|---|
-| `rm` that matches nothing; files git holds unchanged; a build folder (`node_modules`, `dist`, `build`, `.next`, `target`, ...); anything under `/tmp` or `$TMPDIR` | untracked, changed or gitignored files (`.env` is gitignored); a path with `$VAR` or a backtick; `/`, `~` or the repo root; a path outside git |
+| `rm` that matches nothing; files git holds unchanged; a build folder inside the repo that git ignores (`node_modules`, `dist`, `build`, `.next`, `target`, ...); anything under `/tmp` or `$TMPDIR` | untracked, changed or gitignored files (`.env` is gitignored), even inside a folder named `build` or `vendor`; a path with `$VAR` or a backtick; `/`, `~` or the repo root; a path outside git |
 | `git reset --hard` on a clean tree that drops no commit | uncommitted changes, or commits that leave the branch |
 | `git clean` whose dry run lists nothing | anything it would remove |
 | a force push that drops no remote commit, after a fetch in the last day | dropped commits, no local copy of the remote branch, or a fetch older than a day |
@@ -405,8 +405,10 @@ command would destroy, then runs it as written:
   `refs/status-line/guard/<time>/`.
 - A force push keeps the remote's old head under
   `refs/status-line/pushed-over/<time>`.
+- Only the paths at risk are kept and counted against the cap: `rm -rf
+  node_modules .env` keeps `.env` alone.
 - Over 500 MB, or with nothing to keep, the report says *won't be kept* before
-  you press anything.
+  you press anything, and 1 runs the command without a copy.
 - If the copy fails, the command doesn't run, and Claude is told why.
 
 For ten minutes after, the band shows `undo: /sl undo · 10m`. `/sl undo` moves
