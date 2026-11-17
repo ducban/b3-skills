@@ -280,3 +280,110 @@ No prior entries. All findings below are `New`.
 - `addChords` tests cover taken keys in Global and Chat, both keys taken, and invalid JSON. Missing: alias forms (#22), `null` unbinds (#24), a `bindings` block whose `bindings` is not an object.
 - Whether the engine resolves `meta+a` and `alt+a` as the same key was not verified against Claude Code; #22 assumes it does, as `keyName` does.
 - Live check of single-stroke `alt+shift+a` in Orca and Ghostty has not been done. Only `alt+a` was confirmed by Ban.
+
+---
+
+## CR-20261117-001
+
+- **Entry ID**: CR-20261117-001
+- **Supersedes**: CR-20261114-002
+- **Commit**: 9cb978f
+- **Scope**: Diff `cc8569e...9cb978f` (10 commits, 28 files): bgh 0.10.3-0.10.4, status-line 0.4.0-0.5.2 (the guard's ask-only-on-a-threat, keep-before-run, auto-run), b3-code-review/b3-code-fix 1.1.0 with the rewritten `archive-reviews.sh`, the Vale tooling fixes, `CLAUDE.md`. First entry under the 1.1.0 format, so the scope is taken from CR-20261114-002's range end. Reviewed on two axes in separate sub-agents: Standards (`CLAUDE.md`, `memex-vault/POLICY.md`, Fowler smell baseline) and Spec (`BACKLOG.md` at `6c0f082`, Ban's four approved decisions for 0.5.0, the 0.5.1/0.5.2 requests, the nine approved items for the skills, and CR-20261114-002's recommendations). Uncommitted at review time: untracked `.codex/`, `.opencode/`, `scripts/` (see #32).
+
+### Validation Matrix
+
+| # | Finding | Status | Evidence |
+|---|---|---|---|
+| 1-3, 5, 6, 8-14, 16-19, 21-26 | fixed by CF-20261114-001 / CF-20261114-002 | Fixed | #1, #2, #3, #6, #8, #9, #10, #11, #22 re-checked against their Recommendations at HEAD; #14 has no test (code read only) |
+| 15 | status-line `cost`/`turn` cells show dollars | Fixed | `cost` cell removed, `turn` shows output tokens (CF-20261114-002) |
+| 20 | untracked installer files | Fixed | `.agents/`, `.claude/`, `.crush/`, `skills-lock.json` removed 2026-11-16 after a global install; no CF entry records it. New installer files are #32 |
+| 28 | bgh cache row shows dollars | Accepted | `CLAUDE.md` "Ban's standing decisions for mods": bgh keeps dollars for `spent` (14/11/2026) |
+| 4 | bgh store overwritten whole | Still Open | prefs part only, deferred in CF-20261114-001 |
+| 7 | raw non-ASCII in mod source | Still Open | bgh part fixed; status-line part remains: `mods/status-line/hooks/register.ts:2908` (raw bar glyphs in a help line) |
+| 27 | bgh `k` cannot tell whether Option is Alt | Still Open | unchanged, waits on Ban's decision |
+
+### Findings
+
+#### High
+
+**29. status-line guard: a build-folder name anywhere in the path makes a delete safe, so real threats auto-run with no copy**
+- Evidence: `mods/status-line/hooks/register.ts:1091` (`inBuildDir` splits the whole path). `:1542` applies it to the absolute path before the git check, so `rm -rf /srv/out/photos`, `~/vendor/app/.env` or any repo cloned under a folder named `build`, `out`, `target`, `vendor` or `.cache` is judged safe. `:1556` applies it to every `git status` line regardless of code, so a tracked file with uncommitted changes under a committed `vendor/` or `build/` is safe too.
+- Impact: the command auto-runs after the count with nothing kept. That is data loss in the exact case 0.5.0 exists to stop. Spec S3.2 says "A build folder wins over gitignored", not over untracked-outside-git or uncommitted changes.
+- Recommendation: test only the path below the repo root (`path.slice(root.length + 1)`), only for paths inside a repo, and only on `!!` (ignored) lines. Outside a repo, keep the tmp check alone. Add tests: a repo under `~/build/`, a modified tracked file under `vendor/`, a non-git `/x/out/y`.
+- Status: New
+
+#### Medium
+
+**30. status-line guard: `git clean` over 500 MB promises a copy, then refuses the command**
+- Evidence: the git-clean measure (`mods/status-line/hooks/register.ts:1418-1436`) sets `keep` without measuring size and leaves `keepNote` empty. `KEEP_FILES_SCRIPT` exits 3 over the cap (`:1314`). The run branch then denies (`:2522-2527`).
+- Impact: the band says "1 keeps a copy first"; pressing 1 refuses instead. `BACKLOG.md` (at `6c0f082`): "Over 500 MB: nothing is kept, and the report says 'won't be kept'". With the guard on, a large `git clean` can't run at all.
+- Recommendation: measure the `gone` paths with the same `du` the rm path uses, set `keep: null` and the "won't be kept" note over the cap, as the rm branch does. Test with a fake `du` result over the cap.
+- Status: New
+
+**31. status-line guard: the rm size cap counts paths that need no copy**
+- Evidence: `mods/status-line/hooks/register.ts:1384` (`tooBig` uses `size` of every target) and `:1392` (`keep.paths = judged.paths`, which includes safe build/tmp paths).
+- Impact: `rm -rf node_modules .env` copies all of `node_modules` before running; when `node_modules` is over 500 MB, `.env` is "won't be kept". The cap meant to guard against huge copies blocks keeping the one file that mattered.
+- Recommendation: have `judgeDeletes` return the threatening paths separately, keep only those, and measure the cap on them.
+- Status: New
+
+**32. Review skills: a stale project copy of `archive-reviews.sh` wins over the bundled one**
+- Evidence: untracked `scripts/archive-reviews.sh` (1844 bytes, created 2026-11-17 10:08 with `.codex/skills/` and `.opencode/commands/`, by a Procedure CLI install) is the 1.0.0 script: it archives every entry, the last one included (`scripts/archive-reviews.sh:4-6`). Both SKILL.md files say "when the project has no copy of its own, run that bundled one" (`skills/b3-code-review/SKILL.md:108`, `skills/b3-code-fix/SKILL.md` same section). `.gitignore` covers none of the three paths.
+- Impact: an agent following 1.1.0 here runs the old script, which empties `CODE-REVIEW.md` down to its header and loses the Carried Findings flow. Same class as #20.
+- Recommendation: always run the bundled script (drop the project-copy preference), or have the script print a version line that the skill checks. Ask Ban before deleting the three untracked paths; stop Procedure CLI from installing into this repo or add them to `.gitignore`.
+- Status: New
+
+#### Low
+
+**33. `archive-reviews.sh`: a file with no `---` or no CR entry exits 1 silently**
+- Evidence: `skills/b3-code-review/scripts/archive-reviews.sh:37`, `:55`, `:57`, `:167`. Under `set -euo pipefail`, `grep` finding nothing fails the command substitution, so the `skip:` branches never run. Reproduced: a file `# x / ## CR-1` printed only the banner and exited 1.
+- Recommendation: append `|| true` inside `header_end` and to the `latest=` pipeline. Keep both copies identical.
+- Status: New
+
+**34. b3-code-fix: the template still demands every check**
+- Evidence: `skills/b3-code-fix/SKILL.md:109` ("Verification section must confirm the project's typecheck + build commands ... pass") contradicts `:32` (verify "only for the parts you touched"), which was approved item 7.
+- Recommendation: reword `:109` to "for the parts the fix touched".
+- Status: New
+
+**35. bgh: the documented type-check fails on the test file**
+- Evidence: `mods/bgh/tsconfig.json:1-3` includes everything, so `bun x tsc -p .` (the `CLAUDE.md` Build & Test command) reports `tests/core.spec.ts(2,40)` (`bun:test`) and `(217,30)` (`Buffer`). CF-20261114-001 passed with a different invocation.
+- Recommendation: exclude `tests/` in `mods/bgh/tsconfig.json`, or add `"types": ["bun-types"]`; state the exact command in `CLAUDE.md`.
+- Status: New
+
+**36. bgh: `prompt.submit` still trips validate's gating-hook warning**
+- Evidence: `claude plugin validate .` in `mods/bgh`: "gating hook without .catch: prompt.submit". `mods/bgh/hooks/register.tsx:1618` (`void update($, fixesAtom, () => [])`) has no `.catch`; the other two promises in the hook do. `CLAUDE.md` "Writing mods": "validate's warning about it is real".
+- Recommendation: add `.catch(() => undefined)` at `:1618`, then re-run validate to confirm the warning clears.
+- Status: New
+
+**37. status-line: the guard is a shallow slice of a 2959-line module**
+- Evidence: `mods/status-line/hooks/register.ts` holds theme, usage, git, cold gate and the guard (about 600 lines added in this diff). Six call sites repeat `$.process.run(['bash', '-c', SCRIPT, 'status-line-guard', ...args], { cwd, timeoutMs })` (`:1261`, `:1377`, `:1527`, `:1599`, `:1655`, `:1671`). `~`/glob expansion is duplicated in two scripts (`:1274-1275`, `:1292-1294`, with a comment saying "Same expansion rules"), and the OS trash-base `case` twice (`:1311`, `:1339`).
+- Impact: #29-#31 all sit in the seam between measuring and keeping. With no module boundary, a test has to drive the whole band to reach it.
+- Recommendation: move the guard into `hooks/guard.ts` behind a small interface (`measure(risk, cwd) -> Report`, `keep(report) -> Undo`), with one `runScript` helper and one shared shell prelude for expansion and the trash base. Do this before fixing #29-#31, or together with them.
+- Status: New
+
+**38. Repo: ownership of each part is not written down**
+- Evidence: commit `6f586f7` (`ducban.macos`) changed `mods/status-line/.claude-plugin/plugin.json` and both READMEs. POLICY.md rule 9 allows no small-change exception. That Arch owns status-line was first written in `BACKLOG.md` at `6c0f082`, after that commit, and is not in `CLAUDE.md` or POLICY.md.
+- Recommendation: add an owner column (machine per part) to the `CLAUDE.md` Build & Test table or Layout section.
+- Status: New
+
+### Verification Notes
+
+| Check | Folder | Result |
+|---|---|---|
+| `bun test tests/` | `mods/bgh` | Pass: 52 pass, 0 fail, 135 expect |
+| `claude plugin validate .` | `mods/bgh` | Pass with 2 warnings: `ICON_MISSING`, gating hook without `.catch` (#36) |
+| `bun x tsc -p . --noEmit` | `mods/bgh` | Fail: 2 errors, both in `tests/core.spec.ts` (#35); hook sources clean |
+| `claude plugin test .` | `mods/status-line` | Pass: 55 pass, 0 fail |
+| `claude plugin validate .` | `mods/status-line` | Pass |
+| `bun x tsc -p . --noEmit` | `mods/status-line` | Pass, exit 0 |
+| `python3 dev/b3-write-human/do-luong/sinh-tu-sao.py --check` | repo root | Pass: 28 phrases in sync |
+| `cmp` of the two `archive-reviews.sh` copies | repo root | Identical |
+| Versions | | bgh `plugin.json` 0.10.4 = `RELEASE` (`register.tsx:82`); status-line prints no constant, README says 0.5.2 = `plugin.json` |
+| `$` only to top-level functions; `$.process.run` in gating hooks guarded | | Pass (Standards sub-agent) |
+
+### Residual Risks / Testing Gaps
+
+- No test for `1` during the countdown (S3.3); `2` during the count is tested.
+- The git-reset and force-push keep paths have no test; neither does `/sl undo` for refs.
+- The guard's bash scripts and `archive-reviews.sh` have not run on macOS bash 3.2 / BSD tools; the Standards sub-agent found no GNU-only construct by reading.
+- 0.5.1's "guard: ran" trace shows for 10 s and only while the band is visible; `/sl guard log` is the lasting record.
+- `register.ts:2908` (#7) predates this diff.
