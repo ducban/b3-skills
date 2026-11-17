@@ -22,9 +22,18 @@ Approved by Ban 17/11/2026. The keys are already in `~/.config/bgh/.env` on Arch
   `MODEL_CHOICES` when an id is gone.
 - `ENV_TEMPLATE` (`core.ts:681`), the env list in `register.tsx:122` and `:481`, the setup
   hint (`:935`), HELP, README and `B3_GRAMMAR_PROVIDER`'s comment gain `amd` / `AMD_*`.
-- Tests: route order with `AMD_API_KEY` set, `AMD_BASE_URL` blank and set, the two URLs.
+- Existing `.env` files get the new names too. Today the template is written only when the
+  file is missing or holds no value (`needsTemplate`, `register.tsx:513-520`), so machines that
+  already have keys never see `AMD_*`. At `session.start`, for each key name in `ENV_TEMPLATE`
+  that the file doesn't mention at all (set, blank or commented), append it as a commented line
+  (`#AMD_BASE_URL=`, `#AMD_API_KEY=`) under a `# Added by bgh <version>` comment. Append only:
+  never rewrite or reorder a line, keep the file's mode, skip when `B3_GRAMMAR_ENV_FILE` points
+  elsewhere or the file can't be read. Toast `Grammar: added N key names to <file>`. A pure
+  `missingKeyNames(fileText, template)` in `core.ts` decides what to add.
+- Tests: route order with `AMD_API_KEY` set, `AMD_BASE_URL` blank and set, the two URLs;
+  `missingKeyNames` with a name set, blank, commented, and absent, and a second run adding nothing.
 - Version: bgh minor bump (a new route).
-- About 45 minutes with tests.
+- About an hour with tests (45 minutes for the route, 15 for the append).
 
 ## Shipped
 
