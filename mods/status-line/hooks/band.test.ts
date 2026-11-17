@@ -1808,3 +1808,25 @@ test('1 during the count runs a command with nothing at risk at once', async ($,
   expect(ran).toEqual(['rm -rf /tmp/scratch'])
   await ui.unmount()
 })
+
+// --- each sl tab has a close button that closes all three ---------------------------------
+// The test engine has no person's close to raise (`$.ui` here is render, press,
+// mount...), so Esc on one tab closing the other two is checked live; the
+// button runs the same closePanes.
+test('the close button on an sl tab closes all three tabs', async ($, on) => {
+  stand(on)
+  const closes: { id: string; kind: string }[] = []
+  on('ui.close', ($, e) => {
+    closes.push({ id: e.id, kind: e.origin.kind })
+
+    return { value: undefined }
+  })
+  const pane = await $.ui.mount({ plugin: 'status-line', surface: 'terminal', ...SETTINGS })
+  await pane.press({ key: 'close' })
+  expect(closes).toEqual([
+    { id: 'sl-help', kind: 'plugin' },
+    { id: 'sl-settings', kind: 'plugin' },
+    { id: 'sl-agents', kind: 'plugin' },
+  ])
+  await pane.unmount()
+})

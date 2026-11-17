@@ -81,7 +81,7 @@ import {
   type Usage,
 } from './core'
 
-const RELEASE = '0.11.0'
+const RELEASE = '0.11.1'
 const HARPER_DELAY_MS = 300
 const HOP_TIMEOUT_MS = 6000
 // Model lists, Langfuse scores and traces: none should hold a command or a tab open for long.
@@ -101,6 +101,13 @@ const PANES = [
   { id: DEBUG_PANE, title: 'bgh debug' },
   { id: HELP_PANE, title: 'bgh help' },
 ]
+const PANE_IDS = new Set(PANES.map((p) => p.id))
+
+// The four tabs are one window. Closes every one but `except`; each close raises ui.close with
+// origin plugin, which the hook below lets through, so nothing loops.
+async function closePanes($: EngineInterface, except?: string): Promise<void> {
+  for (const p of PANES) if (p.id !== except) await $.ui.close({ id: p.id }).catch(() => undefined)
+}
 
 // Key names follow the OS: alt + a on Linux and Windows, Option + a on a Mac.
 const helpText = (os: string): string => [
@@ -902,6 +909,13 @@ export const register: Register = (on) => {
 
   // ---- the four panes -------------------------------------------------------
 
+  // Esc, or the close mark, on any bgh tab closes all four: one press, not one per tab.
+  on('ui.close', async ($, e, next) => {
+    const result = await next(e)
+    if (e.origin.kind === 'person' && PANE_IDS.has(e.id)) await closePanes($, e.id)
+    return result
+  }).catch(() => undefined)
+
   on('ui.render', { component: 'Pane', requestId: SETUP_PANE }, async ($, e) => {
     await read($, revAtom)
     const { Box, Text, Button } = $.ui.resolve(e)
@@ -1051,6 +1065,7 @@ export const register: Register = (on) => {
             {` ${line}`}
           </Text>
         ))}
+        <Button key="close" label="close" hotkey="q" plain onPress={() => void closePanes($)} />
       </Box>
     )
   })
@@ -1166,6 +1181,7 @@ export const register: Register = (on) => {
           <Text dimColor>{`none yet: ${ignoreKeys} on the band ignores a word`}</Text>
         )}
         {words.length ? <Text dimColor>a number puts that word back in the check</Text> : null}
+        <Button key="close" label="close" hotkey="q" plain onPress={() => void closePanes($)} />
       </Box>
     )
   })
@@ -1258,12 +1274,13 @@ export const register: Register = (on) => {
           <Button key="x" label="test every route" hotkey="x" plain onPress={() => void $.command.run({ command: 'bgh', args: 'test' }).catch(() => undefined)} />
           <Button key="u" label="refresh" hotkey="u" plain onPress={redraw} />
         </Box>
+        <Button key="close" label="close" hotkey="q" plain onPress={() => void closePanes($)} />
       </Box>
     )
   })
 
   on('ui.render', { component: 'Pane', requestId: HELP_PANE }, async ($, e) => {
-    const { Box, Text } = $.ui.resolve(e)
+    const { Box, Text, Button } = $.ui.resolve(e)
     const narrow = e.props.bodyColumns < 70
     const line = (left: string, right: string) => (
       <Box key={`help-${left}`} flexDirection={narrow ? 'column' : 'row'} columnGap={1}>
@@ -1305,6 +1322,7 @@ export const register: Register = (on) => {
             {`B3 Grammar Helper ${RELEASE} \u{b7} keys in ${envFile}`}
           </Text>
         </Box>
+        <Button key="close" label="close" hotkey="q" plain onPress={() => void closePanes($)} />
       </Box>
     )
   })

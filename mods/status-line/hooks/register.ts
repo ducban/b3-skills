@@ -565,6 +565,14 @@ const PANES: { id: string; title: string }[] = [
   { id: AGENTS, title: 'sl agents' },
 ]
 
+const PANE_IDS = new Set(PANES.map(pane => pane.id))
+
+// The tabs are one window. Closes every one but `except`; each close raises
+// ui.close with origin plugin, which the hook lets through, so nothing loops.
+async function closePanes($: EngineInterface, except?: string): Promise<void> {
+  for (const pane of PANES) if (pane.id !== except) await $.ui.close({ id: pane.id }).catch(() => undefined)
+}
+
 // Opens the tabs and says so in a line, or says why nothing was drawn: on a
 // terminal too narrow to seat a pane the engine keeps it open but undrawn.
 async function openTabs($: EngineInterface, show: string) {
@@ -2730,6 +2738,14 @@ export const register: Register = on => {
 
   // The settings pane. One key per item, and a press moves that item on:
   // 1, 2, 3, 4, off, 1. No cursor to keep track of.
+  // Esc, or the close mark, on any sl tab closes all three: one press, not one per tab.
+  on('ui.close', async ($, e, next) => {
+    const result = await next(e)
+    if (e.origin.kind === 'person' && PANE_IDS.has(e.id)) await closePanes($, e.id)
+
+    return result
+  }).catch(() => undefined)
+
   on('ui.render', { component: 'Pane', requestId: SETTINGS }, async ($, e) => {
     const { Box, Button, Text } = $.ui.resolve(e)
     const cwd = await $.session.cwd()
@@ -2840,6 +2856,7 @@ export const register: Register = on => {
             }),
           ],
         }),
+        Button({ key: 'close', label: 'close', hotkey: 'q', plain: true, onPress: () => void closePanes($) }),
       ],
     })
   })
@@ -2851,7 +2868,7 @@ export const register: Register = on => {
   // engine's list: a loop the engine killed or that failed raises no completion
   // this ledger hears, and a row that read `running` for ever would be a lie.
   on('ui.render', { component: 'Pane', requestId: AGENTS }, async ($, e) => {
-    const { Box, Text } = $.ui.resolve(e)
+    const { Box, Button, Text } = $.ui.resolve(e)
     const now = await $.clock.now()
     try {
       const live = await $.agent.list()
@@ -2906,12 +2923,13 @@ export const register: Register = on => {
         ...(agents.length === 0 ? [Text({ color: MUTED, children: ['none spawned yet'] })] : [head, ...agents.map(row)]),
         Text({ children: [' '] }),
         Text({ color: MUTED, children: [`${ICON.dot} esc closes ${ICON.dot} tab to the other sl tabs and enter, or click one`] }),
+        Button({ key: 'close', label: 'close', hotkey: 'q', plain: true, onPress: () => void closePanes($) }),
       ],
     })
   })
 
   on('ui.render', { component: 'Pane', requestId: LEGEND }, async ($, e) => {
-    const { Box, Text } = $.ui.resolve(e)
+    const { Box, Button, Text } = $.ui.resolve(e)
     const line = (left: string, right: string) =>
       Box({
         flexDirection: 'row',
@@ -2980,6 +2998,7 @@ export const register: Register = on => {
             'input and output are token counts, not dollars. The engine hands a mod one money figure -- the session total -- and no split between the two, and a price table in a mod is a number that goes wrong silently.',
           ],
         }),
+        Button({ key: 'close', label: 'close', hotkey: 'q', plain: true, onPress: () => void closePanes($) }),
       ],
     })
   })

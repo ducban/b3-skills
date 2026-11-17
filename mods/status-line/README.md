@@ -228,9 +228,9 @@ one, then the main loop's falling to a third and the gauge taking the breakdown.
 
 ## State
 
-Version 0.5.3, installed from the b3-skills marketplace at scope **user**, so
+Version 0.5.4, installed from the b3-skills marketplace at scope **user**, so
 it draws in every session on this box. One command, `/sl`, with ten verbs.
-Sixty-one tests pass under `claude plugin test`, `tsc -p .` is clean and
+Sixty-two tests pass under `claude plugin test`, `tsc -p .` is clean and
 `claude plugin validate` passes.
 
 Every polled figure carries a note saying why it has nothing, and `/sl debug`
@@ -249,7 +249,9 @@ raise their own.
 `focus: true` raises as well as focuses, which is why the asked-for pane is
 opened last. A click on the other tab shows it, or Tab onto it and Enter. The
 verb answers with one line, `sl settings open. Esc closes it.`, or with the
-engine's reason when the terminal is too narrow to seat a pane.
+engine's reason when the terminal is too narrow to seat a pane. The three tabs
+are one window: Esc on any of them closes all three, and so does the `close`
+button (`q`) at the foot of each.
 
 The panes follow the shape the `/bgh` mod settled on, so the two read alike:
 one command with the verb after it, pane ids `sl-<view>`, tab titles `sl <view>`

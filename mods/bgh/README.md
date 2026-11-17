@@ -80,7 +80,7 @@ On a Mac these are Option keys, and Option types `å` unless the terminal sends 
 | `/bgh clear-cache` | forget the remembered LLM answers |
 | `/bgh help` | the `bgh help` tab: every command and every key |
 
-Commands you read open a pane; the four open together as tabs (`bgh setup`, `bgh settings`, `bgh debug`, `bgh help`), the one you asked for in front, and Esc closes them. Commands that do one thing (`on`, `off`, `reload`, `ignore`, `unignore`, `clear-cache`) stay text and pop a toast. Where a pane can't be drawn, every command answers in text instead.
+Commands you read open a pane; the four open together as tabs (`bgh setup`, `bgh settings`, `bgh debug`, `bgh help`), the one you asked for in front. Esc on any tab closes all four, and so does the `close` button (`q`) at the foot of each. Commands that do one thing (`on`, `off`, `reload`, `ignore`, `unignore`, `clear-cache`) stay text and pop a toast. Where a pane can't be drawn, every command answers in text instead.
 
 ### Setup guide
 

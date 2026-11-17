@@ -226,8 +226,8 @@ phần ba và đồng hồ lấy breakdown.
 
 ## Trạng thái
 
-Bản 0.5.3, cài từ marketplace b3-skills ở scope **user**, nên phiên
-nào trên máy cũng có. Một lệnh `/sl` với mười verb. 61 test qua
+Bản 0.5.4, cài từ marketplace b3-skills ở scope **user**, nên phiên
+nào trên máy cũng có. Một lệnh `/sl` với mười verb. 62 test qua
 `claude plugin test`, `tsc -p .` sạch, `claude plugin validate` qua.
 
 Số nào lấy định kỳ đều kèm một ghi chú nói vì sao nó trống, và `/sl debug` in
@@ -246,7 +246,8 @@ Nên `/sl help`, `/sl settings` và `/sl agents` lệnh nào cũng mở cả ba 
 đưa khung của mình lên trước. `focus: true` vừa đưa lên vừa lấy tiêu điểm, nên
 khung được gọi mở sau cùng. Muốn xem tab kia thì bấm vào, hoặc Tab rồi Enter.
 Lệnh trả về một dòng, `sl settings open. Esc closes it.`, hoặc lý do của engine
-khi terminal hẹp quá không đặt khung được.
+khi terminal hẹp quá không đặt khung được. Ba tab là một cửa sổ: Esc ở tab nào
+cũng đóng cả ba, nút `close` (`q`) ở cuối mỗi tab cũng vậy.
 
 Khung làm theo đúng kiểu mod `/bgh` đã chốt, để hai mod dùng giống nhau: một
 lệnh và verb đứng sau, id khung `sl-<view>`, tên tab `sl <view>` viết thường
