@@ -33,6 +33,11 @@ Chỉ ghi từ đã chạy qua chuỗi trên một bài thật, đừng điền 
 | quyền truy cập | access | 4 | nghề dịch tài liệu phần mềm |
 | sao lưu | backup | 4 | nghề dịch tài liệu phần mềm |
 | đồng bộ | sync | 4 | nghề dịch tài liệu phần mềm |
+| số dư đảm phí | contribution margin | 3 | kế toán quản trị đã dùng; bảng thuật ngữ phân tích chi phí, khối lượng, lợi nhuận của Đại học Duy Tân ghi contribution margin là số dư đảm phí |
+| giá vốn hàng bán | cost of goods sold (COGS) | 3 | tên tài khoản 632 trong Thông tư 200/2014/TT-BTC |
+| tỷ lệ rời bỏ | churn rate | 4 | bảng tính unit economics gửi đội kinh doanh, 18/11/2026 |
+| giá trị vòng đời khách hàng | customer lifetime value (LTV) | 4 | bảng tính unit economics gửi đội kinh doanh, 18/11/2026 |
+| chi phí thu hút khách hàng | customer acquisition cost (CAC) | 4 | bảng tính unit economics gửi đội kinh doanh, 18/11/2026 |
 
 ## Giữ nguyên tiếng Anh
 
@@ -47,6 +52,7 @@ Chỉ ghi từ đã chạy qua chuỗi trên một bài thật, đừng điền 
 | compaction | 5 | dịch là phải dựng mới |
 | zero-shot, agentic, iterative, workflow | 5 | nghề dùng trơn trong câu tiếng Việt, không dịch không chú |
 | sprint, backlog, deadline | 5 | `tai-lieu-tieng-viet.md`, luật 6 |
+| unit economics | 5 | dịch là phải dựng mới; "kinh tế đơn vị" bị người đọc trả lại ngày 18/11/2026 |
 
 ## Bản dịch đã loại
 
@@ -61,6 +67,9 @@ kỹ thuật, xem mục "Chặn cụm, đừng chặn từ" ở `thuat-ngu.md`.
 | bền qua sập (compaction) | compaction | gọi sang khái niệm khác, trượt phép thử tra ngược |
 | tác nhân AI (agent) | tác tử (agent) | thua cửa 2, tiêu chuẩn đã chốt |
 | AI tác thể (agent) | tác tử (agent) | đề xuất cá nhân, chưa ai dùng lại; ngược trật tự danh từ trung tâm đứng đầu |
+| kinh tế đơn vị (unit economics) | unit economics | dịch từng chữ, chưa ai trong nghề dùng |
+| ghế (seat, trong bảng giá phần mềm) | người dùng | dịch từng chữ; bảng giá tiếng Việt tính theo người dùng: "mỗi người dùng thêm" |
+| biên đóng góp (contribution margin) | số dư đảm phí (contribution margin) | dịch từng chữ, thua cửa 3: kế toán quản trị đã có từ quen dùng |
 
 ## Chỗ còn tranh
 
